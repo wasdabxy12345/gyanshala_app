@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../../core/utils/validators.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -32,38 +33,22 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     required String role,
   }) async {
-    final profile = await Supabase.instance.client
-        .from('signup_requests')
-        .select()
-        .eq('phone', identifier)
-        .single();
-
-    String dbRole = profile['role'].toString().trim().toLowerCase();
-    String selectedRole = role.trim().toLowerCase();
-
-    if (dbRole != selectedRole) {
-      throw Exception(
-        "Selected role ($selectedRole) does not match account role ($dbRole)",
-      );
-    }
-
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    // Sign in with phone + password
+    // Attempt standard login
     final response = await _auth.signInWithPassword(
       phone: phone,
       password: password,
     );
 
-    // Sync user metadata with DB role
-    final String? userMetadataRole = response.user?.userMetadata?['role']?.toString();
-    if (userMetadataRole?.toLowerCase() != role.toLowerCase()) {
-      await _auth.updateUser(UserAttributes(data: {'role': role}));
-      debugPrint("✓ Updated user metadata role to: $role");
-    }
+    // Check if they are approved via metadata
+    final status = response.user?.userMetadata?['status'];
 
-    debugPrint("✓ Login successful for phone: $phone as $role");
+    if (status != 'approved') {
+      // Sign them back out if not approved
+      await _auth.signOut();
+      throw Exception("Your account is still pending admin approval.");
+    }
   }
 
   @override
@@ -78,53 +63,36 @@ class AuthRepositoryImpl implements AuthRepository {
     _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    try {
-      // Only create signup_requests record - DO NOT create auth account yet
-      // Auth account will be created after admin approval via OTP verification
-      final existingRows = await _fetchSignupRequestsByPhone(
-        phone,
-        columns: 'phone,status',
-      );
+    // 1. Create the Auth account immediately.
+    // Supabase hashes the password and handles security.
+    final AuthResponse res = await _auth.signUp(
+      phone: phone,
+      password: password,
+      data: {
+        'first_name': firstName.trim(),
+        'last_name': lastName.trim(),
+        'role': role,
+        'status': 'pending', // This metadata marks them as unauthorized
+      },
+    );
 
-      if (existingRows.isNotEmpty) {
-        final status = (existingRows.first['status'] as String?)?.toLowerCase();
-        if (status == 'approved' || status == 'completed') {
-          throw Exception(
-            'A request for this number is already approved or completed.',
-          );
-        }
-
-        // Update existing pending/denied request
-        await Supabase.instance.client
-            .from('signup_requests')
-            .update({
-              'first_name': firstName.trim(),
-              'last_name': lastName.trim(),
-              'role': role,
-              'password': password, // Store password to be used later
-              'status': 'pending',
-              'push_token': pushToken,
-            })
-            .eq('phone', existingRows.first['phone']);
-        debugPrint('✓ Updated signup request for phone: $phone');
-      } else {
-        // Create new request
-        await Supabase.instance.client.from('signup_requests').insert({
+    // 2. Create the entry for the Admin to see in the dashboard
+    if (res.user != null) {
+      try {
+        await Supabase.instance.client.from('signup_requests').upsert({
+          'id': res.user!.id, // Link the request to the actual Auth user
           'phone': phone,
           'first_name': firstName.trim(),
           'last_name': lastName.trim(),
           'role': role,
-          'password': password, // Store password to be used later
           'status': 'pending',
           'push_token': pushToken,
-        });
-        debugPrint('✓ Created signup request for phone: $phone');
+          // REMOVED: 'password': password
+        }, onConflict: 'phone');
+      } catch (e) {
+        debugPrint('!! POSTGRES ERROR: $e');
+        // This will tell us if a column is missing or if RLS is blocking it
       }
-    } on PostgrestException catch (e) {
-      if (_isMissingSignupRequestsTable(e)) {
-        throw Exception('Signup approval table missing. Please contact admin.');
-      }
-      rethrow;
     }
   }
 
@@ -201,16 +169,16 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // Verify the OTP
     await _auth.verifyOTP(type: OtpType.sms, phone: phone, token: otp.trim());
-    
+
     debugPrint("✓ OTP verified for phone: $phone");
-    
+
     // Get signup data and update auth account with password + metadata
     try {
       final signupData = await _fetchSignupRequestsByPhone(
         phone,
         columns: 'phone,first_name,last_name,role,password',
       );
-      
+
       if (signupData.isNotEmpty) {
         final data = signupData.first;
         final storedPassword = data['password'] as String?;
@@ -288,10 +256,6 @@ class AuthRepositoryImpl implements AuthRepository {
       return digitsOnly;
     }
     throw Exception('Enter a valid phone number.');
-  }
-
-  bool _isMissingSignupRequestsTable(PostgrestException e) {
-    return e.code == 'PGRST205' || e.message.contains("public.signup_requests");
   }
 
   Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(
