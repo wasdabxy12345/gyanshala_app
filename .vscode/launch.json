@@ -1,0 +1,10 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "gyanshala_app",
+      "request": "launch",
+      "type": "dart"
+    }
+  ]
+}

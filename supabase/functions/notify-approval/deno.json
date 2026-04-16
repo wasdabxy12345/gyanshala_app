@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "std/http/server": "https://deno.land/std@0.168.0/http/server.ts",
+    "google-auth-library": "npm:google-auth-library@8.8.0"
+  }
+}

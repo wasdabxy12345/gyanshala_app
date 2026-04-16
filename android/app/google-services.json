@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "279965298426",
+    "project_id": "gyanshalaapp",
+    "storage_bucket": "gyanshalaapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:279965298426:android:88dbf6efb9ebecc0252343",
+        "android_client_info": {
+          "package_name": "com.example.gyanshala_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdyv3xrSLH3LYGNlOVsdifWEbe0TIbX9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

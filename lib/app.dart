@@ -1,0 +1,21 @@
+import 'package:flutter/material.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
+
+import 'core/theme/app_theme.dart';
+
+import 'main.dart'; // Import main.dart to access the global navigatorKey
+
+class GyanshalaApp extends StatelessWidget {
+  const GyanshalaApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'Gyanshala NGO',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      home: const WelcomeScreen(),
+    );
+  }
+}
