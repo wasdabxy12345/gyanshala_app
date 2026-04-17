@@ -47,10 +47,7 @@ android {
     }
 
     dependencies {
-        // Add this specific line in your dependencies block
-        coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
-
-        // ... your other dependencies ...
+        coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     }
 }
 

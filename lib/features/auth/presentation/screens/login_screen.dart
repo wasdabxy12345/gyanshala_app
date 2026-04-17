@@ -4,10 +4,10 @@ import 'package:gyanshala_app/core/models/user_model.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
 import '../../data/repositories/auth_repository_impl.dart';
-import 'forgot_password_screen.dart';
-import 'signup_screen.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
+import 'forgot_password_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,10 +42,35 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Signed in as ${_selectedRole.label ?? ''}'),
-        ),
+        SnackBar(content: Text('Signed in as ${_selectedRole.label ?? ''}')),
       );
+
+      if (_selectedRole == UserRole.mentor) {
+        // Navigator.of(context).pushAndRemoveUntil(
+        //   MaterialPageRoute(builder: (_) => const MentorDashboardScreen()),
+        //   (route) =>
+        //       false, // This clears the login screen from the "back" history
+        // );
+      } else if (_selectedRole == UserRole.seniorMentor) {
+        // Navigator.of(context).pushAndRemoveUntil(
+        //   MaterialPageRoute(
+        //     builder: (_) => const SeniorMentorDashboardScreen(),
+        //   ),
+        //   (route) =>
+        //       false, // This clears the login screen from the "back" history
+        // );
+      } else if (_selectedRole == UserRole.admin) {
+        // Navigator.of(context).pushAndRemoveUntil(
+        //   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+        //   (route) =>
+        //       false, // This clears the login screen from the "back" history
+        // );
+      } else {
+        // For any other roles, you can add more conditions here
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Role not recognized.')));
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -143,9 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const SignupScreen(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const SignupScreen()),
               );
             },
             child: const Text(AppStrings.signUp),

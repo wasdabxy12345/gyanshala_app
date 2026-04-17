@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:gyanshala_app/features/auth/presentation/screens/signup_verification_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart'; // Added this
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Added this
-import 'firebase_options.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/signup_verification_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'app.dart';
+import 'firebase_options.dart';
 
 const _supabaseUrl = 'https://ntrniclejneisdzepntv.supabase.co';
 const _supabaseAnonKey = 'sb_publishable_sTcOrSy3ODTZyPOjUHLlHg_j6uS7P9N';
@@ -48,7 +50,10 @@ Future<void> main() async {
     });
   }
 
-  runApp(const GyanshalaApp());
+  runApp(
+    // This is the missing piece!
+    const ProviderScope(child: GyanshalaApp()),
+  );
 }
 
 /// The secret sauce to make banners appear while app is open
@@ -60,7 +65,7 @@ Future<void> _setupForegroundNotifications() async {
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const initSettings = InitializationSettings(android: androidSettings);
   await _localNotif.initialize(
-    initSettings,
+    settings: initSettings,
     onDidReceiveNotificationResponse: (NotificationResponse details) {
       _handleNotificationTap();
     },
@@ -77,10 +82,10 @@ Future<void> _setupForegroundNotifications() async {
 
     if (notification != null) {
       _localNotif.show(
-        notification.hashCode,
-        notification.title,
-        notification.body,
-        const NotificationDetails(
+        id: notification.hashCode,
+        title: notification.title,
+        body: notification.body,
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'high_importance_channel', // Match this in your AndroidManifest
             'High Importance Notifications',
