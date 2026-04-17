@@ -60,103 +60,48 @@ class AuthRepositoryImpl implements AuthRepository {
     required String role,
     String? pushToken,
   }) async {
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    // 1. Create the Auth account immediately.
-    // Supabase hashes the password and handles security.
-    final AuthResponse res = await _auth.signUp(
+    // You only need THIS call now.
+    // The database trigger we just wrote handles the 'signup_requests' table.
+    await _auth.signUp(
       phone: phone,
       password: password,
       data: {
         'first_name': firstName.trim(),
         'last_name': lastName.trim(),
         'role': role,
-        'status': 'pending', // This metadata marks them as unauthorized
+        'status': 'pending',
+        'push_token': pushToken, // This metadata is passed to the trigger
       },
     );
 
-    // 2. Create the entry for the Admin to see in the dashboard
-    if (res.user != null) {
-      try {
-        await Supabase.instance.client.from('signup_requests').upsert({
-          'id': res.user!.id, // Link the request to the actual Auth user
-          'phone': phone,
-          'first_name': firstName.trim(),
-          'last_name': lastName.trim(),
-          'role': role,
-          'status': 'pending',
-          'push_token': pushToken,
-          // REMOVED: 'password': password
-        }, onConflict: 'phone');
-      } catch (e) {
-        debugPrint('!! POSTGRES ERROR: $e');
-        // This will tell us if a column is missing or if RLS is blocking it
-      }
-    }
+    debugPrint(
+      '✓ Signup initiated. Database trigger is handling the request entry.',
+    );
   }
 
   @override
   Future<void> sendOtp({
     required String identifier,
-    bool requireApprovedSignup = false,
+    bool requireApprovedSignup = true,
   }) async {
     _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    bool accountCreated = false;
-
-    if (requireApprovedSignup) {
-      final status = await getSignupStatus(identifier);
-      if (status != 'approved') {
-        throw Exception('Your account is not approved yet.');
-      }
-
-      // Fetch the stored password from signup_requests
-      try {
-        final signupData = await _fetchSignupRequestsByPhone(
-          phone,
-          columns: 'phone,first_name,last_name,role,password',
-        );
-
-        if (signupData.isNotEmpty) {
-          final data = signupData.first;
-          final storedPassword = data['password'] as String?;
-
-          if (storedPassword != null && storedPassword.isNotEmpty) {
-            // Create auth account with the stored password BEFORE sending OTP
-            try {
-              await _auth.signUp(
-                phone: phone,
-                password: storedPassword,
-                data: {
-                  'first_name': data['first_name'],
-                  'last_name': data['last_name'],
-                  'role': data['role'],
-                },
-              );
-              accountCreated = true;
-              debugPrint('✓ Auth account created for phone: $phone');
-            } on AuthException catch (e) {
-              if (!e.message.contains('already registered')) {
-                rethrow;
-              }
-              accountCreated = true;
-              debugPrint('⚠ Auth account already exists for: $phone');
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠ Warning: Could not create auth account: $e');
-      }
+    // 1. Check the approval status
+    final status = await getSignupStatus(identifier);
+    if (status != 'approved') {
+      throw Exception('Your account is still $status. OTP cannot be sent.');
     }
 
-    // Send OTP - only create user if we haven't created the account yet
+    // 2. Trigger the OTP call ONCE
     await _auth.signInWithOtp(
       phone: phone,
-      shouldCreateUser: !accountCreated && requireApprovedSignup,
+      shouldCreateUser: false, // Account was created at signup
     );
-    debugPrint('✓ OTP sent to: $phone');
+
+    debugPrint('✓ Admin-approved OTP sent to: $phone');
   }
 
   @override
@@ -164,41 +109,12 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String otp,
   }) async {
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    // Verify the OTP
+    // This confirms the phone number in Supabase Auth
     await _auth.verifyOTP(type: OtpType.sms, phone: phone, token: otp.trim());
 
-    debugPrint("✓ OTP verified for phone: $phone");
-
-    // Get signup data and update auth account with password + metadata
-    try {
-      final signupData = await _fetchSignupRequestsByPhone(
-        phone,
-        columns: 'phone,first_name,last_name,role,password',
-      );
-
-      if (signupData.isNotEmpty) {
-        final data = signupData.first;
-        final storedPassword = data['password'] as String?;
-
-        // Set password and metadata in auth account
-        await _auth.updateUser(
-          UserAttributes(
-            password: storedPassword,
-            data: {
-              'first_name': data['first_name'],
-              'last_name': data['last_name'],
-              'role': data['role'],
-            },
-          ),
-        );
-        debugPrint("✓ Auth account updated with password and metadata");
-      }
-    } catch (e) {
-      debugPrint("⚠ Warning: Could not update auth account: $e");
-    }
+    debugPrint("✓ Phone verified and account fully activated.");
   }
 
   @override

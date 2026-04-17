@@ -2,10 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../data/repositories/auth_repository_impl.dart';
+import '../widgets/auth_shell.dart';
 import 'login_screen.dart';
 import 'otp_verification_screen.dart';
-import '../widgets/auth_shell.dart';
 
 enum ApprovalState { loading, pending, approved, denied, error }
 
@@ -82,14 +83,21 @@ class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
           _state = ApprovalState.pending;
       });
     } catch (e) {
+      debugPrint(
+        "DEBUG: Status fetch failed because: $e",
+      ); // CHECK THIS IN CONSOLE
       setState(() => _state = ApprovalState.error);
     }
   }
 
   // Inside _SignupVerificationScreenState
 
+  bool _isSendingOtp = false;
+
   Future<void> _handleSendOtp() async {
-    if (_persistedIdentifier == null) return;
+    if (_isSendingOtp || _persistedIdentifier == null) return;
+
+    setState(() => _isSendingOtp = true); // Lock the button
 
     try {
       await _authRepository.sendOtp(
@@ -107,15 +115,6 @@ class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
             title: 'Verify Phone',
             onVerified: () async {
               try {
-                // 1. If we have a password (from a fresh signup), update it FIRST
-                // We do this first so the account is ready before they get to the Login screen
-                if (widget.password != null) {
-                  await _authRepository.updatePassword(
-                    identifier: _persistedIdentifier!,
-                    password: widget.password!,
-                  );
-                }
-
                 // 2. Clean up local storage
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('pending_id');
@@ -156,6 +155,7 @@ class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
         ),
       );
     } catch (e) {
+      setState(() => _isSendingOtp = false); // Unlock on error
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
