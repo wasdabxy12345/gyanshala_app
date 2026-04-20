@@ -1,30 +1,15 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/utils/validators.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
-  AuthRepositoryImpl._internal();
-
-  static final AuthRepositoryImpl instance = AuthRepositoryImpl._internal();
-
-  // Supabase Configuration check
-  // static const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  // static const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
-  // ignore: unnecessary_null_comparison
-  bool get _isSupabaseEnabled => Supabase.instance.client != null;
-
-  GoTrueClient get _auth => Supabase.instance.client.auth;
-
-  /// Throws an exception if Supabase is not configured
+  AuthRepositoryImpl(this._supabase);
+  final SupabaseClient _supabase;
+  GoTrueClient get _auth => _supabase.auth;
   void _ensureSupabase() {
-    if (!_isSupabaseEnabled) {
-      throw Exception(
-        'Supabase is not configured. Please check your environment variables.',
-      );
-    }
+    // If the constructor ran, _supabase is guaranteed to exist
   }
 
   @override
@@ -109,12 +94,48 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String otp,
   }) async {
-    final phone = _normalizePhone(identifier);
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        phone: identifier,
+        token: otp,
+        type: OtpType.sms,
+      );
 
-    // This confirms the phone number in Supabase Auth
-    await _auth.verifyOTP(type: OtpType.sms, phone: phone, token: otp.trim());
+      if (response.user != null) {
+        // 1. Give the DB a moment or implement a retry mechanism
+        int retryCount = 0;
+        bool profileExists = false;
 
-    debugPrint("✓ Phone verified and account fully activated.");
+        while (retryCount < 3 && !profileExists) {
+          final profile = await _supabase
+              .from('profiles')
+              .select()
+              .eq('id', response.user!.id)
+              .maybeSingle();
+
+          if (profile != null) {
+            profileExists = true;
+            break;
+          }
+
+          // Wait 1 second before retrying
+          await Future.delayed(Duration(seconds: 1));
+          retryCount++;
+        }
+
+        if (!profileExists) {
+          // Log this but don't necessarily crash the auth flow
+          if (kDebugMode) {
+            print("Warning: Profile record still not found after retries.");
+          }
+          // Decide if you want to allow them in or redirect to a 'Setup' page
+        }
+      }
+    } on AuthException catch (e) {
+      throw e.message;
+    } catch (e) {
+      throw e.toString();
+    }
   }
 
   @override
@@ -143,7 +164,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // Mark request as completed
     if (requestRows.isNotEmpty) {
-      await Supabase.instance.client
+      await _supabase
           .from('signup_requests')
           .update({'status': 'completed'})
           .eq('phone', requestRows.first['phone']);
@@ -152,14 +173,15 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<String> getSignupStatus(String identifier) async {
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
-    final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status');
+    final rows =
+        await _supabase // Changed from Supabase.instance.client
+            .from('signup_requests')
+            .select('status')
+            .eq('phone', phone)
+            .limit(1);
 
-    if (rows.isEmpty) {
-      throw Exception('No signup request found.');
-    }
-
+    if (rows.isEmpty) throw Exception('No signup request found.');
     return (rows.first['status'] as String).toLowerCase();
   }
 
@@ -180,7 +202,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final candidates = _phoneCandidates(phone);
     for (final candidate in candidates) {
-      final rows = await Supabase.instance.client
+      final rows = await _supabase
           .from('signup_requests')
           .select(columns)
           .eq('phone', candidate)
@@ -198,5 +220,10 @@ class AuthRepositoryImpl implements AuthRepository {
       candidates.add('91$phone');
     }
     return candidates;
+  }
+
+  @override
+  Future<void> signOut() async {
+    await _supabase.auth.signOut();
   }
 }

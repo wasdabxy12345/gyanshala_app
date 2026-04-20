@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 
 import '../../../../core/utils/validators.dart';
-import '../../data/repositories/auth_repository_impl.dart';
 import '../widgets/auth_shell.dart';
 import 'otp_verification_screen.dart';
 import 'reset_password_screen.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  final _authRepository = AuthRepositoryImpl.instance;
+  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {
@@ -30,7 +32,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
     try {
       final identifier = _phoneController.text.trim();
-      await _authRepository.sendOtp(identifier: identifier);
+      await ref.read(authRepositoryProvider).sendOtp(identifier: identifier);
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute<void>(

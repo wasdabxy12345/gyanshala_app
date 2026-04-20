@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 
-import '../../data/repositories/auth_repository_impl.dart';
 import '../widgets/auth_shell.dart';
 
-class OtpVerificationScreen extends StatefulWidget {
+class OtpVerificationScreen extends ConsumerStatefulWidget {
   const OtpVerificationScreen({
     super.key,
     required this.identifier,
@@ -20,13 +21,14 @@ class OtpVerificationScreen extends StatefulWidget {
   final String buttonText;
 
   @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() =>
+      _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otpController = TextEditingController();
-  final _authRepository = AuthRepositoryImpl.instance;
+  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {
@@ -39,10 +41,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     try {
       debugPrint('Step 1: Verifying OTP for ${widget.identifier}...');
-      await _authRepository.verifyOtp(
-        identifier: widget.identifier,
-        otp: _otpController.text.trim(),
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .verifyOtp(
+            identifier: widget.identifier,
+            otp: _otpController.text.trim(),
+          );
 
       debugPrint(
         'Step 2: OTP Verified successfully. Running onVerified callback...',

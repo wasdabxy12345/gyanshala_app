@@ -50,6 +50,11 @@ Future<void> main() async {
     });
   }
 
+  // FORCE LOGOUT ON STARTUP
+  // This ensures that every time the app process starts fresh,
+  // the session is cleared and the user sees the Login/Signup screen.
+  await Supabase.instance.client.auth.signOut();
+
   runApp(
     // This is the missing piece!
     const ProviderScope(child: GyanshalaApp()),

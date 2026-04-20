@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 
-import '../../data/repositories/auth_repository_impl.dart';
-import 'login_screen.dart';
 import '../widgets/auth_shell.dart';
+import 'login_screen.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
+class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({
     super.key,
     required this.identifier,
@@ -19,14 +20,15 @@ class ResetPasswordScreen extends StatefulWidget {
   final String successMessage;
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authRepository = AuthRepositoryImpl.instance;
+  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {
@@ -40,14 +42,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
     try {
-      await _authRepository.updatePassword(
-        identifier: widget.identifier,
-        password: _passwordController.text,
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .updatePassword(
+            identifier: widget.identifier,
+            password: _passwordController.text,
+          );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.successMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.successMessage)));
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
         (_) => false,

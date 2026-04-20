@@ -12,6 +12,8 @@ class ActionGrid extends StatelessWidget {
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
+      childAspectRatio:
+          1.1, // <--- ADD THIS: Ensures cards have a stable height
       children: [
         _buildMenuCard(context, "Students", Icons.group, Colors.orange),
         _buildMenuCard(

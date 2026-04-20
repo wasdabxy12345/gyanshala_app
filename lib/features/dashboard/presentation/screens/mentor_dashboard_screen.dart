@@ -24,45 +24,46 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () {
-              // Quick Sign Out for testing
-              ref.read(supabaseClientProvider).auth.signOut();
-            },
+            onPressed: () => ref.read(supabaseClientProvider).auth.signOut(),
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          const Text(
-            "Welcome, Mentor",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+      // CHANGE: Use SingleChildScrollView + Column instead of ListView
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start, // Align text to left
+            children: [
+              const Text(
+                "Welcome, Mentor",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+
+              // GPS Check-in Section
+              const AttendanceCard(),
+
+              const SizedBox(height: 24),
+              const Text(
+                "Quick Actions",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+
+              // Action Grid
+              const ActionGrid(),
+
+              // Add a bit of bottom padding so the grid doesn't touch the nav bar
+              const SizedBox(height: 20),
+            ],
           ),
-          const SizedBox(height: 20),
-
-          // GPS Check-in Section
-          const AttendanceCard(),
-
-          const SizedBox(height: 24),
-          const Text(
-            "Quick Actions",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-
-          // Action Grid
-          const ActionGrid(),
-        ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-          // Add navigation logic for reports/settings here later
-        },
+        onTap: (index) => setState(() => _selectedIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
           BottomNavigationBarItem(

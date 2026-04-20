@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../../core/providers/auth_provider.dart';
-import '../../../dashboard/presentation/screens/mentor_dashboard_screen.dart';
-import 'login_screen.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
 
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({super.key});
@@ -13,16 +12,17 @@ class AuthWrapper extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return authState.when(
-      data: (data) {
-        // If there is a session, the user is logged in
-        if (data.session != null) {
-          return const MentorDashboardScreen();
-        }
-        return const LoginScreen();
+      data: (user) {
+        if (user == null) return const WelcomeScreen(); // Show Login/Signup
+
+        // If you want to ALWAYS show login on restart,
+        // you would call ref.read(authRepositoryProvider).signOut()
+        // in an initState or use a 'firstRun' flag.
+        return const MentorDashboardScreen();
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, trace) => Scaffold(body: Center(child: Text("Error: $e"))),
+      error: (e, st) => const WelcomeScreen(),
     );
   }
 }

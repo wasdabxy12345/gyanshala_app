@@ -1,26 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
-import '../../data/repositories/auth_repository_impl.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authRepository = AuthRepositoryImpl.instance;
+  // final _authRepository = AuthRepositoryImpl.instance;
   UserRole _selectedRole = UserRole.mentor;
 
   @override
@@ -35,11 +36,13 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     try {
-      await _authRepository.login(
-        identifier: _identifierController.text,
-        password: _passwordController.text,
-        role: _selectedRole.label ?? '',
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .login(
+            identifier: _identifierController.text,
+            password: _passwordController.text,
+            role: _selectedRole.label ?? '',
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Signed in as ${_selectedRole.label ?? ''}')),

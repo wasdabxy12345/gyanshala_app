@@ -1,8 +1,8 @@
-// welcome_screen.dart
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/constants/app_strings.dart';
-import 'signup_screen.dart';
+
 import 'login_screen.dart';
+import 'signup_screen.dart';
 import 'signup_verification_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {

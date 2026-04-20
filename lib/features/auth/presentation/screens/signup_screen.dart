@@ -1,30 +1,31 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/utils/validators.dart';
-import '../../data/repositories/auth_repository_impl.dart';
-import 'login_screen.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'login_screen.dart';
 
-class SignupScreen extends StatefulWidget {
+class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _authRepository = AuthRepositoryImpl.instance;
+  // final _authRepository = AuthRepositoryImpl.instance;
   UserRole _selectedRole = UserRole.mentor;
 
   @override
@@ -46,14 +47,16 @@ class _SignupScreenState extends State<SignupScreen> {
       // Get the unique device token
       String? pushToken = await FirebaseMessaging.instance.getToken();
 
-      await _authRepository.signup(
-        firstName: _firstNameController.text.trim(),
-        lastName: _lastNameController.text.trim(),
-        identifier: _phoneController.text.trim(),
-        password: _passwordController.text,
-        role: _selectedRole.label ?? '',
-        pushToken: pushToken, // Now the variable is "used"!
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .signup(
+            firstName: _firstNameController.text.trim(),
+            lastName: _lastNameController.text.trim(),
+            identifier: _phoneController.text.trim(),
+            password: _passwordController.text,
+            role: _selectedRole.label ?? '',
+            pushToken: pushToken, // Now the variable is "used"!
+          );
 
       // ADD THIS: Save the phone number locally immediately
       final prefs = await SharedPreferences.getInstance();

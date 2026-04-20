@@ -27,4 +27,6 @@ abstract class AuthRepository {
   });
 
   Future<String> getSignupStatus(String identifier);
+
+  Future<void> signOut();
 }

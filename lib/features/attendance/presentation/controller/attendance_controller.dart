@@ -1,4 +1,4 @@
-import 'dart:developer' as dev; // Use this for professional logging
+import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,36 +8,65 @@ import '../../../../core/providers/supabase_provider.dart';
 
 class AttendanceController extends StateNotifier<bool> {
   final SupabaseClient _client;
+  bool _isLoading = false; // Add a private loading flag
 
   AttendanceController(this._client) : super(false);
 
   Future<void> processCheckIn() async {
+    if (_isLoading) return; // Prevent double-taps
+    _isLoading = true;
+
     try {
-      // 1. Handle Permissions
+      // 1. Service/Permission Check
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        await Geolocator.openLocationSettings();
+        return;
+      }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.deniedForever) return;
+        if (permission == LocationPermission.deniedForever) {
+          // Permissions are denied forever, handle appropriately.
+          return;
+        }
       }
 
-      // 2. Get Location (Using the standard getCurrentPosition)
-      Position position = await Geolocator.getCurrentPosition(
-        // ignore: deprecated_member_use
-        desiredAccuracy: LocationAccuracy.high,
+      // 2. Get Current Location
+      const LocationSettings locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter:
+            10, // Minimum distance (in meters) before an update is fired
       );
 
-      // 3. Save to Supabase
-      await _client.from('attendance_logs').insert({
-        'user_id': _client.auth.currentUser!.id,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'check_in': DateTime.now().toIso8601String(),
-      });
+      // Use the 'locationSettings' parameter instead of 'desiredAccuracy'
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings,
+      );
 
-      state = true;
-    } catch (e, stackTrace) {
-      // Professional logging instead of print
-      dev.log("Check-in failed", error: e, stackTrace: stackTrace);
+      final userId = _client.auth.currentUser?.id;
+
+      if (userId != null) {
+        await _client.from('attendance').insert({
+          'user_id': userId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'status': !state ? 'check_in' : 'check_out',
+          'recorded_at': DateTime.now().toIso8601String(),
+        });
+      }
+
+      // 3. Simple Toggle (For testing UI stability)
+      state = !state;
+
+      dev.log(
+        "Check-in success at: ${position.latitude}, ${position.longitude}",
+      );
+    } catch (e, stack) {
+      dev.log("Attendance Error", error: e, stackTrace: stack);
+    } finally {
+      _isLoading = false; // Always reset loading
     }
   }
 }

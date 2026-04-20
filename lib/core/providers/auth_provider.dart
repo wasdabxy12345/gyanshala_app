@@ -1,14 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:gyanshala_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_provider.dart';
 
-// This provider listens to Supabase Auth changes (Login, Logout, etc.)
-final authStateProvider = StreamProvider<AuthState>((ref) {
-  return ref.watch(supabaseClientProvider).auth.onAuthStateChange;
+final authStateProvider = StreamProvider<User?>((ref) {
+  return Supabase.instance.client.auth.onAuthStateChange.map(
+    (event) => event.session?.user,
+  );
 });
 
 // This helper provider just returns the current user object
 final currentUserProvider = Provider<User?>((ref) {
   return ref.watch(supabaseClientProvider).auth.currentUser;
+});
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  // Watch the global supabaseClientProvider we created earlier
+  final client = ref.watch(supabaseClientProvider);
+  return AuthRepositoryImpl(client);
 });

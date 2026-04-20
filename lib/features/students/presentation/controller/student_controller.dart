@@ -7,6 +7,7 @@ import '../../../../core/providers/supabase_provider.dart';
 
 class StudentController extends StateNotifier<bool> {
   final SupabaseClient _client;
+
   StudentController(this._client) : super(false);
 
   Future<bool> registerStudent({
@@ -20,6 +21,8 @@ class StudentController extends StateNotifier<bool> {
   }) async {
     state = true; // Loading state
     try {
+      final user = _client.auth.currentUser;
+
       await _client.from('students').insert({
         'full_name': name,
         'student_id_custom': studentId,
@@ -28,8 +31,9 @@ class StudentController extends StateNotifier<bool> {
         'village_name': village,
         'cluster_name': cluster,
         'school_name': school,
-        'mentor_id': _client.auth.currentUser!.id,
+        'mentor_id': user?.id, // Associate with current mentor
       });
+
       state = false;
       return true;
     } catch (e, stack) {
@@ -40,6 +44,8 @@ class StudentController extends StateNotifier<bool> {
   }
 }
 
+// The provider that the UI listens to
 final studentProvider = StateNotifierProvider<StudentController, bool>((ref) {
-  return StudentController(ref.watch(supabaseClientProvider));
+  final client = ref.watch(supabaseClientProvider);
+  return StudentController(client);
 });

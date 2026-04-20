@@ -1,28 +1,30 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../data/repositories/auth_repository_impl.dart';
 import '../widgets/auth_shell.dart';
 import 'login_screen.dart';
 import 'otp_verification_screen.dart';
 
 enum ApprovalState { loading, pending, approved, denied, error }
 
-class SignupVerificationScreen extends StatefulWidget {
+class SignupVerificationScreen extends ConsumerStatefulWidget {
   final String? identifier;
   final String? password;
 
   const SignupVerificationScreen({super.key, this.identifier, this.password});
 
   @override
-  State<SignupVerificationScreen> createState() =>
+  ConsumerState<SignupVerificationScreen> createState() =>
       _SignupVerificationScreenState();
 }
 
-class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
-  final _authRepository = AuthRepositoryImpl.instance;
+class _SignupVerificationScreenState
+    extends ConsumerState<SignupVerificationScreen> {
+  // final _authRepository = AuthRepositoryImpl.instance;
   String? _persistedIdentifier;
   ApprovalState _state = ApprovalState.loading;
 
@@ -71,9 +73,9 @@ class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
   Future<void> _fetchStatus() async {
     setState(() => _state = ApprovalState.loading);
     try {
-      final status = await _authRepository.getSignupStatus(
-        _persistedIdentifier!,
-      );
+      final status = await ref
+          .read(authRepositoryProvider)
+          .getSignupStatus(_persistedIdentifier!);
       setState(() {
         if (status == 'approved') {
           _state = ApprovalState.approved;
@@ -100,10 +102,12 @@ class _SignupVerificationScreenState extends State<SignupVerificationScreen> {
     setState(() => _isSendingOtp = true); // Lock the button
 
     try {
-      await _authRepository.sendOtp(
-        identifier: _persistedIdentifier!,
-        requireApprovedSignup: true,
-      );
+      await ref
+          .read(authRepositoryProvider)
+          .sendOtp(
+            identifier: _persistedIdentifier!,
+            requireApprovedSignup: true,
+          );
 
       if (!mounted) return;
 
