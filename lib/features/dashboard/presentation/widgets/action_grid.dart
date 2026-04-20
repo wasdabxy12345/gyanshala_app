@@ -49,9 +49,9 @@ class ActionGrid extends StatelessWidget {
           );
         } else {
           // Placeholder for others
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("$title feature coming soon!")),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("working on it: $title")));
         }
       },
       child: Container(

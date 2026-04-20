@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
@@ -49,11 +50,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (_selectedRole == UserRole.mentor) {
-        // Navigator.of(context).pushAndRemoveUntil(
-        //   MaterialPageRoute(builder: (_) => const MentorDashboardScreen()),
-        //   (route) =>
-        //       false, // This clears the login screen from the "back" history
-        // );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MentorDashboardScreen()),
+          (route) =>
+              false, // This clears the login screen from the "back" history
+        );
       } else if (_selectedRole == UserRole.seniorMentor) {
         // Navigator.of(context).pushAndRemoveUntil(
         //   MaterialPageRoute(
