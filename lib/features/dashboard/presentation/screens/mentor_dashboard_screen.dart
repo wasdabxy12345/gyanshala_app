@@ -29,12 +29,11 @@ class _MentorDashboardScreenState extends ConsumerState<MentorDashboardScreen> {
           ),
         ],
       ),
-      // CHANGE: Use SingleChildScrollView + Column instead of ListView
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, // Align text to left
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 "Welcome, Mentor",

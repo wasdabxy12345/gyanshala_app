@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
-import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
 
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({super.key});
@@ -18,7 +17,7 @@ class AuthWrapper extends ConsumerWidget {
         // If you want to ALWAYS show login on restart,
         // you would call ref.read(authRepositoryProvider).signOut()
         // in an initState or use a 'firstRun' flag.
-        return const MentorDashboardScreen();
+        return const WelcomeScreen();
       },
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),

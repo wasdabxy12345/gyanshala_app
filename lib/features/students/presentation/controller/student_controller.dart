@@ -11,7 +11,7 @@ class StudentController extends StateNotifier<bool> {
 
   StudentController(this._client) : super(false);
 
-  // --- REGISTER STUDENT ---
+  // register
   Future<bool> registerStudent({
     required String name,
     required String studentId,
@@ -45,7 +45,7 @@ class StudentController extends StateNotifier<bool> {
     }
   }
 
-  // --- FETCH STUDENTS (Fixes 'getMyStudents' error) ---
+  // fetch
   Future<List<Map<String, dynamic>>> getMyStudents() async {
     try {
       final user = _client.auth.currentUser;
@@ -61,13 +61,12 @@ class StudentController extends StateNotifier<bool> {
     }
   }
 
-  // --- SUBMIT ATTENDANCE (Fixes 'submitAttendance' error) ---
+  // submit
   Future<bool> submitAttendance(
     List<Map<String, dynamic>> attendanceData,
   ) async {
     state = true;
     try {
-      // upsert handles both insert and update if a record for that day exists
       await _client.from('student_attendance').upsert(attendanceData);
       state = false;
       return true;

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gyanshala_app/features/students/presentation/screens/add_student_screen.dart';
+import 'package:gyanshala_app/features/students/presentation/screens/student_hub_screen.dart';
 
 class ActionGrid extends StatelessWidget {
   const ActionGrid({super.key});
@@ -12,8 +12,7 @@ class ActionGrid extends StatelessWidget {
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
-      childAspectRatio:
-          1.1, // <--- ADD THIS: Ensures cards have a stable height
+      childAspectRatio: 1.1,
       children: [
         _buildMenuCard(context, "Students", Icons.group, Colors.orange),
         _buildMenuCard(
@@ -45,7 +44,7 @@ class ActionGrid extends StatelessWidget {
         if (title == "Students") {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddStudentScreen()),
+            MaterialPageRoute(builder: (context) => const StudentHubPage()),
           );
         } else {
           // Placeholder for others
