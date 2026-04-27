@@ -46,6 +46,7 @@ dependencies:
   google_fonts: ^8.0.2
   fl_chart: ^1.2.0 # For the UNM Analytics
   riverpod_annotation: ^4.0.2
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

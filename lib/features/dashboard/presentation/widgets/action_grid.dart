@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gyanshala_app/features/students/presentation/screens/student_hub_screen.dart';
+import 'package:gyanshala_app/features/students/presentation/student_hub_page.dart';
 
 class ActionGrid extends StatelessWidget {
   const ActionGrid({super.key});
