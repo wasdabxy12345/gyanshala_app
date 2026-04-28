@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
 
 import '../../../../core/constants/app_strings.dart';
