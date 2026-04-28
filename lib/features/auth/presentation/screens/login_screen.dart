@@ -64,11 +64,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         //       false, // This clears the login screen from the "back" history
         // );
       } else if (_selectedRole == UserRole.admin) {
-        // Navigator.of(context).pushAndRemoveUntil(
-        //   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-        //   (route) =>
-        //       false, // This clears the login screen from the "back" history
-        // );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+          (route) =>
+              false, // This clears the login screen from the "back" history
+        );
       } else {
         // For any other roles, you can add more conditions here
         ScaffoldMessenger.of(

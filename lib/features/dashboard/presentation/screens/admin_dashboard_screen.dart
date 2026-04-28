@@ -5,8 +5,8 @@ import 'package:gyanshala_app/features/settings/presentation/views/settings_scre
 import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
-class MentorDashboardScreen extends ConsumerWidget {
-  const MentorDashboardScreen({super.key});
+class AdminDashboardScreen extends ConsumerWidget {
+  const AdminDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +44,7 @@ class HomeContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Welcome, Mentor",
+              "Welcome, Admin",
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 20),

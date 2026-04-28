@@ -8,32 +8,44 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._supabase);
   final SupabaseClient _supabase;
   GoTrueClient get _auth => _supabase.auth;
-  void _ensureSupabase() {
-    // If the constructor ran, _supabase is guaranteed to exist
-  }
 
   @override
   Future<void> login({
     required String identifier,
     required String password,
-    required String role,
+    required String role, // This is the role selected in the UI
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // Attempt standard login
+    // 1. Perform standard login
     final response = await _auth.signInWithPassword(
       phone: phone,
       password: password,
     );
 
-    // Check if they are approved via metadata
-    final status = response.user?.userMetadata?['status'];
+    final user = response.user;
+    if (user == null) throw Exception("User not found.");
 
+    // 2. Check Approval Status (Existing logic)
+    final status = user.userMetadata?['status'];
     if (status != 'approved') {
-      // Sign them back out if not approved
       await _auth.signOut();
       throw Exception("Your account is still pending admin approval.");
     }
+
+    // 3. ROLE VERIFICATION (The Fix)
+    // Check the role stored in metadata (or you could query the 'profiles' table)
+    final actualRole = user.userMetadata?['role'];
+
+    if (actualRole != role) {
+      // If they logged in as "Mentor" but are an "Admin" in DB, kick them out
+      await _auth.signOut();
+      throw Exception(
+        "Access Denied: You are registered as $actualRole, not $role.",
+      );
+    }
+
+    debugPrint("✓ Login successful as $actualRole");
   }
 
   @override
@@ -43,12 +55,16 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
     required String role,
+    required String qualification, // Added
+    required String village, // Added
+    required String cluster, // Added
+    required String school, // Added
     String? pushToken,
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // You only need THIS call now.
-    // The database trigger we just wrote handles the 'signup_requests' table.
+    // This call passes all metadata to the Supabase Auth user.
+    // Your database trigger will then pick these up to create the profile/request.
     await _auth.signUp(
       phone: phone,
       password: password,
@@ -57,12 +73,16 @@ class AuthRepositoryImpl implements AuthRepository {
         'last_name': lastName.trim(),
         'role': role,
         'status': 'pending',
-        'push_token': pushToken, // This metadata is passed to the trigger
+        'qualification': qualification.trim(), // Pass to metadata
+        'village': village.trim(), // Pass to metadata
+        'cluster': cluster.trim(), // Pass to metadata
+        'school': school.trim(), // Pass to metadata
+        'push_token': pushToken,
       },
     );
 
     debugPrint(
-      '✓ Signup initiated. Database trigger is handling the request entry.',
+      '✓ Signup initiated with mentor details. Database trigger is handling the request entry.',
     );
   }
 
@@ -71,7 +91,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     bool requireApprovedSignup = true,
   }) async {
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
     // 1. Check the approval status
@@ -143,7 +162,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
   }) async {
-    _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
     final requestRows = await _fetchSignupRequestsByPhone(
@@ -225,5 +243,32 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> signOut() async {
     await _supabase.auth.signOut();
+  }
+
+  @override
+  Future<void> updateProfile({
+    required String firstName,
+    required String lastName,
+    String? qualification, // Added optional parameters
+    String? village,
+    String? cluster,
+    String? school,
+  }) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    final Map<String, dynamic> updateData = {
+      'first_name': firstName,
+      'last_name': lastName,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    // Only add these to the update map if they aren't null
+    if (qualification != null) updateData['qualification'] = qualification;
+    if (village != null) updateData['village'] = village;
+    if (cluster != null) updateData['cluster'] = cluster;
+    if (school != null) updateData['school'] = school;
+
+    await _supabase.from('profiles').update(updateData).eq('id', user.id);
   }
 }

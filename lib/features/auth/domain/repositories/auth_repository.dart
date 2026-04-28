@@ -11,7 +11,11 @@ abstract class AuthRepository {
     required String identifier,
     required String password,
     required String role,
-    String? pushToken, // Add this optional parameter
+    String? pushToken,
+    required String qualification,
+    required String village,
+    required String cluster,
+    required String school, // Add this optional parameter
   });
 
   Future<void> sendOtp({
@@ -29,4 +33,9 @@ abstract class AuthRepository {
   Future<String> getSignupStatus(String identifier);
 
   Future<void> signOut();
+
+  Future<void> updateProfile({
+    required String firstName,
+    required String lastName,
+  });
 }

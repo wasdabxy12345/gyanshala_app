@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
-import 'login_screen.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -25,7 +25,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
+
+  final _qualificationController = TextEditingController();
+  final _villageController = TextEditingController();
+  final _clusterController = TextEditingController();
+  final _schoolController = TextEditingController();
+
   UserRole _selectedRole = UserRole.mentor;
 
   @override
@@ -35,6 +40,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+
+    _qualificationController.dispose();
+    _villageController.dispose();
+    _clusterController.dispose();
+    _schoolController.dispose();
     super.dispose();
   }
 
@@ -55,7 +65,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             identifier: _phoneController.text.trim(),
             password: _passwordController.text,
             role: _selectedRole.label ?? '',
-            pushToken: pushToken, // Now the variable is "used"!
+            pushToken: pushToken,
+            // Add these extra parameters to your repository method:
+            qualification: _qualificationController.text.trim(),
+            village: _villageController.text.trim(),
+            cluster: _clusterController.text.trim(),
+            school: _schoolController.text.trim(),
           );
 
       // ADD THIS: Save the phone number locally immediately
@@ -86,6 +101,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Helper to check if the current role is mentor-related
+    final isMentorType =
+        _selectedRole == UserRole.mentor ||
+        _selectedRole == UserRole.seniorMentor;
+
     return AuthShell(
       title: 'Signup',
       subtitle: 'Submit details for admin approval',
@@ -94,6 +114,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1. ROLE SELECTOR AT THE TOP
+            const Text(
+              'Select Position *',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            RoleSelector(
+              selectedRole: _selectedRole,
+              onRoleSelected: (role) {
+                setState(() => _selectedRole = role);
+              },
+            ),
+            const SizedBox(height: 20),
+
+            // 2. COMMON FIELDS (Name)
             Row(
               children: [
                 Expanded(
@@ -104,12 +139,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       labelText: 'First Name *',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Required';
-                      }
-                      return null;
-                    },
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Required'
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -118,17 +151,67 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     controller: _lastNameController,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(labelText: 'Last Name *'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Required';
-                      }
-                      return null;
-                    },
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Required'
+                        : null,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
+
+            // 3. CONDITIONAL MENTOR FIELDS
+            if (isMentorType) ...[
+              TextFormField(
+                controller: _qualificationController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Qualification *',
+                  prefixIcon: Icon(Icons.school_outlined),
+                ),
+                validator: (value) =>
+                    (value == null || value.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _villageController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: 'Village *'),
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? 'Required' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _clusterController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(labelText: 'Cluster *'),
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? 'Required' : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _schoolController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'School *',
+                  prefixIcon: Icon(Icons.location_city_outlined),
+                ),
+                validator: (value) =>
+                    (value == null || value.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 14),
+            ],
+
+            // 4. COMMON FIELDS (Phone & Password)
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -139,12 +222,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               validator: (value) {
                 final phone = value?.trim() ?? '';
-                if (phone.isEmpty) {
-                  return 'Phone Number is required';
-                }
-                if (!Validators.isValidPhone(phone)) {
+                if (phone.isEmpty) return 'Phone Number is required';
+                if (!Validators.isValidPhone(phone))
                   return 'Enter a valid phone number';
-                }
                 return null;
               },
             ),
@@ -158,12 +238,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 prefixIcon: Icon(Icons.lock_outline),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
+                if (value == null || value.isEmpty)
                   return 'Password is required';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
+                if (value.length < 6) return 'At least 6 characters';
                 return null;
               },
             ),
@@ -176,28 +253,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 prefixIcon: Icon(Icons.lock_person_outlined),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please confirm your password';
-                }
-                if (value != _passwordController.text) {
+                if (value != _passwordController.text)
                   return 'Passwords do not match';
-                }
                 return null;
               },
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'Select Position *',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            RoleSelector(
-              selectedRole: _selectedRole,
-              onRoleSelected: (role) {
-                setState(() => _selectedRole = role);
-              },
-            ),
             const SizedBox(height: 24),
+
+            // 5. SIGNUP BUTTON
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -208,20 +271,25 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           ],
         ),
       ),
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('Already have an account? '),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-              );
-            },
-            child: const Text('Log In'),
-          ),
-        ],
-      ),
+      footer: _buildFooter(), // Extracted footer to keep code clean
+    );
+  }
+
+  Widget _buildFooter() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('Already have an account? '),
+        TextButton(
+          onPressed: () {
+            // This assumes you have LoginScreen imported
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+            );
+          },
+          child: const Text('Log In'),
+        ),
+      ],
     );
   }
 }
