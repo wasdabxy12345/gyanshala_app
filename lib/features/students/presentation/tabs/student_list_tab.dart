@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/features/students/controller/student_controller.dart';
+import 'package:gyanshala_app/features/students/presentation/views/add_student_screen.dart';
 
 class StudentListTab extends ConsumerStatefulWidget {
   final String searchQuery;
@@ -11,12 +12,11 @@ class StudentListTab extends ConsumerStatefulWidget {
 }
 
 class _StudentListTabState extends ConsumerState<StudentListTab> {
-  String? selectedGender;
-  int? selectedGrade;
-  String? selectedSchool;
-  String? selectedVillage;
-  String? selectedCluster;
-  bool _showFilters = false;
+  final Set<String> selectedGenders = {};
+  final Set<int> selectedGrades = {};
+  final Set<String> selectedSchools = {};
+  final Set<String> selectedVillages = {};
+  final Set<String> selectedClusters = {};
 
   bool _matchesSearch(Map<String, dynamic> student, String query) {
     if (query.isEmpty) return true;
@@ -47,19 +47,19 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
   }
 
   bool _matchesFilters(Map<String, dynamic> student) {
-    if (selectedGender != null &&
-        student['gender']?.toString() != selectedGender)
+    if (selectedGenders.isNotEmpty &&
+        !selectedGenders.contains(student['gender']?.toString()))
       return false;
-    if (selectedGrade != null && student['grade'] != selectedGrade)
+    if (selectedGrades.isNotEmpty && !selectedGrades.contains(student['grade']))
       return false;
-    if (selectedSchool != null &&
-        student['school_name']?.toString() != selectedSchool)
+    if (selectedSchools.isNotEmpty &&
+        !selectedSchools.contains(student['school_name']?.toString()))
       return false;
-    if (selectedVillage != null &&
-        student['village_name']?.toString() != selectedVillage)
+    if (selectedVillages.isNotEmpty &&
+        !selectedVillages.contains(student['village_name']?.toString()))
       return false;
-    if (selectedCluster != null &&
-        student['cluster_name']?.toString() != selectedCluster)
+    if (selectedClusters.isNotEmpty &&
+        !selectedClusters.contains(student['cluster_name']?.toString()))
       return false;
     return true;
   }
@@ -125,102 +125,105 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
 
           return Column(
             children: [
-              if (_showFilters)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        DropdownButton<String>(
-                          hint: const Text('Gender'),
-                          value: selectedGender,
-                          items: genders
-                              .map(
-                                (g) =>
-                                    DropdownMenuItem(value: g, child: Text(g)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedGender = val),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => _showMultiSelectDialog<String>(
+                          context: context,
+                          title: 'Gender',
+                          options: genders,
+                          selected: selectedGenders,
                         ),
-                        const SizedBox(width: 12),
-                        DropdownButton<int>(
-                          hint: const Text('Grade'),
-                          value: selectedGrade,
-                          items: grades
-                              .map(
-                                (g) => DropdownMenuItem(
-                                  value: g,
-                                  child: Text('Grade $g'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedGrade = val),
+                        child: Text(
+                          selectedGenders.isEmpty
+                              ? 'Gender: All'
+                              : 'Gender: ${selectedGenders.length} selected',
                         ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('School'),
-                          value: selectedSchool,
-                          items: schools
-                              .map(
-                                (s) =>
-                                    DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedSchool = val),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: () => _showMultiSelectDialog<int>(
+                          context: context,
+                          title: 'Grade',
+                          options: grades,
+                          selected: selectedGrades,
+                          labelBuilder: (g) => 'Grade $g',
                         ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('Village'),
-                          value: selectedVillage,
-                          items: villages
-                              .map(
-                                (v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedVillage = val),
+                        child: Text(
+                          selectedGrades.isEmpty
+                              ? 'Grade: All'
+                              : 'Grade: ${selectedGrades.length} selected',
                         ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('Cluster'),
-                          value: selectedCluster,
-                          items: clusters
-                              .map(
-                                (c) =>
-                                    DropdownMenuItem(value: c, child: Text(c)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedCluster = val),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: () => _showMultiSelectDialog<String>(
+                          context: context,
+                          title: 'School',
+                          options: schools,
+                          selected: selectedSchools,
                         ),
-                        const SizedBox(width: 12),
-                        if (selectedGender != null ||
-                            selectedGrade != null ||
-                            selectedSchool != null ||
-                            selectedVillage != null ||
-                            selectedCluster != null)
-                          SizedBox(
-                            width: 120,
-                            child: ElevatedButton(
-                              onPressed: () => setState(() {
-                                selectedGender = null;
-                                selectedGrade = null;
-                                selectedSchool = null;
-                                selectedVillage = null;
-                                selectedCluster = null;
-                              }),
-                              child: const Text('Clear Filters'),
-                            ),
+                        child: Text(
+                          selectedSchools.isEmpty
+                              ? 'School: All'
+                              : 'School: ${selectedSchools.length} selected',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: () => _showMultiSelectDialog<String>(
+                          context: context,
+                          title: 'Village',
+                          options: villages,
+                          selected: selectedVillages,
+                        ),
+                        child: Text(
+                          selectedVillages.isEmpty
+                              ? 'Village: All'
+                              : 'Village: ${selectedVillages.length} selected',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: () => _showMultiSelectDialog<String>(
+                          context: context,
+                          title: 'Cluster',
+                          options: clusters,
+                          selected: selectedClusters,
+                        ),
+                        child: Text(
+                          selectedClusters.isEmpty
+                              ? 'Cluster: All'
+                              : 'Cluster: ${selectedClusters.length} selected',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      if (selectedGenders.isNotEmpty ||
+                          selectedGrades.isNotEmpty ||
+                          selectedSchools.isNotEmpty ||
+                          selectedVillages.isNotEmpty ||
+                          selectedClusters.isNotEmpty)
+                        SizedBox(
+                          width: 120,
+                          child: ElevatedButton(
+                            onPressed: () => setState(() {
+                              selectedGenders.clear();
+                              selectedGrades.clear();
+                              selectedSchools.clear();
+                              selectedVillages.clear();
+                              selectedClusters.clear();
+                            }),
+                            child: const Text('Clear Filters'),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
                 ),
+              ),
               Expanded(
                 child: filteredStudents.isEmpty
                     ? const Center(child: Text('No students found'))
@@ -272,25 +275,87 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
           );
         },
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'filter',
-            onPressed: () => setState(() => _showFilters = !_showFilters),
-            mini: true,
-            child: const Icon(Icons.filter_list),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'add',
-            onPressed: () {
-              // Add your Navigation to AddStudentScreen here
-            },
-            child: const Icon(Icons.add),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'add',
+        onPressed: () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const AddStudentScreen()));
+        },
+        child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Future<void> _showMultiSelectDialog<T>({
+    required BuildContext context,
+    required String title,
+    required List<T> options,
+    required Set<T> selected,
+    String Function(T value)? labelBuilder,
+  }) async {
+    final temp = Set<T>.from(selected);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Select $title'),
+          content: StatefulBuilder(
+            builder: (context, setLocalState) {
+              return SizedBox(
+                width: 320,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: options.map((option) {
+                    final isChecked = temp.contains(option);
+                    final label =
+                        labelBuilder?.call(option) ?? option.toString();
+                    return CheckboxListTile(
+                      value: isChecked,
+                      title: Text(label),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      onChanged: (checked) {
+                        setLocalState(() {
+                          if (checked == true) {
+                            temp.add(option);
+                          } else {
+                            temp.remove(option);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() => selected.clear());
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('All'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  selected
+                    ..clear()
+                    ..addAll(temp);
+                });
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

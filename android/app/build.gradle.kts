@@ -10,7 +10,8 @@ plugins {
 
 android {
     namespace = "com.example.gyanshala_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
+    buildToolsVersion = "34.0.0"
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -36,6 +37,9 @@ android {
         versionName = flutter.versionName
 
         multiDexEnabled = true // Add this line
+
+        minSdk = flutter.minSdkVersion
+        targetSdk = 34
     }
 
     buildTypes {
