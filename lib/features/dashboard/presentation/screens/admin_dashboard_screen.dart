@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/mentor_list_screen.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 // You will create these widgets/screens next
@@ -79,11 +81,19 @@ class AdminHomeContent extends StatelessWidget {
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               children: [
+                // Inside _AdminActionTile for "Approve Signups"
                 _AdminActionTile(
                   title: "Approve Signups",
                   icon: Icons.how_to_reg,
                   color: Colors.blue,
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SignupRequestsScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _AdminActionTile(
                   title: "Track Attendance",
@@ -95,7 +105,14 @@ class AdminHomeContent extends StatelessWidget {
                   title: "Mentor List",
                   icon: Icons.groups,
                   color: Colors.purple,
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const MentorListScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _AdminActionTile(
                   title: "Reports",

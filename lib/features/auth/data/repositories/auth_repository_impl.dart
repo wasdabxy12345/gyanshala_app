@@ -50,15 +50,16 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
     required String role,
-    required String qualification,
-    required String village,
-    required String cluster,
-    required String school,
+    String? qualification,
+    String? village,
+    String? cluster,
+    String? school,
     String? pushToken,
   }) async {
     final phone = _normalizePhone(identifier);
 
-    await _auth.signUp(
+    // 1. Create the Auth User
+    final response = await _auth.signUp(
       phone: phone,
       password: password,
       data: {
@@ -66,17 +67,29 @@ class AuthRepositoryImpl implements AuthRepository {
         'last_name': lastName.trim(),
         'role': role,
         'status': 'pending',
-        'qualification': qualification.trim(),
-        'village': village.trim(),
-        'cluster': cluster.trim(),
-        'school': school.trim(),
-        'push_token': pushToken,
       },
     );
 
-    debugPrint(
-      '✓ Signup initiated with mentor details. Database trigger is handling the request entry.',
-    );
+    final user = response.user;
+    if (user == null) throw Exception("Signup failed.");
+
+    // 2. CRITICAL: Manually insert into signup_requests table
+    // This is what the Admin Dashboard reads!
+    await _supabase.from('signup_requests').insert({
+      'id': user.id, // Links to auth.users
+      'phone': phone,
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'role': role,
+      'status': 'pending',
+      'qualification': qualification?.trim(),
+      'village': village?.trim(),
+      'cluster': cluster?.trim(),
+      'school': school?.trim(),
+      'push_token': pushToken,
+    });
+
+    debugPrint('✓ Signup successful. Request row created for Admin approval.');
   }
 
   @override
