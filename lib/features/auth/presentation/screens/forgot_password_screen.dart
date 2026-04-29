@@ -32,7 +32,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
     try {
       final identifier = _phoneController.text.trim();
-      await ref.read(authRepositoryProvider).sendOtp(identifier: identifier);
+      await ref
+          .read(authRepositoryProvider)
+          .sendOtp(
+            identifier: _phoneController.text.trim(),
+            requireApprovedSignup: false,
+          );
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute<void>(

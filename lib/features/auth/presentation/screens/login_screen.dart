@@ -4,6 +4,7 @@ import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_mentor_dashboard_screen.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
@@ -57,13 +58,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               false, // This clears the login screen from the "back" history
         );
       } else if (_selectedRole == UserRole.seniorMentor) {
-        // Navigator.of(context).pushAndRemoveUntil(
-        //   MaterialPageRoute(
-        //     builder: (_) => const SeniorMentorDashboardScreen(),
-        //   ),
-        //   (route) =>
-        //       false, // This clears the login screen from the "back" history
-        // );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => const SeniorMentorDashboardScreen(),
+          ),
+          (route) =>
+              false, // This clears the login screen from the "back" history
+        );
       } else if (_selectedRole == UserRole.admin) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),

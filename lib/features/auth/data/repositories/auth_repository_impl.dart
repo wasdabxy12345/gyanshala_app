@@ -93,19 +93,31 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // 1. Check the approval status
-    final status = await getSignupStatus(identifier);
-    if (status != 'approved') {
-      throw Exception('Your account is still $status. OTP cannot be sent.');
+    // This is the variable the warning is talking about
+    final candidates = _phoneCandidates(phone);
+
+    if (requireApprovedSignup) {
+      // 1. Check for new signups
+      final status = await getSignupStatus(identifier);
+      if (status != 'approved') {
+        throw Exception('Your account is still $status. OTP cannot be sent.');
+      }
+    } else {
+      // 2. CHECK FOR FORGOT PASSWORD
+      // Use the 'candidates' variable here to satisfy the compiler and fix the bug
+      final response = await _supabase
+          .from('profiles')
+          .select('id')
+          .inFilter('phone', candidates.toList()) // <--- VARIABLE IS USED HERE
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception('No account found with this phone number.');
+      }
     }
 
-    // 2. Trigger the OTP call ONCE
-    await _auth.signInWithOtp(
-      phone: phone,
-      shouldCreateUser: false, // Account was created at signup
-    );
-
-    debugPrint('✓ Admin-approved OTP sent to: $phone');
+    // Trigger OTP
+    await _auth.signInWithOtp(phone: phone, shouldCreateUser: false);
   }
 
   @override
@@ -191,23 +203,24 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<String> getSignupStatus(String identifier) async {
-    final phone = _normalizePhone(identifier);
-    final rows =
-        await _supabase // Changed from Supabase.instance.client
-            .from('signup_requests')
-            .select('status')
-            .eq('phone', phone)
-            .limit(1);
+    final rows = await _fetchSignupRequestsByPhone(
+      identifier,
+      columns: 'status',
+    );
 
-    if (rows.isEmpty) throw Exception('No signup request found.');
+    if (rows.isEmpty) {
+      throw Exception(
+        'No signup request found for $identifier. Please sign up first.',
+      );
+    }
+
     return (rows.first['status'] as String).toLowerCase();
   }
-
-  // --- Helper Methods ---
 
   String _normalizePhone(String value) {
     final trimmed = value.trim();
     final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+    debugPrint('Normalized phone for query: $digitsOnly');
     if (Validators.isValidPhone(trimmed)) {
       return digitsOnly;
     }
@@ -233,8 +246,10 @@ class AuthRepositoryImpl implements AuthRepository {
   Set<String> _phoneCandidates(String phone) {
     final candidates = <String>{phone};
     if (phone.length > 10) {
+      // If user entered 919876543210, also search for 9876543210
       candidates.add(phone.substring(phone.length - 10));
     } else if (phone.length == 10) {
+      // If user entered 9876543210, also search for 919876543210
       candidates.add('91$phone');
     }
     return candidates;
