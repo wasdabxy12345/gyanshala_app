@@ -1,5 +1,3 @@
-// ignore_for_file: curly_braces_in_flow_control_structures
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
@@ -24,7 +22,6 @@ class SignupVerificationScreen extends ConsumerStatefulWidget {
 
 class _SignupVerificationScreenState
     extends ConsumerState<SignupVerificationScreen> {
-  // final _authRepository = AuthRepositoryImpl.instance;
   String? _persistedIdentifier;
   ApprovalState _state = ApprovalState.loading;
 
@@ -37,8 +34,6 @@ class _SignupVerificationScreenState
   Future<void> _loadAndCheckStatus() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Priority 1: Widget argument (passed directly from Signup)
-    // Priority 2: Stored preference (if returning to the app later)
     final String? idToUse = widget.identifier ?? prefs.getString('pending_id');
 
     if (idToUse == null || idToUse.isEmpty) {
@@ -47,10 +42,8 @@ class _SignupVerificationScreenState
       return;
     }
 
-    // Ensure it's saved for next time
     await prefs.setString('pending_id', idToUse);
 
-    // 1. Get identifier from widget (if coming from Signup) or Prefs (if coming from Welcome)
     _persistedIdentifier = widget.identifier ?? prefs.getString('pending_id');
 
     setState(() {
@@ -62,7 +55,6 @@ class _SignupVerificationScreenState
       return;
     }
 
-    // 2. If we have a new identifier from a fresh signup, save it immediately
     if (widget.identifier != null) {
       await prefs.setString('pending_id', widget.identifier!);
     }
@@ -85,21 +77,17 @@ class _SignupVerificationScreenState
           _state = ApprovalState.pending;
       });
     } catch (e) {
-      debugPrint(
-        "DEBUG: Status fetch failed because: $e",
-      ); // CHECK THIS IN CONSOLE
+      debugPrint("DEBUG: Status fetch failed because: $e");
       setState(() => _state = ApprovalState.error);
     }
   }
-
-  // Inside _SignupVerificationScreenState
 
   bool _isSendingOtp = false;
 
   Future<void> _handleSendOtp() async {
     if (_isSendingOtp || _persistedIdentifier == null) return;
 
-    setState(() => _isSendingOtp = true); // Lock the button
+    setState(() => _isSendingOtp = true);
 
     try {
       await ref
@@ -114,16 +102,13 @@ class _SignupVerificationScreenState
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => OtpVerificationScreen(
-            // FIX: Use _persistedIdentifier instead of _idController
             identifier: _persistedIdentifier!,
             title: 'Verify Phone',
             onVerified: () async {
               try {
-                // 2. Clean up local storage
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('pending_id');
 
-                // 3. Show the success message
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -135,10 +120,8 @@ class _SignupVerificationScreenState
                   );
                 }
 
-                // 4. Wait a moment for the user to read the message
                 await Future.delayed(const Duration(seconds: 2));
 
-                // 5. Finally, Navigate and clear the stack
                 if (!mounted) return;
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -159,7 +142,7 @@ class _SignupVerificationScreenState
         ),
       );
     } catch (e) {
-      setState(() => _isSendingOtp = false); // Unlock on error
+      setState(() => _isSendingOtp = false);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -173,10 +156,9 @@ class _SignupVerificationScreenState
       title: _getTitle(),
       subtitle: _getSubtitle(),
       formChild: Column(
-        mainAxisSize: MainAxisSize.min, // Keeps the column compact
+        mainAxisSize: MainAxisSize.min,
         children: [_buildContent()],
       ),
-      // Fix: Added the required footer argument
       footer: const SizedBox.shrink(),
     );
   }

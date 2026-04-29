@@ -18,7 +18,7 @@ serve(async (req) => {
     let serviceAccount;
     try {
       serviceAccount = JSON.parse(secret);
-    } catch (_e) { // Changed 'e' to '_e' to satisfy the linter
+    } catch (_e) {
       console.log("Failed to parse secret. First 20 chars:", secret.substring(0, 20));
       throw new Error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT secret");
     }
@@ -48,15 +48,15 @@ serve(async (req) => {
               title: "Account Approved! 🎉",
               body: `Hi ${record.first_name}, your request has been accepted. You can now sign in.`
             },
-            android: { priority: "high" }, // Force it to wake up the phone
-            apns: { payload: { aps: { contentAvailable: true } } } // For iOSw
+            android: { priority: "high" },
+            apns: { payload: { aps: { contentAvailable: true } } }
           }
         }),
       }
     );
 
     const result = await response.json();
-    console.log("FIREBASE FINAL RESPONSE:", JSON.stringify(result)); // Look for this in logs!
+    console.log("FIREBASE FINAL RESPONSE:", JSON.stringify(result));
     return new Response(JSON.stringify(result), { status: 200 });
 
   } catch (error: unknown) {

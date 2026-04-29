@@ -49,13 +49,10 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
   }
 
   bool _isHoliday(DateTime date) {
-    // Strip time component for consistent comparison
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
-    // 1. Check if it's a Sunday (0 = Monday, 7 = Sunday)
     if (date.weekday == DateTime.sunday) return true;
 
-    // 2. Check the holiday list
     final isHoliday = _holidays.any(
       (h) =>
           h.year == normalizedDate.year &&
@@ -63,7 +60,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           h.day == normalizedDate.day,
     );
 
-    // Debug: Always log when checking April 18, 2026
     if (normalizedDate.year == 2026 &&
         normalizedDate.month == 4 &&
         normalizedDate.day == 18) {
@@ -100,7 +96,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
     final Map<String, String> existing = {};
     for (var row in data) {
-      // Map database 'present'/'absent' to your UI 'P'/'A'
       existing[row['student_id']] = row['status'] == 'present' ? 'P' : 'A';
     }
 
@@ -120,7 +115,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
         ListTile(
           tileColor: holidaySelected ? Colors.orange.shade50 : null,
           title: Text(
-            "Date: ${DateFormat('dd MMM yyyy (EEEE)').format(widget.date)}", // Added EEEE for day name
+            "Date: ${DateFormat('dd MMM yyyy (EEEE)').format(widget.date)}",
             style: TextStyle(
               color: holidaySelected ? Colors.orange.shade900 : Colors.black,
               fontWeight: holidaySelected ? FontWeight.bold : FontWeight.normal,
@@ -144,14 +139,12 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
         const Divider(height: 0),
 
-        // --- THE CHANGE IS HERE ---
         Expanded(
           child: holidaySelected
-              ? _buildHolidayPlaceholder() // Show this if it's a holiday
-              : _buildStudentList(), // Show the list if it's a working day
+              ? _buildHolidayPlaceholder()
+              : _buildStudentList(),
         ),
 
-        // Only show the Save Button if it's NOT a holiday
         if (!holidaySelected)
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -176,7 +169,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     );
   }
 
-  // Helper widget for the Holiday view
   Widget _buildHolidayPlaceholder() {
     return Center(
       child: Column(
@@ -239,8 +231,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
       },
     );
   }
-
-  // --- MISSING METHODS ADDED BELOW ---
 
   Widget _statusBtn(String id, String label, Color color, bool isSelected) {
     return ChoiceChip(

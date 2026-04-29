@@ -41,8 +41,6 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
     );
   }
 
-  // --- Helper Methods (Moved INSIDE the class) ---
-
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
     return List.generate(
       end.difference(start).inDays + 1,
@@ -238,4 +236,4 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
       },
     );
   }
-} // <--- End of _AttendanceReportTabState
+}

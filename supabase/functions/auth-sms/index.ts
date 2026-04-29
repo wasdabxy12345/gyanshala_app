@@ -7,15 +7,12 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Get the signature headers and raw body
     const payload = await req.text()
     const headers = Object.fromEntries(req.headers)
     
-    // 2. Get the secret we set in Step 1 (stripping the prefix)
     const hookSecret = Deno.env.get('SEND_SMS_HOOK_SECRET')?.replace('v1,whsec_', '')
     if (!hookSecret) throw new Error("Missing hook secret")
 
-    // 3. Verify the webhook signature
     const wh = new Webhook(hookSecret)
     const verifiedPayload = wh.verify(payload, headers) as {
       user: { phone: string },
@@ -26,7 +23,6 @@ serve(async (req) => {
     const phone = user.phone
     const code = sms.otp
     
-    // 4. Your 2Factor Details
     const API_KEY = "edcfdc83-33df-11f1-bfb4-0200cd936042"
     const TEMPLATE_NAME = "YOUR_TEMPLATE_NAME" 
     const cleanPhone = phone.replace('+', '')
@@ -36,7 +32,6 @@ serve(async (req) => {
     const response = await fetch(url, { method: 'GET' })
     const result = await response.json()
 
-    // 5. Return success to Supabase
     return new Response(JSON.stringify({ status: 'success', result }), { 
       status: 200,
       headers: { 'Content-Type': 'application/json' }

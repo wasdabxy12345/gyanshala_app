@@ -17,7 +17,6 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.person_outline),
             title: const Text("Edit Profile"),
             onTap: () async {
-              // 1. Fetch the latest profile data from Supabase
               final supabase = ref.read(supabaseClientProvider);
               final user = supabase.auth.currentUser;
 
@@ -58,20 +57,17 @@ class SettingsScreen extends ConsumerWidget {
                       child: const Text("Cancel"),
                     ),
                     TextButton(
-                      onPressed: () =>
-                          Navigator.pop(context, true), // This returns 'true'
+                      onPressed: () => Navigator.pop(context, true),
                       child: const Text("Logout"),
                     ),
                   ],
                 ),
               );
 
-              // If the user clicked 'Logout', confirm will be true
               if (confirm == true) {
                 try {
                   await ref.read(supabaseClientProvider).auth.signOut();
 
-                  // Force navigation to WelcomeScreen if your Auth wrapper doesn't do it automatically
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(

@@ -15,7 +15,7 @@ abstract class AuthRepository {
     required String qualification,
     required String village,
     required String cluster,
-    required String school, // Add this optional parameter
+    required String school,
   });
 
   Future<void> sendOtp({

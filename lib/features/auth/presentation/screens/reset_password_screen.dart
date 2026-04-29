@@ -28,7 +28,6 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {

@@ -11,13 +11,11 @@ final authStateProvider = StreamProvider<User?>((ref) {
   );
 });
 
-// This helper provider just returns the current user object
 final currentUserProvider = Provider<User?>((ref) {
   return ref.watch(supabaseClientProvider).auth.currentUser;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  // Watch the global supabaseClientProvider we created earlier
   final client = ref.watch(supabaseClientProvider);
   return AuthRepositoryImpl(client);
 });

@@ -1,6 +1,5 @@
 import 'dart:developer' as dev;
 
-// Updated from legacy
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,7 +10,6 @@ class StudentController extends StateNotifier<bool> {
 
   StudentController(this._client) : super(false);
 
-  // register
   Future<bool> registerStudent({
     required String name,
     required String studentId,
@@ -45,7 +43,6 @@ class StudentController extends StateNotifier<bool> {
     }
   }
 
-  // fetch
   Future<List<Map<String, dynamic>>> getMyStudents() async {
     try {
       final user = _client.auth.currentUser;
@@ -61,7 +58,6 @@ class StudentController extends StateNotifier<bool> {
     }
   }
 
-  // submit
   Future<bool> submitAttendance(
     List<Map<String, dynamic>> attendanceData,
   ) async {
@@ -114,7 +110,6 @@ class StudentController extends StateNotifier<bool> {
       final holidays = (data as List).map((row) {
         dev.log('Processing row: $row (type: ${row.runtimeType})');
         final dateStr = row['holiday_date'] as String;
-        // Parse as local date and strip time component
         final parsed = DateTime.parse(dateStr);
         final normalized = DateTime(parsed.year, parsed.month, parsed.day);
         dev.log('Holiday loaded: $dateStr -> $parsed -> $normalized');
@@ -129,7 +124,6 @@ class StudentController extends StateNotifier<bool> {
   }
 }
 
-// The provider
 final studentProvider = StateNotifierProvider<StudentController, bool>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return StudentController(client);

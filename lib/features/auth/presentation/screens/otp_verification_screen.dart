@@ -28,7 +28,6 @@ class OtpVerificationScreen extends ConsumerStatefulWidget {
 class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otpController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {
@@ -55,11 +54,9 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       if (!mounted) return;
 
       try {
-        // This is usually the updatePassword() call from your SignupVerificationScreen
         await widget.onVerified();
         debugPrint('Step 3: onVerified callback completed.');
       } catch (e) {
-        // Silencing the same_password error as discussed
         if (e.toString().contains('same_password')) {
           debugPrint('Step 3: Handled same_password exception. Proceeding...');
         } else {
@@ -67,9 +64,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
         }
       }
 
-      // If we got here, the process is done.
-      // Note: Usually navigation happens inside onVerified,
-      // but let's add a fallback check here.
       debugPrint(
         'Step 4: All steps done. If the screen did not change, check the onVerified function.',
       );

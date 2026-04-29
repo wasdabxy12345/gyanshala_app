@@ -8,7 +8,6 @@ import 'signup_verification_screen.dart';
 class WelcomeScreen extends StatelessWidget {
   final bool showPendingMessage;
 
-  // Add the parameter to the constructor
   const WelcomeScreen({super.key, this.showPendingMessage = false});
 
   @override
@@ -21,7 +20,6 @@ class WelcomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Show this info box only if the user just signed up
                 if (showPendingMessage) ...[
                   const SizedBox(height: 20),
                   Container(
@@ -94,7 +92,6 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // UPDATED: Check Approval Button
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).push(

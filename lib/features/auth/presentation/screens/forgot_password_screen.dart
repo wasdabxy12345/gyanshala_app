@@ -18,7 +18,6 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
 
   @override
   void dispose() {

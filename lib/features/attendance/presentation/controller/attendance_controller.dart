@@ -8,16 +8,15 @@ import '../../../../core/providers/supabase_provider.dart';
 
 class AttendanceController extends StateNotifier<bool> {
   final SupabaseClient _client;
-  bool _isLoading = false; // Add a private loading flag
+  bool _isLoading = false;
 
   AttendanceController(this._client) : super(false);
 
   Future<void> processCheckIn() async {
-    if (_isLoading) return; // Prevent double-taps
+    if (_isLoading) return;
     _isLoading = true;
 
     try {
-      // 1. Service/Permission Check
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         await Geolocator.openLocationSettings();
@@ -28,19 +27,15 @@ class AttendanceController extends StateNotifier<bool> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.deniedForever) {
-          // Permissions are denied forever, handle appropriately.
           return;
         }
       }
 
-      // 2. Get Current Location
       const LocationSettings locationSettings = LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter:
-            10, // Minimum distance (in meters) before an update is fired
+        distanceFilter: 10,
       );
 
-      // Use the 'locationSettings' parameter instead of 'desiredAccuracy'
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: locationSettings,
       );
@@ -57,7 +52,6 @@ class AttendanceController extends StateNotifier<bool> {
         });
       }
 
-      // 3. Simple Toggle (For testing UI stability)
       state = !state;
 
       dev.log(
@@ -66,7 +60,7 @@ class AttendanceController extends StateNotifier<bool> {
     } catch (e, stack) {
       dev.log("Attendance Error", error: e, stackTrace: stack);
     } finally {
-      _isLoading = false; // Always reset loading
+      _isLoading = false;
     }
   }
 }

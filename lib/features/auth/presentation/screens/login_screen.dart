@@ -24,7 +24,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
   UserRole _selectedRole = UserRole.mentor;
 
   @override
@@ -54,25 +53,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (_selectedRole == UserRole.mentor) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const MentorDashboardScreen()),
-          (route) =>
-              false, // This clears the login screen from the "back" history
+          (route) => false,
         );
       } else if (_selectedRole == UserRole.seniorMentor) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => const SeniorMentorDashboardScreen(),
           ),
-          (route) =>
-              false, // This clears the login screen from the "back" history
+          (route) => false,
         );
       } else if (_selectedRole == UserRole.admin) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-          (route) =>
-              false, // This clears the login screen from the "back" history
+          (route) => false,
         );
       } else {
-        // For any other roles, you can add more conditions here
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Role not recognized.')));

@@ -54,7 +54,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     try {
       debugPrint('--- Signup Attempt Start ---');
 
-      // Get the unique device token
       String? pushToken = await FirebaseMessaging.instance.getToken();
 
       await ref
@@ -66,14 +65,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text,
             role: _selectedRole.label ?? '',
             pushToken: pushToken,
-            // Add these extra parameters to your repository method:
             qualification: _qualificationController.text.trim(),
             village: _villageController.text.trim(),
             cluster: _clusterController.text.trim(),
             school: _schoolController.text.trim(),
           );
 
-      // ADD THIS: Save the phone number locally immediately
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pending_id', _phoneController.text.trim());
 
@@ -81,12 +78,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
       if (!mounted) return;
 
-      // Navigate to WelcomeScreen and pass the 'showPendingMessage' flag
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
           builder: (_) => const WelcomeScreen(showPendingMessage: true),
         ),
-        (route) => false, // Clears the stack
+        (route) => false,
       );
     } catch (e) {
       debugPrint('--- SIGNUP ERROR ---');
@@ -101,7 +97,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Helper to check if the current role is mentor-related
     final isMentorType =
         _selectedRole == UserRole.mentor ||
         _selectedRole == UserRole.seniorMentor;
@@ -114,7 +109,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. ROLE SELECTOR AT THE TOP
             const Text(
               'Select Position *',
               style: TextStyle(fontWeight: FontWeight.w600),
@@ -128,7 +122,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 2. COMMON FIELDS (Name)
             Row(
               children: [
                 Expanded(
@@ -161,7 +154,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             const SizedBox(height: 14),
 
-            // 3. CONDITIONAL MENTOR FIELDS
             if (isMentorType) ...[
               TextFormField(
                 controller: _qualificationController,
@@ -211,7 +203,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               const SizedBox(height: 14),
             ],
 
-            // 4. COMMON FIELDS (Phone & Password)
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -260,7 +251,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             const SizedBox(height: 24),
 
-            // 5. SIGNUP BUTTON
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -271,7 +261,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           ],
         ),
       ),
-      footer: _buildFooter(), // Extracted footer to keep code clean
+      footer: _buildFooter(),
     );
   }
 
@@ -282,7 +272,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         const Text('Already have an account? '),
         TextButton(
           onPressed: () {
-            // This assumes you have LoginScreen imported
             Navigator.of(context).pushReplacement(
               MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
             );

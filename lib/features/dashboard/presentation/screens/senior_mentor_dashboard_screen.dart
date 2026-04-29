@@ -26,7 +26,6 @@ class SeniorMentorDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      // We no longer need IndexedStack since HomeContent is the only main view
       body: const HomeContent(),
     );
   }

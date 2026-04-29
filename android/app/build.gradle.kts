@@ -1,10 +1,7 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -15,8 +12,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // Enable core library desugaring
-        isCoreLibraryDesugaringEnabled = true // Note the 'is' and '='
+        isCoreLibraryDesugaringEnabled = true
 
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -36,7 +32,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        multiDexEnabled = true // Add this line
+        multiDexEnabled = true
 
         minSdk = flutter.minSdkVersion
         targetSdk = 34

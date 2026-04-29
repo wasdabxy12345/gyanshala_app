@@ -13,11 +13,10 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> login({
     required String identifier,
     required String password,
-    required String role, // This is the role selected in the UI
+    required String role,
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // 1. Perform standard login
     final response = await _auth.signInWithPassword(
       phone: phone,
       password: password,
@@ -26,19 +25,15 @@ class AuthRepositoryImpl implements AuthRepository {
     final user = response.user;
     if (user == null) throw Exception("User not found.");
 
-    // 2. Check Approval Status (Existing logic)
     final status = user.userMetadata?['status'];
     if (status != 'approved') {
       await _auth.signOut();
       throw Exception("Your account is still pending admin approval.");
     }
 
-    // 3. ROLE VERIFICATION (The Fix)
-    // Check the role stored in metadata (or you could query the 'profiles' table)
     final actualRole = user.userMetadata?['role'];
 
     if (actualRole != role) {
-      // If they logged in as "Mentor" but are an "Admin" in DB, kick them out
       await _auth.signOut();
       throw Exception(
         "Access Denied: You are registered as $actualRole, not $role.",
@@ -55,16 +50,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
     required String role,
-    required String qualification, // Added
-    required String village, // Added
-    required String cluster, // Added
-    required String school, // Added
+    required String qualification,
+    required String village,
+    required String cluster,
+    required String school,
     String? pushToken,
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // This call passes all metadata to the Supabase Auth user.
-    // Your database trigger will then pick these up to create the profile/request.
     await _auth.signUp(
       phone: phone,
       password: password,
@@ -73,10 +66,10 @@ class AuthRepositoryImpl implements AuthRepository {
         'last_name': lastName.trim(),
         'role': role,
         'status': 'pending',
-        'qualification': qualification.trim(), // Pass to metadata
-        'village': village.trim(), // Pass to metadata
-        'cluster': cluster.trim(), // Pass to metadata
-        'school': school.trim(), // Pass to metadata
+        'qualification': qualification.trim(),
+        'village': village.trim(),
+        'cluster': cluster.trim(),
+        'school': school.trim(),
         'push_token': pushToken,
       },
     );
@@ -93,22 +86,18 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // This is the variable the warning is talking about
     final candidates = _phoneCandidates(phone);
 
     if (requireApprovedSignup) {
-      // 1. Check for new signups
       final status = await getSignupStatus(identifier);
       if (status != 'approved') {
         throw Exception('Your account is still $status. OTP cannot be sent.');
       }
     } else {
-      // 2. CHECK FOR FORGOT PASSWORD
-      // Use the 'candidates' variable here to satisfy the compiler and fix the bug
       final response = await _supabase
           .from('profiles')
           .select('id')
-          .inFilter('phone', candidates.toList()) // <--- VARIABLE IS USED HERE
+          .inFilter('phone', candidates.toList())
           .maybeSingle();
 
       if (response == null) {
@@ -116,7 +105,6 @@ class AuthRepositoryImpl implements AuthRepository {
       }
     }
 
-    // Trigger OTP
     await _auth.signInWithOtp(phone: phone, shouldCreateUser: false);
   }
 
@@ -133,7 +121,6 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (response.user != null) {
-        // 1. Give the DB a moment or implement a retry mechanism
         int retryCount = 0;
         bool profileExists = false;
 
@@ -149,17 +136,14 @@ class AuthRepositoryImpl implements AuthRepository {
             break;
           }
 
-          // Wait 1 second before retrying
           await Future.delayed(Duration(seconds: 1));
           retryCount++;
         }
 
         if (!profileExists) {
-          // Log this but don't necessarily crash the auth flow
           if (kDebugMode) {
             print("Warning: Profile record still not found after retries.");
           }
-          // Decide if you want to allow them in or redirect to a 'Setup' page
         }
       }
     } on AuthException catch (e) {
@@ -189,10 +173,8 @@ class AuthRepositoryImpl implements AuthRepository {
             'role': requestRows.first['role'],
           };
 
-    // Update Auth User
     await _auth.updateUser(UserAttributes(password: password, data: metadata));
 
-    // Mark request as completed
     if (requestRows.isNotEmpty) {
       await _supabase
           .from('signup_requests')
@@ -246,10 +228,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Set<String> _phoneCandidates(String phone) {
     final candidates = <String>{phone};
     if (phone.length > 10) {
-      // If user entered 919876543210, also search for 9876543210
       candidates.add(phone.substring(phone.length - 10));
     } else if (phone.length == 10) {
-      // If user entered 9876543210, also search for 919876543210
       candidates.add('91$phone');
     }
     return candidates;
@@ -264,7 +244,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> updateProfile({
     required String firstName,
     required String lastName,
-    String? qualification, // Added optional parameters
+    String? qualification,
     String? village,
     String? cluster,
     String? school,
@@ -278,7 +258,6 @@ class AuthRepositoryImpl implements AuthRepository {
       'updated_at': DateTime.now().toIso8601String(),
     };
 
-    // Only add these to the update map if they aren't null
     if (qualification != null) updateData['qualification'] = qualification;
     if (village != null) updateData['village'] = village;
     if (cluster != null) updateData['cluster'] = cluster;

@@ -11,7 +11,6 @@ class AttendanceCard extends ConsumerWidget {
     final isCheckedIn = ref.watch(attendanceProvider);
 
     return Card(
-      // Using Card widget as it handles constraints better
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -23,7 +22,6 @@ class AttendanceCard extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: IntrinsicHeight(
-          // Forces children to be only as tall as needed
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -58,7 +56,6 @@ class AttendanceCard extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Wrap button in a ConstrainedBox to prevent Infinite Width error
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, maxWidth: 100),
                 child: ElevatedButton(
@@ -67,8 +64,7 @@ class AttendanceCard extends ConsumerWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isCheckedIn ? Colors.red : Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: EdgeInsets
-                        .zero, // Remove internal padding to prevent expansion
+                    padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

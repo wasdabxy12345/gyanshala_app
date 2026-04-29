@@ -39,7 +39,6 @@ class ActionGrid extends StatelessWidget {
     Color color,
   ) {
     return InkWell(
-      // Update this inside your ActionGrid buildMenuCard method:
       onTap: () {
         if (title == "Students") {
           Navigator.push(
@@ -47,7 +46,6 @@ class ActionGrid extends StatelessWidget {
             MaterialPageRoute(builder: (context) => const StudentHubPage()),
           );
         } else {
-          // Placeholder for others
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text("working on it: $title")));
@@ -59,7 +57,7 @@ class ActionGrid extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05), // Updated here
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
@@ -69,7 +67,7 @@ class ActionGrid extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.1), // Updated here
+              backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(icon, color: color),
             ),
             const SizedBox(height: 12),

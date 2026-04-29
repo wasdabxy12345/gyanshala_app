@@ -61,7 +61,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final newPhone = _phoneController.text.trim();
       final oldPhone = widget.initialData['phone'];
 
-      // 1. Update general profile info
       await supabase
           .from('profiles')
           .update({
@@ -75,7 +74,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           })
           .eq('id', supabase.auth.currentUser!.id);
 
-      // 2. If phone changed, trigger OTP
       if (newPhone != oldPhone) {
         await supabase.auth.updateUser(UserAttributes(phone: newPhone));
         setState(() => _isOtpSent = true);
@@ -129,14 +127,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Grayed Out Section
             _buildTextField("First Name", _firstNameController, enabled: false),
             _buildTextField("Last Name", _lastNameController, enabled: false),
             _buildTextField("Role", _roleController, enabled: false),
 
             const Divider(height: 32),
 
-            // Editable Section
             _buildTextField(
               "Phone (Authentication)",
               _phoneController,
