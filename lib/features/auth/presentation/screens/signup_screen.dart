@@ -76,7 +76,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     try {
       String? pushToken = await FirebaseMessaging.instance.getToken();
 
-      // Find the names from the IDs for storage
       final clusterName = _clusters
           .firstWhere(
             (e) => e.id == _selectedClusterId,
@@ -183,83 +182,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            if (isMentorType) ...[
-              TextFormField(
-                controller: _qualificationController,
-                decoration: const InputDecoration(
-                  labelText: 'Qualification *',
-                  prefixIcon: Icon(Icons.school_outlined),
-                ),
-                validator: (value) =>
-                    (value == null || value.isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 14),
 
-              // CLUSTER DROPDOWN
-              DropdownSearch<LocationItem>(
-                items: (filter, loadProps) => _clusters,
-                itemAsString: (item) => item.name,
-                decoratorProps: const DropDownDecoratorProps(
-                  decoration: InputDecoration(
-                    labelText: "Select Cluster *",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                onChanged: (data) async {
-                  setState(() {
-                    _selectedClusterId = data?.id;
-                    _selectedVillageId = null;
-                    _selectedSchoolId = null;
-                    _villages.clear();
-                    _schools.clear();
-                  });
-                  if (data != null) {
-                    final list = await controller.fetchVillages(data.id);
-                    setState(() => _villages.addAll(list));
-                  }
-                },
-              ),
-              if (_selectedClusterId != null) ...[
-                const SizedBox(height: 14),
-                DropdownSearch<LocationItem>(
-                  items: (filter, loadProps) => _villages,
-                  itemAsString: (item) => item.name,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(
-                      labelText: "Select Village *",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  onChanged: (data) async {
-                    setState(() {
-                      _selectedVillageId = data?.id;
-                      _selectedSchoolId = null;
-                      _schools.clear();
-                    });
-                    if (data != null) {
-                      final list = await controller.fetchSchools(data.id);
-                      setState(() => _schools.addAll(list));
-                    }
-                  },
-                ),
-              ],
-              if (_selectedVillageId != null) ...[
-                const SizedBox(height: 14),
-                DropdownSearch<LocationItem>(
-                  items: (filter, loadProps) => _schools,
-                  itemAsString: (item) => item.name,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(
-                      labelText: "Select School *",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  onChanged: (data) =>
-                      setState(() => _selectedSchoolId = data?.id),
-                ),
-              ],
-              const SizedBox(height: 14),
-            ],
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -298,6 +221,88 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ? 'Passwords do not match'
                   : null,
             ),
+
+            const SizedBox(height: 14),
+
+            if (isMentorType) ...[
+              TextFormField(
+                controller: _qualificationController,
+                decoration: const InputDecoration(
+                  labelText: 'Qualification *',
+                  prefixIcon: Icon(Icons.school_outlined),
+                ),
+                validator: (value) =>
+                    (value == null || value.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 14),
+
+              DropdownSearch<LocationItem>(
+                items: (filter, loadProps) => _clusters,
+                itemAsString: (item) => item.name,
+                compareFn: (item1, item2) => item1.id == item2.id,
+                decoratorProps: const DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    labelText: "Select Cluster *",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                onChanged: (data) async {
+                  setState(() {
+                    _selectedClusterId = data?.id;
+                    _selectedVillageId = null;
+                    _selectedSchoolId = null;
+                    _villages.clear();
+                    _schools.clear();
+                  });
+                  if (data != null) {
+                    final list = await controller.fetchVillages(data.id);
+                    setState(() => _villages.addAll(list));
+                  }
+                },
+              ),
+              if (_selectedClusterId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  items: (filter, loadProps) => _villages,
+                  itemAsString: (item) => item.name,
+                  compareFn: (item1, item2) => item1.id == item2.id,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select Village *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (data) async {
+                    setState(() {
+                      _selectedVillageId = data?.id;
+                      _selectedSchoolId = null;
+                      _schools.clear();
+                    });
+                    if (data != null) {
+                      final list = await controller.fetchSchools(data.id);
+                      setState(() => _schools.addAll(list));
+                    }
+                  },
+                ),
+              ],
+              if (_selectedVillageId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  items: (filter, loadProps) => _schools,
+                  itemAsString: (item) => item.name,
+                  compareFn: (item1, item2) => item1.id == item2.id,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select School *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (data) =>
+                      setState(() => _selectedSchoolId = data?.id),
+                ),
+              ],
+            ],
+
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
