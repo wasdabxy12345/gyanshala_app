@@ -4,7 +4,7 @@ import 'dart:developer' as dev;
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/providers/supabase_provider.dart';
+import '../../../core/providers/supabase_provider.dart';
 
 class StudentController extends StateNotifier<bool> {
   final SupabaseClient _client;
@@ -67,13 +67,64 @@ class StudentController extends StateNotifier<bool> {
   ) async {
     state = true;
     try {
-      await _client.from('student_attendance').upsert(attendanceData);
+      await _client
+          .from('student_attendance')
+          .upsert(attendanceData, onConflict: 'student_id, date');
+
       state = false;
       return true;
-    } catch (e) {
-      dev.log("Attendance submission failed", error: e);
+    } catch (e, stack) {
+      dev.log("Attendance submission failed", error: e, stackTrace: stack);
       state = false;
       return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAttendanceRangeReport(
+    DateTime start,
+    DateTime end,
+  ) async {
+    try {
+      final response = await _client.rpc(
+        'get_student_stats',
+        params: {
+          'p_start_date': start.toIso8601String().split('T')[0],
+          'p_end_date': end.toIso8601String().split('T')[0],
+          'p_mentor_id': _client.auth.currentUser?.id,
+        },
+      );
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e, stack) {
+      dev.log("Range report fetch failed", error: e, stackTrace: stack);
+      return [];
+    }
+  }
+
+  Future<List<DateTime>> getHolidays() async {
+    try {
+      dev.log('Fetching holidays from database...');
+      final data = await _client.from('holidays').select('holiday_date');
+      dev.log('Raw data returned: $data (type: ${data.runtimeType})');
+
+      if (data.isEmpty) {
+        dev.log('Database returned empty list');
+        return [];
+      }
+
+      final holidays = (data as List).map((row) {
+        dev.log('Processing row: $row (type: ${row.runtimeType})');
+        final dateStr = row['holiday_date'] as String;
+        // Parse as local date and strip time component
+        final parsed = DateTime.parse(dateStr);
+        final normalized = DateTime(parsed.year, parsed.month, parsed.day);
+        dev.log('Holiday loaded: $dateStr -> $parsed -> $normalized');
+        return normalized;
+      }).toList();
+      dev.log('Total holidays loaded: ${holidays.length}');
+      return holidays;
+    } catch (e, stack) {
+      dev.log("Holiday fetch failed", error: e, stackTrace: stack);
+      return [];
     }
   }
 }

@@ -19,7 +19,7 @@ class RoleSelector extends StatelessWidget {
       children: UserRole.values.map((role) {
         final isSelected = role == selectedRole;
         return ChoiceChip(
-          label: Text(role.label ?? ''),
+          label: Text(role.label),
           selected: isSelected,
           onSelected: (_) => onRoleSelected(role),
           selectedColor: Theme.of(context).colorScheme.primary,

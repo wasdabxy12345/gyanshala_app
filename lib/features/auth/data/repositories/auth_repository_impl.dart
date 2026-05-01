@@ -8,9 +8,7 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._supabase);
   final SupabaseClient _supabase;
   GoTrueClient get _auth => _supabase.auth;
-  void _ensureSupabase() {
-    // If the constructor ran, _supabase is guaranteed to exist
-  }
+  void _ensureSupabase() {}
 
   @override
   Future<void> login({
@@ -20,17 +18,14 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // Attempt standard login
     final response = await _auth.signInWithPassword(
       phone: phone,
       password: password,
     );
 
-    // Check if they are approved via metadata
     final status = response.user?.userMetadata?['status'];
 
     if (status != 'approved') {
-      // Sign them back out if not approved
       await _auth.signOut();
       throw Exception("Your account is still pending admin approval.");
     }
@@ -47,8 +42,6 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // You only need THIS call now.
-    // The database trigger we just wrote handles the 'signup_requests' table.
     await _auth.signUp(
       phone: phone,
       password: password,
@@ -57,7 +50,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'last_name': lastName.trim(),
         'role': role,
         'status': 'pending',
-        'push_token': pushToken, // This metadata is passed to the trigger
+        'push_token': pushToken,
       },
     );
 
@@ -74,19 +67,20 @@ class AuthRepositoryImpl implements AuthRepository {
     _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
-    // 1. Check the approval status
     final status = await getSignupStatus(identifier);
-    if (status != 'approved') {
+
+    if (status == 'pending' || status == 'rejected') {
       throw Exception('Your account is still $status. OTP cannot be sent.');
     }
 
-    // 2. Trigger the OTP call ONCE
-    await _auth.signInWithOtp(
-      phone: phone,
-      shouldCreateUser: false, // Account was created at signup
-    );
-
-    debugPrint('✓ Admin-approved OTP sent to: $phone');
+    try {
+      await _auth.signInWithOtp(phone: phone, shouldCreateUser: false);
+    } on AuthException catch (e) {
+      if (e.message.contains('User not found')) {
+        throw Exception('No account found for this phone number.');
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -102,7 +96,6 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (response.user != null) {
-        // 1. Give the DB a moment or implement a retry mechanism
         int retryCount = 0;
         bool profileExists = false;
 
@@ -118,17 +111,14 @@ class AuthRepositoryImpl implements AuthRepository {
             break;
           }
 
-          // Wait 1 second before retrying
           await Future.delayed(Duration(seconds: 1));
           retryCount++;
         }
 
         if (!profileExists) {
-          // Log this but don't necessarily crash the auth flow
           if (kDebugMode) {
             print("Warning: Profile record still not found after retries.");
           }
-          // Decide if you want to allow them in or redirect to a 'Setup' page
         }
       }
     } on AuthException catch (e) {
@@ -146,6 +136,8 @@ class AuthRepositoryImpl implements AuthRepository {
     _ensureSupabase();
     final phone = _normalizePhone(identifier);
 
+    await _auth.updateUser(UserAttributes(password: password));
+
     final requestRows = await _fetchSignupRequestsByPhone(
       phone,
       columns: 'phone,first_name,last_name,role',
@@ -159,10 +151,8 @@ class AuthRepositoryImpl implements AuthRepository {
             'role': requestRows.first['role'],
           };
 
-    // Update Auth User
     await _auth.updateUser(UserAttributes(password: password, data: metadata));
 
-    // Mark request as completed
     if (requestRows.isNotEmpty) {
       await _supabase
           .from('signup_requests')
@@ -174,18 +164,11 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<String> getSignupStatus(String identifier) async {
     final phone = _normalizePhone(identifier);
-    final rows =
-        await _supabase // Changed from Supabase.instance.client
-            .from('signup_requests')
-            .select('status')
-            .eq('phone', phone)
-            .limit(1);
+    final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status');
 
-    if (rows.isEmpty) throw Exception('No signup request found.');
+    if (rows.isEmpty) return 'not_found';
     return (rows.first['status'] as String).toLowerCase();
   }
-
-  // --- Helper Methods ---
 
   String _normalizePhone(String value) {
     final trimmed = value.trim();

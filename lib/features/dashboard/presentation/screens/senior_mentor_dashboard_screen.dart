@@ -5,13 +5,12 @@ import 'package:gyanshala_app/features/settings/presentation/views/settings_scre
 import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
-class MentorDashboardScreen extends ConsumerWidget {
-  const MentorDashboardScreen({super.key});
+class SeniorMentorDashboardScreen extends ConsumerWidget {
+  const SeniorMentorDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: const Text("GS + UNM Portal"),
         centerTitle: true,
@@ -44,7 +43,7 @@ class HomeContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Welcome, Mentor",
+              "Welcome, Senior Mentor",
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 20),

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_mentor_dashboard_screen.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
@@ -42,11 +44,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .login(
             identifier: _identifierController.text,
             password: _passwordController.text,
-            role: _selectedRole.label ?? '',
+            role: _selectedRole.label,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signed in as ${_selectedRole.label ?? ''}')),
+        SnackBar(content: Text('Signed in as ${_selectedRole.label}')),
       );
 
       if (_selectedRole == UserRole.mentor) {
@@ -56,21 +58,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               false, // This clears the login screen from the "back" history
         );
       } else if (_selectedRole == UserRole.seniorMentor) {
-        // Navigator.of(context).pushAndRemoveUntil(
-        //   MaterialPageRoute(
-        //     builder: (_) => const SeniorMentorDashboardScreen(),
-        //   ),
-        //   (route) =>
-        //       false, // This clears the login screen from the "back" history
-        // );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => const SeniorMentorDashboardScreen(),
+          ),
+          (route) =>
+              false, // This clears the login screen from the "back" history
+        );
       } else if (_selectedRole == UserRole.admin) {
-        // Navigator.of(context).pushAndRemoveUntil(
-        //   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-        //   (route) =>
-        //       false, // This clears the login screen from the "back" history
-        // );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+          (route) =>
+              false, // This clears the login screen from the "back" history
+        );
       } else {
-        // For any other roles, you can add more conditions here
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Role not recognized.')));

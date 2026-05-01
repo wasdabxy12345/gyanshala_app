@@ -1,9 +1,13 @@
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/models/location_model.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
+import 'package:gyanshala_app/features/location/controller/location_controller.dart'
+    as controller;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/utils/validators.dart';
@@ -28,6 +32,32 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   // final _authRepository = AuthRepositoryImpl.instance;
   UserRole _selectedRole = UserRole.mentor;
 
+  final List<LocationItem> _clusters = [];
+  final List<LocationItem> _villages = [];
+  final List<LocationItem> _schools = [];
+
+  String? _selectedClusterId;
+  String? _selectedVillageId;
+  String? _selectedSchoolId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClusters();
+  }
+
+  Future<void> _loadClusters() async {
+    try {
+      final clusters = await controller.fetchClusters();
+      setState(() {
+        _clusters.clear();
+        _clusters.addAll(clusters);
+      });
+    } catch (e) {
+      debugPrint('Error loading clusters: $e');
+    }
+  }
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -42,9 +72,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     try {
-      debugPrint('--- Signup Attempt Start ---');
-
-      // Get the unique device token
       String? pushToken = await FirebaseMessaging.instance.getToken();
 
       await ref
@@ -54,11 +81,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             lastName: _lastNameController.text.trim(),
             identifier: _phoneController.text.trim(),
             password: _passwordController.text,
-            role: _selectedRole.label ?? '',
-            pushToken: pushToken, // Now the variable is "used"!
+            role: _selectedRole.label,
+            pushToken: pushToken,
           );
 
-      // ADD THIS: Save the phone number locally immediately
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pending_id', _phoneController.text.trim());
 
@@ -66,12 +92,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
       if (!mounted) return;
 
-      // Navigate to WelcomeScreen and pass the 'showPendingMessage' flag
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
           builder: (_) => const WelcomeScreen(showPendingMessage: true),
         ),
-        (route) => false, // Clears the stack
+        (route) => false,
       );
     } catch (e) {
       debugPrint('--- SIGNUP ERROR ---');
@@ -94,6 +119,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 20),
+            const Text(
+              'Select Position *',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            RoleSelector(
+              selectedRole: _selectedRole,
+              onRoleSelected: (role) {
+                setState(() => _selectedRole = role);
+              },
+            ),
+            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
@@ -185,18 +223,131 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 return null;
               },
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'Select Position *',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            RoleSelector(
-              selectedRole: _selectedRole,
-              onRoleSelected: (role) {
-                setState(() => _selectedRole = role);
-              },
-            ),
+            if (_selectedRole != UserRole.admin) ...[
+              DropdownSearch<LocationItem>(
+                compareFn: (item, selectedItem) => item.id == selectedItem.id,
+                popupProps: PopupProps.menu(
+                  showSearchBox: true,
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: "Search Cluster...",
+                      prefixIcon: const Icon(Icons.search),
+                    ),
+                  ),
+                  emptyBuilder: (context, searchEntry) =>
+                      const Center(child: Text("No clusters found")),
+                ),
+                items: (filter, loadProps) => _clusters,
+                itemAsString: (LocationItem u) => u.name,
+                decoratorProps: DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    labelText: "Select Cluster *",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                selectedItem: _clusters.isEmpty || _selectedClusterId == null
+                    ? null
+                    : _clusters.firstWhere(
+                        (c) => c.id == _selectedClusterId,
+                        orElse: () => LocationItem(id: '', name: ''),
+                      ),
+                onChanged: (LocationItem? data) async {
+                  if (data == null) return;
+                  setState(() {
+                    _selectedClusterId = data.id;
+                    _selectedVillageId = null;
+                    _selectedSchoolId = null;
+                    _villages.clear();
+                    _schools.clear();
+                  });
+                  final list = await controller.fetchVillages(data.id);
+                  setState(() {
+                    _villages.addAll(list);
+                  });
+                },
+              ),
+
+              if (_selectedClusterId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  compareFn: (item, selectedItem) => item.id == selectedItem.id,
+                  popupProps: PopupProps.menu(
+                    showSearchBox: true,
+                    searchFieldProps: TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: "Search Village...",
+                        prefixIcon: const Icon(Icons.search),
+                      ),
+                    ),
+                    emptyBuilder: (context, searchEntry) =>
+                        const Center(child: Text("No villages found")),
+                  ),
+                  items: (filter, loadProps) => _villages,
+                  itemAsString: (LocationItem u) => u.name,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select Village *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  selectedItem: _villages.isEmpty || _selectedVillageId == null
+                      ? null
+                      : _villages.firstWhere(
+                          (v) => v.id == _selectedVillageId,
+                          orElse: () => LocationItem(id: '', name: ''),
+                        ),
+                  onChanged: (LocationItem? data) async {
+                    if (data == null) return;
+                    setState(() {
+                      _selectedVillageId = data.id;
+                      _selectedSchoolId = null;
+                      _schools.clear();
+                    });
+                    final list = await controller.fetchSchools(data.id);
+                    setState(() {
+                      _schools.addAll(list);
+                    });
+                  },
+                ),
+              ],
+
+              if (_selectedVillageId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  compareFn: (item, selectedItem) => item.id == selectedItem.id,
+                  popupProps: PopupProps.menu(
+                    showSearchBox: true,
+                    searchFieldProps: TextFieldProps(
+                      decoration: InputDecoration(
+                        hintText: "Search School...",
+                        prefixIcon: const Icon(Icons.search),
+                      ),
+                    ),
+                    emptyBuilder: (context, searchEntry) =>
+                        const Center(child: Text("No schools found")),
+                  ),
+                  items: (filter, loadProps) => _schools,
+                  itemAsString: (LocationItem u) => u.name,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select School *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  selectedItem: _schools.isEmpty || _selectedSchoolId == null
+                      ? null
+                      : _schools.firstWhere(
+                          (s) => s.id == _selectedSchoolId,
+                          orElse: () => LocationItem(id: '', name: ''),
+                        ),
+                  onChanged: (LocationItem? data) {
+                    setState(() {
+                      _selectedSchoolId = data?.id;
+                    });
+                  },
+                ),
+              ],
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
