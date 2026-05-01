@@ -41,7 +41,7 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
     );
   }
 
-  // --- Helper Methods (Moved INSIDE the class) ---
+  // --- Helper Methods ---
 
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
     return List.generate(
@@ -126,8 +126,13 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
           .read(studentProvider.notifier)
           .getAttendanceRangeReport(widget.startDate, widget.endDate),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text("No attendance data found."));
+        }
 
         final students = snapshot.data!
             .where(
@@ -149,19 +154,25 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     border: TableBorder.all(color: Colors.grey[300]!),
-                    headingRowHeight: 80,
-                    columnSpacing: 15,
+                    headingRowHeight: 70,
+                    columnSpacing: 12,
+                    horizontalMargin: 10,
                     columns: [
                       const DataColumn(label: Text('Student\nName')),
                       ...dates.map(
                         (d) => DataColumn(
-                          label: Container(
-                            width: 40,
-                            color: _isHoliday(d) ? Colors.grey[200] : null,
+                          label: SizedBox(
+                            width: 35,
                             child: Center(
                               child: Text(
                                 "${DateFormat('MM/dd').format(d)}\n${DateFormat('E').format(d)}",
                                 textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _isHoliday(d)
+                                      ? Colors.grey
+                                      : Colors.black,
+                                ),
                               ),
                             ),
                           ),
@@ -179,40 +190,41 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
 
                         return DataRow(
                           cells: [
-                            DataCell(_buildNameCell(student['full_name'])),
+                            DataCell(
+                              _buildNameCell(student['full_name'] ?? 'Unknown'),
+                            ),
                             ...dates.map((d) {
                               final key = DateFormat('yyyy-MM-dd').format(d);
                               final status = attMap[key];
                               final holiday = _isHoliday(d);
 
-                              if (!holiday && status == 'present')
+                              if (!holiday && status == 'present') {
                                 presentCount++;
+                              }
 
                               return DataCell(
                                 Container(
-                                  color: holiday ? Colors.grey[200] : null,
-                                  child: Center(
-                                    child: holiday
-                                        ? const Text(
-                                            "-",
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                            ),
-                                          )
-                                        : Text(
-                                            status == 'present'
-                                                ? 'P'
-                                                : (status == 'absent'
-                                                      ? 'A'
-                                                      : ''),
-                                            style: TextStyle(
-                                              color: status == 'present'
-                                                  ? Colors.green
-                                                  : Colors.red,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                  width: 35,
+                                  color: holiday ? Colors.grey[100] : null,
+                                  alignment: Alignment.center,
+                                  child: holiday
+                                      ? const Text(
+                                          "-",
+                                          style: TextStyle(color: Colors.grey),
+                                        )
+                                      : Text(
+                                          status == 'present'
+                                              ? 'P'
+                                              : (status == 'absent'
+                                                    ? 'A'
+                                                    : '-'),
+                                          style: TextStyle(
+                                            color: status == 'present'
+                                                ? Colors.green
+                                                : Colors.red,
+                                            fontWeight: FontWeight.bold,
                                           ),
-                                  ),
+                                        ),
                                 ),
                               );
                             }),
@@ -221,6 +233,10 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
                                 child: Text(
                                   "$presentCount\n${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%",
                                   textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ),
                             ),
@@ -238,4 +254,4 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
       },
     );
   }
-} // <--- End of _AttendanceReportTabState
+}

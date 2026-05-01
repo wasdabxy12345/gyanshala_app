@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/location_model.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:gyanshala_app/features/location/controller/location_controller.dart'
     as controller;
@@ -13,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
-import 'login_screen.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -29,7 +29,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  // final _authRepository = AuthRepositoryImpl.instance;
+  final _qualificationController = TextEditingController();
+
   UserRole _selectedRole = UserRole.mentor;
 
   final List<LocationItem> _clusters = [];
@@ -65,6 +66,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _qualificationController.dispose();
     super.dispose();
   }
 
@@ -73,6 +75,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     try {
       String? pushToken = await FirebaseMessaging.instance.getToken();
+
+      // Find the names from the IDs for storage
+      final clusterName = _clusters
+          .firstWhere(
+            (e) => e.id == _selectedClusterId,
+            orElse: () => LocationItem(id: '', name: ''),
+          )
+          .name;
+      final villageName = _villages
+          .firstWhere(
+            (e) => e.id == _selectedVillageId,
+            orElse: () => LocationItem(id: '', name: ''),
+          )
+          .name;
+      final schoolName = _schools
+          .firstWhere(
+            (e) => e.id == _selectedSchoolId,
+            orElse: () => LocationItem(id: '', name: ''),
+          )
+          .name;
 
       await ref
           .read(authRepositoryProvider)
@@ -83,12 +105,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text,
             role: _selectedRole.label,
             pushToken: pushToken,
+            qualification: _qualificationController.text.trim(),
+            cluster: clusterName,
+            village: villageName,
+            school: schoolName,
           );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pending_id', _phoneController.text.trim());
-
-      debugPrint('Signup successful and ID persisted.');
 
       if (!mounted) return;
 
@@ -99,9 +123,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         (route) => false,
       );
     } catch (e) {
-      debugPrint('--- SIGNUP ERROR ---');
-      debugPrint(e.toString());
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
@@ -111,6 +132,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMentorType =
+        _selectedRole == UserRole.mentor ||
+        _selectedRole == UserRole.seniorMentor;
+
     return AuthShell(
       title: 'Signup',
       subtitle: 'Submit details for admin approval',
@@ -119,7 +144,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
             const Text(
               'Select Position *',
               style: TextStyle(fontWeight: FontWeight.w600),
@@ -127,9 +151,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const SizedBox(height: 8),
             RoleSelector(
               selectedRole: _selectedRole,
-              onRoleSelected: (role) {
-                setState(() => _selectedRole = role);
-              },
+              onRoleSelected: (role) => setState(() => _selectedRole = role),
             ),
             const SizedBox(height: 20),
             Row(
@@ -137,52 +159,118 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _firstNameController,
-                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'First Name *',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Required';
-                      }
-                      return null;
-                    },
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Required'
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     controller: _lastNameController,
-                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(labelText: 'Last Name *'),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Required';
-                      }
-                      return null;
-                    },
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty)
+                        ? 'Required'
+                        : null,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
+            if (isMentorType) ...[
+              TextFormField(
+                controller: _qualificationController,
+                decoration: const InputDecoration(
+                  labelText: 'Qualification *',
+                  prefixIcon: Icon(Icons.school_outlined),
+                ),
+                validator: (value) =>
+                    (value == null || value.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 14),
+
+              // CLUSTER DROPDOWN
+              DropdownSearch<LocationItem>(
+                items: (filter, loadProps) => _clusters,
+                itemAsString: (item) => item.name,
+                decoratorProps: const DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    labelText: "Select Cluster *",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                onChanged: (data) async {
+                  setState(() {
+                    _selectedClusterId = data?.id;
+                    _selectedVillageId = null;
+                    _selectedSchoolId = null;
+                    _villages.clear();
+                    _schools.clear();
+                  });
+                  if (data != null) {
+                    final list = await controller.fetchVillages(data.id);
+                    setState(() => _villages.addAll(list));
+                  }
+                },
+              ),
+              if (_selectedClusterId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  items: (filter, loadProps) => _villages,
+                  itemAsString: (item) => item.name,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select Village *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (data) async {
+                    setState(() {
+                      _selectedVillageId = data?.id;
+                      _selectedSchoolId = null;
+                      _schools.clear();
+                    });
+                    if (data != null) {
+                      final list = await controller.fetchSchools(data.id);
+                      setState(() => _schools.addAll(list));
+                    }
+                  },
+                ),
+              ],
+              if (_selectedVillageId != null) ...[
+                const SizedBox(height: 14),
+                DropdownSearch<LocationItem>(
+                  items: (filter, loadProps) => _schools,
+                  itemAsString: (item) => item.name,
+                  decoratorProps: const DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select School *",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (data) =>
+                      setState(() => _selectedSchoolId = data?.id),
+                ),
+              ],
+              const SizedBox(height: 14),
+            ],
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Phone Number *',
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
               validator: (value) {
                 final phone = value?.trim() ?? '';
-                if (phone.isEmpty) {
-                  return 'Phone Number is required';
-                }
-                if (!Validators.isValidPhone(phone)) {
-                  return 'Enter a valid phone number';
-                }
+                if (phone.isEmpty) return 'Required';
+                if (!Validators.isValidPhone(phone)) return 'Invalid phone';
                 return null;
               },
             ),
@@ -190,20 +278,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Password *',
                 prefixIcon: Icon(Icons.lock_outline),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Password is required';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
+              validator: (value) => (value == null || value.length < 6)
+                  ? 'Min 6 characters'
+                  : null,
             ),
             const SizedBox(height: 14),
             TextFormField(
@@ -213,141 +294,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 labelText: 'Confirm Password *',
                 prefixIcon: Icon(Icons.lock_person_outlined),
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please confirm your password';
-                }
-                if (value != _passwordController.text) {
-                  return 'Passwords do not match';
-                }
-                return null;
-              },
+              validator: (value) => (value != _passwordController.text)
+                  ? 'Passwords do not match'
+                  : null,
             ),
-            if (_selectedRole != UserRole.admin) ...[
-              DropdownSearch<LocationItem>(
-                compareFn: (item, selectedItem) => item.id == selectedItem.id,
-                popupProps: PopupProps.menu(
-                  showSearchBox: true,
-                  searchFieldProps: TextFieldProps(
-                    decoration: InputDecoration(
-                      hintText: "Search Cluster...",
-                      prefixIcon: const Icon(Icons.search),
-                    ),
-                  ),
-                  emptyBuilder: (context, searchEntry) =>
-                      const Center(child: Text("No clusters found")),
-                ),
-                items: (filter, loadProps) => _clusters,
-                itemAsString: (LocationItem u) => u.name,
-                decoratorProps: DropDownDecoratorProps(
-                  decoration: InputDecoration(
-                    labelText: "Select Cluster *",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                selectedItem: _clusters.isEmpty || _selectedClusterId == null
-                    ? null
-                    : _clusters.firstWhere(
-                        (c) => c.id == _selectedClusterId,
-                        orElse: () => LocationItem(id: '', name: ''),
-                      ),
-                onChanged: (LocationItem? data) async {
-                  if (data == null) return;
-                  setState(() {
-                    _selectedClusterId = data.id;
-                    _selectedVillageId = null;
-                    _selectedSchoolId = null;
-                    _villages.clear();
-                    _schools.clear();
-                  });
-                  final list = await controller.fetchVillages(data.id);
-                  setState(() {
-                    _villages.addAll(list);
-                  });
-                },
-              ),
-
-              if (_selectedClusterId != null) ...[
-                const SizedBox(height: 14),
-                DropdownSearch<LocationItem>(
-                  compareFn: (item, selectedItem) => item.id == selectedItem.id,
-                  popupProps: PopupProps.menu(
-                    showSearchBox: true,
-                    searchFieldProps: TextFieldProps(
-                      decoration: InputDecoration(
-                        hintText: "Search Village...",
-                        prefixIcon: const Icon(Icons.search),
-                      ),
-                    ),
-                    emptyBuilder: (context, searchEntry) =>
-                        const Center(child: Text("No villages found")),
-                  ),
-                  items: (filter, loadProps) => _villages,
-                  itemAsString: (LocationItem u) => u.name,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(
-                      labelText: "Select Village *",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  selectedItem: _villages.isEmpty || _selectedVillageId == null
-                      ? null
-                      : _villages.firstWhere(
-                          (v) => v.id == _selectedVillageId,
-                          orElse: () => LocationItem(id: '', name: ''),
-                        ),
-                  onChanged: (LocationItem? data) async {
-                    if (data == null) return;
-                    setState(() {
-                      _selectedVillageId = data.id;
-                      _selectedSchoolId = null;
-                      _schools.clear();
-                    });
-                    final list = await controller.fetchSchools(data.id);
-                    setState(() {
-                      _schools.addAll(list);
-                    });
-                  },
-                ),
-              ],
-
-              if (_selectedVillageId != null) ...[
-                const SizedBox(height: 14),
-                DropdownSearch<LocationItem>(
-                  compareFn: (item, selectedItem) => item.id == selectedItem.id,
-                  popupProps: PopupProps.menu(
-                    showSearchBox: true,
-                    searchFieldProps: TextFieldProps(
-                      decoration: InputDecoration(
-                        hintText: "Search School...",
-                        prefixIcon: const Icon(Icons.search),
-                      ),
-                    ),
-                    emptyBuilder: (context, searchEntry) =>
-                        const Center(child: Text("No schools found")),
-                  ),
-                  items: (filter, loadProps) => _schools,
-                  itemAsString: (LocationItem u) => u.name,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(
-                      labelText: "Select School *",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  selectedItem: _schools.isEmpty || _selectedSchoolId == null
-                      ? null
-                      : _schools.firstWhere(
-                          (s) => s.id == _selectedSchoolId,
-                          orElse: () => LocationItem(id: '', name: ''),
-                        ),
-                  onChanged: (LocationItem? data) {
-                    setState(() {
-                      _selectedSchoolId = data?.id;
-                    });
-                  },
-                ),
-              ],
-            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -359,20 +309,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           ],
         ),
       ),
-      footer: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('Already have an account? '),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-              );
-            },
-            child: const Text('Log In'),
+      footer: _buildFooter(),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('Already have an account? '),
+        TextButton(
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
           ),
-        ],
-      ),
+          child: const Text('Log In'),
+        ),
+      ],
     );
   }
 }

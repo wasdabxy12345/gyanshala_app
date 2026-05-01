@@ -12,11 +12,8 @@ class AuthWrapper extends ConsumerWidget {
 
     return authState.when(
       data: (user) {
-        if (user == null) return const WelcomeScreen(); // Show Login/Signup
+        if (user == null) return const WelcomeScreen();
 
-        // If you want to ALWAYS show login on restart,
-        // you would call ref.read(authRepositoryProvider).signOut()
-        // in an initState or use a 'firstRun' flag.
         return const WelcomeScreen();
       },
       loading: () =>

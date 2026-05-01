@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/features/students/controller/student_controller.dart';
+import 'package:gyanshala_app/features/students/presentation/views/add_student_screen.dart';
 
 class StudentListTab extends ConsumerStatefulWidget {
   final String searchQuery;
@@ -11,12 +12,12 @@ class StudentListTab extends ConsumerStatefulWidget {
 }
 
 class _StudentListTabState extends ConsumerState<StudentListTab> {
-  String? selectedGender;
-  int? selectedGrade;
-  String? selectedSchool;
-  String? selectedVillage;
-  String? selectedCluster;
-  bool _showFilters = false;
+  // Using Set for Multi-selection logic
+  final Set<String> selectedGenders = {};
+  final Set<int> selectedGrades = {};
+  final Set<String> selectedSchools = {};
+  final Set<String> selectedVillages = {};
+  final Set<String> selectedClusters = {};
 
   bool _matchesSearch(Map<String, dynamic> student, String query) {
     if (query.isEmpty) return true;
@@ -47,19 +48,19 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
   }
 
   bool _matchesFilters(Map<String, dynamic> student) {
-    if (selectedGender != null &&
-        student['gender']?.toString() != selectedGender)
+    if (selectedGenders.isNotEmpty &&
+        !selectedGenders.contains(student['gender']?.toString()))
       return false;
-    if (selectedGrade != null && student['grade'] != selectedGrade)
+    if (selectedGrades.isNotEmpty && !selectedGrades.contains(student['grade']))
       return false;
-    if (selectedSchool != null &&
-        student['school_name']?.toString() != selectedSchool)
+    if (selectedSchools.isNotEmpty &&
+        !selectedSchools.contains(student['school_name']?.toString()))
       return false;
-    if (selectedVillage != null &&
-        student['village_name']?.toString() != selectedVillage)
+    if (selectedVillages.isNotEmpty &&
+        !selectedVillages.contains(student['village_name']?.toString()))
       return false;
-    if (selectedCluster != null &&
-        student['cluster_name']?.toString() != selectedCluster)
+    if (selectedClusters.isNotEmpty &&
+        !selectedClusters.contains(student['cluster_name']?.toString()))
       return false;
     return true;
   }
@@ -74,7 +75,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
             return const Center(child: CircularProgressIndicator());
 
           final allStudents = snapshot.data!;
-
           final filteredStudents = allStudents
               .where(
                 (s) =>
@@ -82,7 +82,7 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
               )
               .toList();
 
-          // Get unique filter values
+          // Extract unique values for filter options
           final genders =
               allStudents
                   .map((s) => s['gender']?.toString())
@@ -90,7 +90,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                   .toSet()
                   .toList()
                 ..sort();
-
           final grades =
               allStudents
                   .map((s) => s['grade'] as int?)
@@ -98,7 +97,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                   .toSet()
                   .toList()
                 ..sort();
-
           final schools =
               allStudents
                   .map((s) => s['school_name']?.toString())
@@ -106,7 +104,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                   .toSet()
                   .toList()
                 ..sort();
-
           final villages =
               allStudents
                   .map((s) => s['village_name']?.toString())
@@ -114,7 +111,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                   .toSet()
                   .toList()
                 ..sort();
-
           final clusters =
               allStudents
                   .map((s) => s['cluster_name']?.toString())
@@ -125,102 +121,47 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
 
           return Column(
             children: [
-              if (_showFilters)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        DropdownButton<String>(
-                          hint: const Text('Gender'),
-                          value: selectedGender,
-                          items: genders
-                              .map(
-                                (g) =>
-                                    DropdownMenuItem(value: g, child: Text(g)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedGender = val),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      _filterButton('Gender', genders, selectedGenders),
+                      const SizedBox(width: 8),
+                      _filterButton(
+                        'Grade',
+                        grades,
+                        selectedGrades,
+                        labelBuilder: (g) => 'Grade $g',
+                      ),
+                      const SizedBox(width: 8),
+                      _filterButton('School', schools, selectedSchools),
+                      const SizedBox(width: 8),
+                      _filterButton('Village', villages, selectedVillages),
+                      const SizedBox(width: 8),
+                      _filterButton('Cluster', clusters, selectedClusters),
+                      if ([
+                        selectedGenders,
+                        selectedGrades,
+                        selectedSchools,
+                        selectedVillages,
+                        selectedClusters,
+                      ].any((s) => s.isNotEmpty))
+                        TextButton(
+                          onPressed: () => setState(() {
+                            selectedGenders.clear();
+                            selectedGrades.clear();
+                            selectedSchools.clear();
+                            selectedVillages.clear();
+                            selectedClusters.clear();
+                          }),
+                          child: const Text('Clear'),
                         ),
-                        const SizedBox(width: 12),
-                        DropdownButton<int>(
-                          hint: const Text('Grade'),
-                          value: selectedGrade,
-                          items: grades
-                              .map(
-                                (g) => DropdownMenuItem(
-                                  value: g,
-                                  child: Text('Grade $g'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedGrade = val),
-                        ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('School'),
-                          value: selectedSchool,
-                          items: schools
-                              .map(
-                                (s) =>
-                                    DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedSchool = val),
-                        ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('Village'),
-                          value: selectedVillage,
-                          items: villages
-                              .map(
-                                (v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedVillage = val),
-                        ),
-                        const SizedBox(width: 12),
-                        DropdownButton<String>(
-                          hint: const Text('Cluster'),
-                          value: selectedCluster,
-                          items: clusters
-                              .map(
-                                (c) =>
-                                    DropdownMenuItem(value: c, child: Text(c)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => selectedCluster = val),
-                        ),
-                        const SizedBox(width: 12),
-                        if (selectedGender != null ||
-                            selectedGrade != null ||
-                            selectedSchool != null ||
-                            selectedVillage != null ||
-                            selectedCluster != null)
-                          SizedBox(
-                            width: 120,
-                            child: ElevatedButton(
-                              onPressed: () => setState(() {
-                                selectedGender = null;
-                                selectedGrade = null;
-                                selectedSchool = null;
-                                selectedVillage = null;
-                                selectedCluster = null;
-                              }),
-                              child: const Text('Clear Filters'),
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
+              ),
               Expanded(
                 child: filteredStudents.isEmpty
                     ? const Center(child: Text('No students found'))
@@ -272,22 +213,76 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
           );
         },
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'filter',
-            onPressed: () => setState(() => _showFilters = !_showFilters),
-            mini: true,
-            child: const Icon(Icons.filter_list),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AddStudentScreen())),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _filterButton<T>(
+    String title,
+    List<T> options,
+    Set<T> selected, {
+    String Function(T)? labelBuilder,
+  }) {
+    return OutlinedButton(
+      onPressed: () => _showMultiSelectDialog<T>(
+        context: context,
+        title: title,
+        options: options,
+        selected: selected,
+        labelBuilder: labelBuilder,
+      ),
+      child: Text(selected.isEmpty ? title : '$title (${selected.length})'),
+    );
+  }
+
+  Future<void> _showMultiSelectDialog<T>({
+    required BuildContext context,
+    required String title,
+    required List<T> options,
+    required Set<T> selected,
+    String Function(T value)? labelBuilder,
+  }) async {
+    final temp = Set<T>.from(selected);
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Select $title'),
+        content: StatefulBuilder(
+          builder: (context, setLocalState) => SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: options.map((option) {
+                return CheckboxListTile(
+                  title: Text(labelBuilder?.call(option) ?? option.toString()),
+                  value: temp.contains(option),
+                  onChanged: (val) => setLocalState(
+                    () => val == true ? temp.add(option) : temp.remove(option),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'add',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
             onPressed: () {
-              // Add your Navigation to AddStudentScreen here
+              setState(() {
+                selected.clear();
+                selected.addAll(temp);
+              });
+              Navigator.pop(ctx);
             },
-            child: const Icon(Icons.add),
+            child: const Text('Apply'),
           ),
         ],
       ),

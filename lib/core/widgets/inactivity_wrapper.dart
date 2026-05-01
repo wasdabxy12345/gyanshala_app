@@ -15,7 +15,6 @@ class InactivityWrapper extends ConsumerStatefulWidget {
 class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
   Timer? _timer;
 
-  // Set inactivity duration (e.g., 15 minutes)
   static const _inactivityDuration = Duration(minutes: 15);
 
   void _resetTimer() {
@@ -24,10 +23,8 @@ class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
   }
 
   void _logoutUser() {
-    // This logs the user out from Supabase
     ref.read(authRepositoryProvider).signOut();
 
-    // Optional: Show a message
     debugPrint("User logged out due to inactivity");
   }
 
@@ -46,8 +43,7 @@ class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
   @override
   Widget build(BuildContext context) {
     return Listener(
-      onPointerDown: (_) =>
-          _resetTimer(), // Reset timer whenever screen is touched
+      onPointerDown: (_) => _resetTimer(),
       behavior: HitTestBehavior.translucent,
       child: widget.child,
     );

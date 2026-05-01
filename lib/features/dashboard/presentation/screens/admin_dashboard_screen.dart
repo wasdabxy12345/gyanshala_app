@@ -49,11 +49,10 @@ class AdminHomeContent extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Replaced Mentor AttendanceCard with a Summary Card
             _buildSummaryCard(
               context,
               title: "Pending Signup Requests",
-              count: "5", // This will eventually come from a provider
+              count: "5",
               icon: Icons.person_add_alt_1,
               color: Colors.orange,
               onTap: () {
@@ -81,7 +80,6 @@ class AdminHomeContent extends StatelessWidget {
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               children: [
-                // Inside _AdminActionTile for "Approve Signups"
                 _AdminActionTile(
                   title: "Approve Signups",
                   icon: Icons.how_to_reg,

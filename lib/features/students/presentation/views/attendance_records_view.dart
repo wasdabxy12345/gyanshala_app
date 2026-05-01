@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../widgets/attendance_report_tab.dart'; // Adjust path as necessary
+import '../widgets/attendance_report_tab.dart';
 
 class AttendanceRecordsView extends StatelessWidget {
   final DateTimeRange range;
@@ -19,8 +19,6 @@ class AttendanceRecordsView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Determine if current range is this week or this month
     final now = DateTime.now();
-    final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
-    thisWeekStart.add(const Duration(days: 6));
 
     return Column(
       children: [
@@ -166,7 +164,13 @@ class AttendanceRecordsView extends StatelessWidget {
   }
 
   Widget _quickBtn(String label, VoidCallback action) {
-    return ElevatedButton(onPressed: action, child: Text(label));
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+      ),
+      onPressed: action,
+      child: Text(label, style: const TextStyle(fontSize: 12)),
+    );
   }
 
   String _formatDateWithMonth(DateTime date) {
