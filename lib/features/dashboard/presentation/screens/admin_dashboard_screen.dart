@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/mentor_list_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
@@ -107,6 +108,19 @@ class AdminHomeContent extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const MentorListScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _AdminActionTile(
+                  title: "Manage Locations",
+                  icon: Icons.map_outlined,
+                  color: Colors.deepOrange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LocationManagementScreen(),
                       ),
                     );
                   },
