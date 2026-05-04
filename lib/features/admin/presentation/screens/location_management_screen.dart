@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:excel/excel.dart' hide TextSpan, Border;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -65,6 +69,100 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         _runSearch(_searchController.text);
       }
     });
+  }
+
+  Future<void> _importFromExcel() async {
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+    );
+
+    if (result == null) return;
+
+    setState(() => _isLoading = true);
+    int importedCount = 0;
+
+    try {
+      var bytes = File(result.files.first.path!).readAsBytesSync();
+      var excel = Excel.decodeBytes(bytes);
+
+      String? lastClusterName;
+      String? lastVillageName;
+
+      for (var table in excel.tables.keys) {
+        var sheet = excel.tables[table];
+        if (sheet == null) continue;
+
+        for (int i = 0; i < sheet.maxRows; i++) {
+          var row = sheet.rows[i];
+          if (row.length < 3) continue;
+
+          final rawCluster = row[0]?.value?.toString().trim();
+          final rawVillage = row[1]?.value?.toString().trim();
+          final schoolName = row[2]?.value?.toString().trim();
+
+          if (rawCluster?.toLowerCase() == 'cluster' &&
+              schoolName?.toLowerCase() == 'school') {
+            continue;
+          }
+
+          if (rawCluster != null && rawCluster.isNotEmpty) {
+            lastClusterName = rawCluster;
+          }
+          if (rawVillage != null && rawVillage.isNotEmpty) {
+            lastVillageName = rawVillage;
+          }
+
+          if (lastClusterName == null || lastClusterName.isEmpty) continue;
+          if (schoolName == null || schoolName.isEmpty) continue;
+
+          final clusterResp = await _supabase
+              .from('clusters')
+              .upsert({'name': lastClusterName}, onConflict: 'name')
+              .select()
+              .single();
+
+          final String clusterId = clusterResp['id'].toString();
+
+          String? villageId;
+          if (lastVillageName != null && lastVillageName.isNotEmpty) {
+            final villageResp = await _supabase
+                .from('villages')
+                .upsert({
+                  'name': lastVillageName,
+                  'cluster_id': clusterId,
+                }, onConflict: 'name, cluster_id')
+                .select()
+                .single();
+            villageId = villageResp['id'].toString();
+          }
+
+          if (villageId != null) {
+            await _supabase.from('schools').upsert({
+              'name': schoolName,
+              'village_id': villageId,
+            }, onConflict: 'name, village_id');
+          }
+          importedCount++;
+        }
+      }
+
+      await _fetchHierarchy();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Successfully processed $importedCount rows")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Import Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Import Error: ${e.toString()}")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _fetchHierarchy() async {
@@ -159,6 +257,37 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (type == 'School') ...[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _importFromExcel();
+                  },
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text("Import Schools via Excel"),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(40),
+                    foregroundColor: Colors.teal,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text(
+                          "OR MANUALLY",
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                ),
+              ],
+
               if (type == 'Village' || type == 'School')
                 DropdownButtonFormField<String>(
                   initialValue: selectedClusterId,
@@ -446,6 +575,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         title: const Text("Locations Management"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: Colors.grey.shade300, height: 1),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
