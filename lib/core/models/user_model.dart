@@ -3,7 +3,7 @@ class UserModel {
   final String phone;
   final String? firstName;
   final String? lastName;
-  final String role; // String from DB
+  final String role;
   final String? qualification;
   final String? cluster;
   final String? village;
@@ -21,7 +21,6 @@ class UserModel {
     this.school,
   });
 
-  // Factory to create a UserModel from Supabase Map
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,

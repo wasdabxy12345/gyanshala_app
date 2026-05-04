@@ -15,7 +15,6 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
   }) async {
-    // 1. Sign in with Supabase Auth
     final response = await _supabase.auth.signInWithPassword(
       phone: identifier,
       password: password,
@@ -23,14 +22,12 @@ class AuthRepositoryImpl implements AuthRepository {
 
     if (response.user == null) throw Exception("Login failed");
 
-    // 2. Fetch the profile from the public.profiles table
     final profileData = await _supabase
         .from('profiles')
         .select()
         .eq('id', response.user!.id)
         .single();
 
-    // 3. Return a UserModel that includes the role from the DB
     return UserModel.fromJson(profileData);
   }
 

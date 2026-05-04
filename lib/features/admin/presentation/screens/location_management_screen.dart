@@ -15,6 +15,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   final _supabase = Supabase.instance.client;
   List<dynamic> _hierarchy = [];
   bool _isLoading = true;
+  final _searchController = TextEditingController();
+  List<dynamic> _filteredHierarchy = [];
 
   @override
   void initState() {
@@ -41,7 +43,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       for (var cluster in _hierarchy) {
         List villages = cluster['villages'] ?? [];
         if (columnIndex == 1) {
-          // Village Column
           villages.sort((a, b) {
             int vCompare = (a['name'] as String).toLowerCase().compareTo(
               (b['name'] as String).toLowerCase(),
@@ -53,7 +54,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         for (var village in villages) {
           List schools = village['schools'] ?? [];
           if (columnIndex == 2) {
-            // School Column
             schools.sort((a, b) {
               int sCompare = (a['name'] as String).toLowerCase().compareTo(
                 (b['name'] as String).toLowerCase(),
@@ -62,6 +62,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             });
           }
         }
+        _runSearch(_searchController.text);
       }
     });
   }
@@ -75,17 +76,27 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           .select(
             'id, name, villages(id, name, cluster_id, schools(id, name, village_id))',
           )
-          .order('name', ascending: true); // Explicitly set ascending
+          .order('name', ascending: true);
 
       if (mounted) {
         setState(() {
           _hierarchy = data;
-          _sortColumnIndex = 0; // Point to Cluster column
-          _isAscending = true; // Match the 'ascending: true' from query
+          _sortColumnIndex = 0;
+          _isAscending = true;
+          if (_searchController.text.isNotEmpty) {
+            _runSearch(_searchController.text);
+          } else {
+            _filteredHierarchy = data;
+          }
         });
       }
     } catch (e) {
       debugPrint("Fetch error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error fetching data: $e")));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -334,7 +345,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   List<TableRow> _generateRows() {
     List<TableRow> rows = [];
-    for (var cluster in _hierarchy) {
+    for (var cluster in _filteredHierarchy) {
       List villages = cluster['villages'] ?? [];
 
       if (villages.isEmpty) {
@@ -432,7 +443,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Location Hierarchy"),
+        title: const Text("Locations Management"),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
       ),
@@ -442,6 +453,31 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onRefresh: _fetchHierarchy,
               child: ListView(
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _runSearch,
+                      decoration: InputDecoration(
+                        hintText: "Search clusters, villages, or schools...",
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _runSearch('');
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                    ),
+                  ),
                   Table(
                     border: TableBorder(
                       verticalInside: BorderSide(color: Colors.grey.shade300),
@@ -616,6 +652,68 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         ),
       ),
     );
+  }
+
+  void _runSearch(String query) {
+    final lowercaseQuery = query.toLowerCase();
+
+    if (lowercaseQuery.isEmpty) {
+      setState(() {
+        _filteredHierarchy = _hierarchy;
+      });
+      return;
+    }
+
+    setState(() {
+      _filteredHierarchy = _hierarchy
+          .map((cluster) {
+            final clusterName = cluster['name'].toString().toLowerCase();
+            final bool clusterMatches = clusterName.contains(lowercaseQuery);
+
+            final villages = List.from(cluster['villages'] ?? []);
+
+            final filteredVillages = villages
+                .map((village) {
+                  final villageName = village['name'].toString().toLowerCase();
+                  final bool villageMatches = villageName.contains(
+                    lowercaseQuery,
+                  );
+
+                  final schools = List.from(village['schools'] ?? []);
+
+                  final filteredSchools = schools.where((school) {
+                    if (clusterMatches || villageMatches) return true;
+                    return school['name'].toString().toLowerCase().contains(
+                      lowercaseQuery,
+                    );
+                  }).toList();
+
+                  final villageCopy = Map<String, dynamic>.from(village);
+                  villageCopy['schools'] = filteredSchools;
+                  return villageCopy;
+                })
+                .where((v) {
+                  final villageName = v['name'].toString().toLowerCase();
+                  final schools = v['schools'] as List;
+
+                  return clusterMatches ||
+                      villageName.contains(lowercaseQuery) ||
+                      schools.isNotEmpty;
+                })
+                .toList();
+
+            final clusterCopy = Map<String, dynamic>.from(cluster);
+            clusterCopy['villages'] = filteredVillages;
+            return clusterCopy;
+          })
+          .where((c) {
+            final clusterName = c['name'].toString().toLowerCase();
+            final villages = c['villages'] as List;
+
+            return clusterName.contains(lowercaseQuery) || villages.isNotEmpty;
+          })
+          .toList();
+    });
   }
 }
 

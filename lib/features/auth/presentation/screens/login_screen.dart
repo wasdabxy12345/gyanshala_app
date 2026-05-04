@@ -22,7 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false; // Added loading state
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -37,7 +37,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Perform login (Role is no longer passed here)
       final authRepo = ref.read(authRepositoryProvider);
       final user = await authRepo.login(
         identifier: _identifierController.text.trim(),
@@ -46,7 +45,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
 
-      // 2. Determine navigation based on user.role
       Widget nextScreen;
       switch (user.role) {
         case 'admin':

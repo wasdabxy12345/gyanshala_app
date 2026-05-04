@@ -67,7 +67,6 @@ class _EntityManagerState extends State<EntityManager> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        // Added to handle dropdown state inside dialog
         builder: (context, setDialogState) => AlertDialog(
           title: Text(
             "${entity == null ? 'Add' : 'Edit'} ${widget.entityName}",
