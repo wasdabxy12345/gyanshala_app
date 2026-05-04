@@ -10,17 +10,14 @@ class StudentController extends StateNotifier<bool> {
 
   StudentController(this._client) : super(false);
 
-  // Inside StudentController
   Future<List<Map<String, dynamic>>> getGlobalAttendanceReport(
     DateTime start,
     DateTime end, {
     String? schoolFilter,
   }) async {
     try {
-      // Calling the same RPC but potentially without the mentor_id constraint
-      // Or a new RPC 'get_global_stats'
       final response = await _client.rpc(
-        'get_global_stats', // A version of your RPC that doesn't filter by mentor
+        'get_global_stats',
         params: {
           'p_start_date': start.toIso8601String().split('T')[0],
           'p_end_date': end.toIso8601String().split('T')[0],
@@ -63,7 +60,7 @@ class StudentController extends StateNotifier<bool> {
     required String cluster,
     required String school,
   }) async {
-    state = true; // 'state' is now defined because of StateNotifier
+    state = true;
     try {
       final user = _client.auth.currentUser;
 
@@ -122,12 +119,10 @@ class StudentController extends StateNotifier<bool> {
 
   Future<List<DateTime>> getHolidays() async {
     try {
-      // Supabase select() now returns a non-nullable List by default
       final List<dynamic> data = await _client
           .from('holidays')
           .select('holiday_date');
 
-      // We can remove the 'if (data == null)' check because it won't be null
       return data.map((row) {
         final parsed = DateTime.parse(row['holiday_date'] as String);
         return DateTime(parsed.year, parsed.month, parsed.day);
@@ -139,7 +134,6 @@ class StudentController extends StateNotifier<bool> {
   }
 }
 
-// Defining the provider
 final studentProvider = StateNotifierProvider<StudentController, bool>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return StudentController(client);

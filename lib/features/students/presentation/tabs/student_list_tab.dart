@@ -12,7 +12,6 @@ class StudentListTab extends ConsumerStatefulWidget {
 }
 
 class _StudentListTabState extends ConsumerState<StudentListTab> {
-  // Using Set for Multi-selection logic
   final Set<String> selectedGenders = {};
   final Set<int> selectedGrades = {};
   final Set<String> selectedSchools = {};
@@ -82,7 +81,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
               )
               .toList();
 
-          // Extract unique values for filter options
           final genders =
               allStudents
                   .map((s) => s['gender']?.toString())

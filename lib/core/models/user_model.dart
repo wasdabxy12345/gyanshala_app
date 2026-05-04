@@ -1,27 +1,38 @@
-enum UserRole {
-  mentor,
-  seniorMentor,
-  admin;
+class UserModel {
+  final String id;
+  final String phone;
+  final String? firstName;
+  final String? lastName;
+  final String role; // String from DB
+  final String? qualification;
+  final String? cluster;
+  final String? village;
+  final String? school;
 
-  static UserRole fromString(String? value) {
-    // This ensures that even if Supabase returns 'Mentor',
-    // it matches our enum 'mentor'
-    return UserRole.values.firstWhere(
-      (role) => role.name.toLowerCase() == value?.toLowerCase(),
-      orElse: () => UserRole.mentor,
+  UserModel({
+    required this.id,
+    required this.phone,
+    this.firstName,
+    this.lastName,
+    required this.role,
+    this.qualification,
+    this.village,
+    this.cluster,
+    this.school,
+  });
+
+  // Factory to create a UserModel from Supabase Map
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'] as String,
+      phone: json['phone'] as String,
+      firstName: json['first_name'] as String?,
+      lastName: json['last_name'] as String?,
+      role: json['role'] as String? ?? 'mentor',
+      qualification: json['qualification'] as String?,
+      village: json['village'] as String?,
+      cluster: json['cluster'] as String?,
+      school: json['school'] as String?,
     );
-  }
-}
-
-extension UserRoleLabel on UserRole {
-  String get label {
-    switch (this) {
-      case UserRole.mentor:
-        return 'Mentor';
-      case UserRole.seniorMentor:
-        return 'Senior Mentor';
-      case UserRole.admin:
-        return 'Admin';
-    }
   }
 }

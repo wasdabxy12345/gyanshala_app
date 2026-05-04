@@ -35,22 +35,18 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
   Future<void> _loadHolidays() async {
     try {
       final list = await ref.read(studentProvider.notifier).getHolidays();
-      debugPrint('=== HOLIDAYS LOADED ===');
-      debugPrint('Total: ${list.length}');
       if (mounted) setState(() => _holidays = list);
     } catch (e, stack) {
-      debugPrint('ERROR loading holidays: $e\n$stack');
+      debugPrint('Failed to load holidays: $e');
+      debugPrintStack(stackTrace: stack);
     }
   }
 
   bool _isHoliday(DateTime date) {
-    // Strip time component for consistent comparison
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
-    // 1. Check if it's a Sunday
     if (date.weekday == DateTime.sunday) return true;
 
-    // 2. Check the holiday list
     final isHoliday = _holidays.any(
       (h) =>
           h.year == normalizedDate.year &&
@@ -58,13 +54,9 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           h.day == normalizedDate.day,
     );
 
-    // Debug: Specific log for your 2026 tracking
     if (normalizedDate.year == 2026 &&
         normalizedDate.month == 4 &&
-        normalizedDate.day == 18) {
-      debugPrint('=== CHECKING APRIL 18, 2026 ===');
-      debugPrint('Is holiday: $isHoliday');
-    }
+        normalizedDate.day == 18) {}
 
     return isHoliday;
   }
@@ -88,7 +80,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
     final Map<String, String> existing = {};
     for (var row in data) {
-      // Map database 'present'/'absent' to your UI 'P'/'A'
       existing[row['student_id']] = row['status'] == 'present' ? 'P' : 'A';
     }
 

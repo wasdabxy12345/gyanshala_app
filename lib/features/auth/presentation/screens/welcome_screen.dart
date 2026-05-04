@@ -1,14 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/constants/app_strings.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/core/services/update_service.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'login_screen.dart';
-import 'signup_screen.dart';
-import 'signup_verification_screen.dart';
+import 'otp_verification_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+enum ApprovalState { loading, pending, approved, denied, none }
+
+class WelcomeScreen extends ConsumerStatefulWidget {
   final bool showPendingMessage;
 
   const WelcomeScreen({super.key, this.showPendingMessage = false});
+
+  @override
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
+  ApprovalState _state = ApprovalState.loading;
+  String? _pendingId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        UpdateService.checkForUpdates(context);
+      }
+    });
+  }
+
+  Future<void> _checkStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString('pending_id');
+
+    if (!mounted) return;
+
+    if (id == null || id.isEmpty) {
+      setState(() {
+        _state = ApprovalState.none;
+        _pendingId = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _pendingId = id;
+      _state = ApprovalState.loading;
+    });
+
+    try {
+      final status = await ref
+          .read(authRepositoryProvider)
+          .getSignupStatus(id)
+          .timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      setState(() {
+        if (status == 'approved') {
+          _state = ApprovalState.approved;
+        } else if (status == 'denied' || status == 'not_found') {
+          _state = ApprovalState.denied;
+        } else {
+          _state = ApprovalState.pending;
+        }
+      });
+    } catch (e) {
+      debugPrint("Status check error: $e");
+      if (mounted) {
+        setState(() => _state = ApprovalState.none);
+      }
+    }
+  }
+
+  Future<void> _clearPending() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('pending_id');
+    _checkStatus();
+  }
+
+  Future<void> _handleNavigateToOtp() async {
+    if (_pendingId == null) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OtpVerificationScreen(
+          identifier: _pendingId!,
+          title: 'Verify Phone',
+          subtitle: 'Request and enter the OTP sent to your phone',
+          onVerified: () async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('pending_id');
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (_) => false,
+            );
+          },
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,50 +118,24 @@ class WelcomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (showPendingMessage) ...[
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.timer_outlined,
-                          color: Colors.amber.shade800,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Your signup request is sent for admin approval. You will receive a notification once approved.',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                if (_state != ApprovalState.none) ...[
+                  _buildStatusCard(),
+                  const SizedBox(height: 30),
                 ],
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Image.network(
-                      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSe_22gfL9zHbi-fK8pMJotQofStQyhuB-fvA&s',
-                      height: 100,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.school, size: 50),
-                    ),
-                    Image.network(
-                      'https://scontent.famd4-1.fna.fbcdn.net/v/t39.30808-6/432152915_122100178058257935_5259036002784278436_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=1A-IPcds02oQ7kNvwHPPAAk&_nc_oc=AdpZwBIr0S9wSBypdHGry0UoS8I-XFI36Gfu3HjU31gL9WWkTm2A--l1ch-BNbuEIuo&_nc_zt=23&_nc_ht=scontent.famd4-1.fna&_nc_gid=vwwDhwcUofBF20uKmatx4w&_nc_ss=7a389&oh=00_Af0eK4t7dhM2NlLta1vJQ1c97FMvCs5zoFb-OvvLp9TTAw&oe=69DFE63C',
-                      height: 200,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Icon(Icons.foundation, size: 50),
-                    ),
+                    // Image.network(
+                    //   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSe_22gfL9zHbi-fK8pMJotQofStQyhuB-fvA&s',
+                    //   height: 80,
+                    // ),
+                    // Image.network(
+                    //   'https://scontent.famd4-1.fna.fbcdn.net/v/t39.30808-6/432152915_122100178058257935_5259036002784278436_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=1A-IPcds02oQ7kNvwHPPAAk&_nc_oc=AdpZwBIr0S9wSBypdHGry0UoS8I-XFI36Gfu3HjU31gL9WWkTm2A--l1ch-BNbuEIuo&_nc_zt=23&_nc_ht=scontent.famd4-1.fna&_nc_gid=vwwDhwcUofBF20uKmatx4w&_nc_ss=7a389&oh=00_Af0eK4t7dhM2NlLta1vJQ1c97FMvCs5zoFb-OvvLp9TTAw&oe=69DFE63C',
+                    //   height: 150,
+                    // ),
                   ],
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 Text(
                   'Student Management System',
                   textAlign: TextAlign.center,
@@ -72,16 +144,22 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 48),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const SignupScreen()),
+                if (_state == ApprovalState.none) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context)
+                          .push(
+                            MaterialPageRoute(
+                              builder: (_) => const SignupScreen(),
+                            ),
+                          )
+                          .then((_) => _checkStatus()),
+                      child: const Text(AppStrings.signUp),
                     ),
-                    child: const Text(AppStrings.signUp),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
@@ -91,21 +169,92 @@ class WelcomeScreen extends StatelessWidget {
                     child: const Text(AppStrings.logIn),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SignupVerificationScreen(),
-                      ),
-                    );
-                  },
-                  child: const Text("Check Signup Status"),
-                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusCard() {
+    Color bgColor = Colors.blue.shade50;
+    Color borderColor = Colors.blue.shade200;
+    IconData icon = Icons.info_outline;
+    String message = "";
+    Widget? action;
+
+    switch (_state) {
+      case ApprovalState.loading:
+        message = "Checking your signup status...";
+        icon = Icons.sync;
+        break;
+      case ApprovalState.pending:
+        bgColor = Colors.amber.shade50;
+        borderColor = Colors.amber.shade200;
+        icon = Icons.timer_outlined;
+        message = "Your signup is pending admin approval.";
+        action = TextButton.icon(
+          onPressed: _checkStatus,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text("Refresh"),
+        );
+        break;
+      case ApprovalState.approved:
+        bgColor = Colors.green.shade50;
+        borderColor = Colors.green.shade200;
+        icon = Icons.check_circle_outline;
+        message = "Approved! Verify your phone to continue.";
+        action = ElevatedButton(
+          onPressed: _handleNavigateToOtp,
+          style: ElevatedButton.styleFrom(visualDensity: VisualDensity.compact),
+          child: const Text("Verify Phone via SMS OTP"),
+        );
+        break;
+      case ApprovalState.denied:
+        bgColor = Colors.red.shade50;
+        borderColor = Colors.red.shade200;
+        icon = Icons.error_outline;
+        message = "Your signup request was declined.";
+        action = TextButton(
+          onPressed: _clearPending,
+          child: const Text("Clear & Try Again"),
+        );
+        break;
+      case ApprovalState.none:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              if (_state == ApprovalState.loading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(icon, color: borderColor.withValues(alpha: 1.0), size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          if (action != null) ...[const SizedBox(height: 12), action],
+        ],
       ),
     );
   }

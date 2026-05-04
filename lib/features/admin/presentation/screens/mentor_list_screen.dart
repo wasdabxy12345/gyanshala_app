@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 
 class MentorListScreen extends ConsumerStatefulWidget {
@@ -13,7 +13,6 @@ class MentorListScreen extends ConsumerStatefulWidget {
 class _MentorListScreenState extends ConsumerState<MentorListScreen> {
   String _searchQuery = "";
 
-  // Filter States
   final Set<String> selectedRoles = {};
   final Set<String> selectedVillages = {};
   final Set<String> selectedClusters = {};
@@ -28,7 +27,7 @@ class _MentorListScreenState extends ConsumerState<MentorListScreen> {
 
     return fullName.contains(query) ||
         mentor['phone'].toString().contains(query) ||
-        roleLabel.contains(query); // Now searching "Senior Mentor" works!
+        roleLabel.contains(query);
   }
 
   bool _matchesFilters(Map<String, dynamic> mentor) {
@@ -88,7 +87,6 @@ class _MentorListScreenState extends ConsumerState<MentorListScreen> {
               .where((m) => _matchesSearch(m) && _matchesFilters(m))
               .toList();
 
-          // Dynamic Filter Options
           final roles =
               allMentors
                   .map((e) => e['role']?.toString())
@@ -184,9 +182,7 @@ class _MentorListScreenState extends ConsumerState<MentorListScreen> {
     );
   }
 
-  // Inside _buildMentorCard
   Widget _buildMentorCard(Map<String, dynamic> mentor) {
-    // Use Enum mapping for logic
     final roleEnum = UserRole.fromString(mentor['role']);
     final isSenior = roleEnum == UserRole.seniorMentor;
 
@@ -203,11 +199,8 @@ class _MentorListScreenState extends ConsumerState<MentorListScreen> {
           ),
         ),
         title: Text("${mentor['first_name']} ${mentor['last_name']}"),
-        // Use the label extension for the subtitle
         subtitle: Text(roleEnum.label.toUpperCase()),
-        children: [
-          // ... rest of your tiles
-        ],
+        children: [],
       ),
     );
   }
@@ -246,9 +239,7 @@ class _MentorListScreenState extends ConsumerState<MentorListScreen> {
                 Flexible(
                   child: ListView(
                     shrinkWrap: true,
-                    // Inside _showMultiSelectDialog's ListView
                     children: options.map((opt) {
-                      // If the filter title is "Role", translate the options
                       String displayLabel = opt;
                       if (title == "Role") {
                         displayLabel = UserRole.fromString(opt).label;

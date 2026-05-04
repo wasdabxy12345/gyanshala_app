@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/models/user_role.dart';
 
 class RoleSelector extends StatelessWidget {
   const RoleSelector({

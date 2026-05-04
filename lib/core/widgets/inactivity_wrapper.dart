@@ -24,8 +24,6 @@ class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
 
   void _logoutUser() {
     ref.read(authRepositoryProvider).signOut();
-
-    debugPrint("User logged out due to inactivity");
   }
 
   @override

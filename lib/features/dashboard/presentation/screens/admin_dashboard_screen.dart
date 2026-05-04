@@ -13,7 +13,7 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("GS + UNM Admin"),
         centerTitle: true,
-        backgroundColor: Colors.indigo, // Visual distinction for Admin
+        backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -72,7 +72,6 @@ class AdminHomeContent extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // Custom Action Grid for Admin
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),

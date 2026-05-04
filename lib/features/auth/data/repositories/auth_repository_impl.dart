@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/utils/validators.dart';
@@ -10,34 +11,27 @@ class AuthRepositoryImpl implements AuthRepository {
   GoTrueClient get _auth => _supabase.auth;
 
   @override
-  Future<void> login({
+  Future<UserModel> login({
     required String identifier,
     required String password,
-    required String role,
   }) async {
-    final phone = _normalizePhone(identifier);
-
-    final response = await _auth.signInWithPassword(
-      phone: phone,
+    // 1. Sign in with Supabase Auth
+    final response = await _supabase.auth.signInWithPassword(
+      phone: identifier,
       password: password,
     );
 
-    final user = response.user; // Define user
-    if (user == null) throw Exception("User not found.");
+    if (response.user == null) throw Exception("Login failed");
 
-    final status = user.userMetadata?['status'];
-    if (status != 'approved') {
-      await _auth.signOut();
-      throw Exception("Your account is still pending admin approval.");
-    }
+    // 2. Fetch the profile from the public.profiles table
+    final profileData = await _supabase
+        .from('profiles')
+        .select()
+        .eq('id', response.user!.id)
+        .single();
 
-    final actualRole = user.userMetadata?['role'];
-    if (actualRole != role) {
-      await _auth.signOut();
-      throw Exception(
-        "Access Denied: You are registered as $actualRole, not $role.",
-      );
-    }
+    // 3. Return a UserModel that includes the role from the DB
+    return UserModel.fromJson(profileData);
   }
 
   @override
@@ -64,7 +58,6 @@ class AuthRepositoryImpl implements AuthRepository {
         'role': role,
         'status': 'pending',
         'push_token': pushToken,
-        // Add these so the trigger can pick them up:
         'qualification': qualification,
         'village': village,
         'cluster': cluster,
@@ -143,35 +136,42 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> updatePassword({
-    required String identifier,
     required String password,
+    String? identifier,
+    String? oldPassword,
   }) async {
-    final phone = _normalizePhone(identifier);
+    try {
+      if (identifier != null) {
+        final phone = _normalizePhone(identifier);
+        final requestRows = await _fetchSignupRequestsByPhone(
+          phone,
+          columns: 'first_name,last_name,role',
+        );
 
-    final requestRows = await _fetchSignupRequestsByPhone(
-      phone,
-      columns: 'phone,first_name,last_name,role',
-    );
+        Map<String, dynamic> metadata = {};
+        if (requestRows.isNotEmpty) {
+          metadata = {
+            'first_name': requestRows.first['first_name'],
+            'last_name': requestRows.first['last_name'],
+            'role': requestRows.first['role'],
+          };
+        }
 
-    // Collect metadata if available to avoid overwriting existing data with nulls
-    Map<String, dynamic>? metadata;
-    if (requestRows.isNotEmpty) {
-      metadata = {
-        'first_name': requestRows.first['first_name'],
-        'last_name': requestRows.first['last_name'],
-        'role': requestRows.first['role'],
-      };
-    }
-
-    // Single update call for both password and metadata
-    await _auth.updateUser(UserAttributes(password: password, data: metadata));
-
-    // Mark request as completed
-    if (requestRows.isNotEmpty) {
-      await _supabase
-          .from('signup_requests')
-          .update({'status': 'completed'})
-          .eq('phone', requestRows.first['phone']);
+        await _auth.updateUser(
+          UserAttributes(password: password, data: metadata),
+        );
+        await _supabase
+            .from('signup_requests')
+            .update({'status': 'completed'})
+            .eq('phone', phone);
+      }
+    } on AuthException catch (e) {
+      if (e.message.contains('Invalid login credentials')) {
+        throw Exception("The current password you entered is incorrect.");
+      }
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception("Update failed: $e");
     }
   }
 
@@ -235,19 +235,32 @@ class AuthRepositoryImpl implements AuthRepository {
     String? school,
   }) async {
     final user = _supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) throw Exception("No authenticated user found.");
+
+    final String role = (user.userMetadata?['role'] ?? '')
+        .toString()
+        .toLowerCase();
+    final bool isAdmin = role == 'admin';
 
     final Map<String, dynamic> updateData = {
-      'first_name': firstName,
-      'last_name': lastName,
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
       'updated_at': DateTime.now().toIso8601String(),
     };
 
-    if (qualification != null) updateData['qualification'] = qualification;
-    if (village != null) updateData['village'] = village;
-    if (cluster != null) updateData['cluster'] = cluster;
-    if (school != null) updateData['school'] = school;
+    if (!isAdmin) {
+      if (qualification != null) updateData['qualification'] = qualification;
+      if (village != null) updateData['village'] = village;
+      if (cluster != null) updateData['cluster'] = cluster;
+      if (school != null) updateData['school'] = school;
+    }
 
     await _supabase.from('profiles').update(updateData).eq('id', user.id);
+
+    await _auth.updateUser(
+      UserAttributes(
+        data: {'first_name': firstName.trim(), 'last_name': lastName.trim()},
+      ),
+    );
   }
 }

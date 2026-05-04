@@ -17,12 +17,10 @@ class AttendanceRecordsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine if current range is this week or this month
     final now = DateTime.now();
 
     return Column(
       children: [
-        // Date Range Display
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Text(
@@ -35,13 +33,11 @@ class AttendanceRecordsView extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        // Quick Action Buttons
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // This Week section with navigation
               Expanded(
                 child: Row(
                   children: [
@@ -84,7 +80,6 @@ class AttendanceRecordsView extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // This Month section with navigation
               Expanded(
                 child: Row(
                   children: [
@@ -151,7 +146,6 @@ class AttendanceRecordsView extends StatelessWidget {
           ),
         ),
         const Divider(),
-        // We reuse your Table logic here
         Expanded(
           child: AttendanceReportTab(
             searchQuery: searchQuery,
@@ -174,7 +168,6 @@ class AttendanceRecordsView extends StatelessWidget {
   }
 
   String _formatDateWithMonth(DateTime date) {
-    // Format: DD-MM-YYYY (DayName)
     final dayName = DateFormat('EEE').format(date);
     final formatted = DateFormat('dd-MM-yyyy').format(date);
     return '$formatted ($dayName)';

@@ -14,7 +14,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
   String _searchQuery = "";
 
-  // Filter States
   final Set<String> selectedRoles = {};
   final Set<String> selectedVillages = {};
   final Set<String> selectedClusters = {};
@@ -74,12 +73,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         appBar: AppBar(
           title: const Text("User Management"),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(
-              110,
-            ), // Space for Tabs + Search
+            preferredSize: const Size.fromHeight(110),
             child: Column(
               children: [
-                // 1. Search Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -100,7 +96,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                     ),
                   ),
                 ),
-                // 2. Tabs
                 const TabBar(
                   tabs: [
                     Tab(text: "Pending"),
@@ -137,12 +132,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
         final allData = snapshot.data!;
 
-        // Apply Search and Filter
         final filteredData = allData
             .where((req) => _matchesSearch(req) && _matchesFilters(req))
             .toList();
 
-        // Extract unique values for filter buttons
         final roles =
             allData
                 .map((e) => e['role']?.toString())
@@ -174,7 +167,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
         return Column(
           children: [
-            // 3. Horizontal Filter Bar
             _buildFilterBar(roles, villages, clusters, schools),
 
             Expanded(
@@ -342,7 +334,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             builder: (context, setLocalState) => Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // --- Select All / Clear All Bar ---
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
@@ -363,7 +354,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                   ),
                 ),
                 const Divider(),
-                // --- Scrollable List ---
                 Flexible(
                   child: ListView(
                     shrinkWrap: true,

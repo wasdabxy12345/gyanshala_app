@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
@@ -9,7 +8,6 @@ import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_men
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
-import '../widgets/role_selector.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
@@ -24,7 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  UserRole _selectedRole = UserRole.mentor;
+  bool _isLoading = false; // Added loading state
 
   @override
   void dispose() {
@@ -34,52 +32,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onLoginPressed() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _isLoading = true);
+
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .login(
-            identifier: _identifierController.text,
-            password: _passwordController.text,
-            role: _selectedRole.label,
-          );
+      // 1. Perform login (Role is no longer passed here)
+      final authRepo = ref.read(authRepositoryProvider);
+      final user = await authRepo.login(
+        identifier: _identifierController.text.trim(),
+        password: _passwordController.text,
+      );
 
       if (!mounted) return;
 
+      // 2. Determine navigation based on user.role
+      Widget nextScreen;
+      switch (user.role) {
+        case 'admin':
+          nextScreen = const AdminDashboardScreen();
+          break;
+        case 'seniorMentor':
+          nextScreen = const SeniorMentorDashboardScreen();
+          break;
+        case 'mentor':
+        default:
+          nextScreen = const MentorDashboardScreen();
+          break;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signed in as ${_selectedRole.label}')),
+        SnackBar(content: Text('Welcome back, ${user.firstName ?? 'User'}')),
       );
 
-      // Navigate based on Role
-      if (_selectedRole == UserRole.mentor) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MentorDashboardScreen()),
-          (route) => false,
-        );
-      } else if (_selectedRole == UserRole.seniorMentor) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => const SeniorMentorDashboardScreen(),
-          ),
-          (route) => false,
-        );
-      } else if (_selectedRole == UserRole.admin) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-          (route) => false,
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Role not recognized.')));
-      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => nextScreen),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -93,18 +89,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Select Role',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            RoleSelector(
-              selectedRole: _selectedRole,
-              onRoleSelected: (role) {
-                setState(() => _selectedRole = role);
-              },
-            ),
-            const SizedBox(height: 20),
             TextFormField(
               controller: _identifierController,
               keyboardType: TextInputType.phone,
@@ -114,12 +98,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               validator: (value) {
                 final phone = value?.trim() ?? '';
-                if (phone.isEmpty) {
-                  return 'Phone Number is required';
-                }
-                if (!Validators.isValidPhone(phone)) {
+                if (phone.isEmpty) return 'Phone Number is required';
+                if (!Validators.isValidPhone(phone))
                   return 'Enter a valid phone number';
-                }
                 return null;
               },
             ),
@@ -132,25 +113,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 prefixIcon: Icon(Icons.lock_outline),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
+                if (value == null || value.isEmpty)
                   return 'Password is required';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
                 return null;
               },
             ),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ForgotPasswordScreen(),
-                    ),
-                  );
-                },
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ForgotPasswordScreen(),
+                  ),
+                ),
                 child: const Text('Forgot password?'),
               ),
             ),
@@ -158,8 +133,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _onLoginPressed,
-                child: const Text(AppStrings.logIn),
+                onPressed: _isLoading ? null : _onLoginPressed,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text(AppStrings.logIn),
               ),
             ),
           ],
@@ -170,11 +151,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         children: [
           const Text('New user? '),
           TextButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const SignupScreen()),
-              );
-            },
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SignupScreen())),
             child: const Text(AppStrings.signUp),
           ),
         ],

@@ -1,8 +1,9 @@
+import 'package:gyanshala_app/core/models/user_model.dart';
+
 abstract class AuthRepository {
-  Future<void> login({
+  Future<UserModel> login({
     required String identifier,
     required String password,
-    required String role,
   });
 
   Future<void> signup({
@@ -26,8 +27,9 @@ abstract class AuthRepository {
   Future<void> verifyOtp({required String identifier, required String otp});
 
   Future<void> updatePassword({
-    required String identifier,
     required String password,
+    String? identifier,
+    String? oldPassword,
   });
 
   Future<String> getSignupStatus(String identifier);

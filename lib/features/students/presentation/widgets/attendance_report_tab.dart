@@ -41,8 +41,6 @@ class _AttendanceReportTabState extends ConsumerState<AttendanceReportTab> {
     );
   }
 
-  // --- Helper Methods ---
-
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
     return List.generate(
       end.difference(start).inDays + 1,

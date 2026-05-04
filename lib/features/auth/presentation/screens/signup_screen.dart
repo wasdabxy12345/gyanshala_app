@@ -3,7 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/location_model.dart';
-import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
@@ -237,7 +237,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               const SizedBox(height: 14),
 
               DropdownSearch<LocationItem>(
-                items: (filter, loadProps) => _clusters,
+                items: (filter, infiniteScrollProps) => _clusters,
                 itemAsString: (item) => item.name,
                 compareFn: (item1, item2) => item1.id == item2.id,
                 decoratorProps: const DropDownDecoratorProps(
@@ -246,7 +246,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
-                onChanged: (data) async {
+                onSelected: (data) async {
                   setState(() {
                     _selectedClusterId = data?.id;
                     _selectedVillageId = null;
@@ -272,7 +272,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  onChanged: (data) async {
+                  onSelected: (data) async {
                     setState(() {
                       _selectedVillageId = data?.id;
                       _selectedSchoolId = null;
@@ -297,7 +297,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  onChanged: (data) =>
+                  onSelected: (data) =>
                       setState(() => _selectedSchoolId = data?.id),
                 ),
               ],

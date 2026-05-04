@@ -30,7 +30,6 @@ Future<void> main() async {
       anonKey: _supabaseAnonKey,
       debug: true,
     );
-    debugPrint("Supabase initialized successfully");
   } catch (e) {
     debugPrint("Supabase Initialization Error: $e");
   }

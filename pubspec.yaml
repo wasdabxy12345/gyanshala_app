@@ -23,7 +23,10 @@ dependencies:
   fl_chart: ^1.2.0
   riverpod_annotation: ^4.0.2
   intl: ^0.20.2
-  dropdown_search: ^6.0.1
+  dropdown_search: ^7.0.0
+  package_info_plus: ^9.0.1
+  http: ^1.2.0
+  ota_update: ^7.0.1
 
 dev_dependencies:
   flutter_test:

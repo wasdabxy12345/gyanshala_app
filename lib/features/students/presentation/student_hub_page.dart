@@ -57,8 +57,8 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
         ),
         body: TabBarView(
           children: [
-            AttendanceParentTab(searchQuery: _searchQuery), // The complex tab
-            StudentListTab(searchQuery: _searchQuery), // The simple list
+            AttendanceParentTab(searchQuery: _searchQuery),
+            StudentListTab(searchQuery: _searchQuery),
           ],
         ),
       ),
