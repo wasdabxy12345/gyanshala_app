@@ -32,34 +32,35 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       }
 
       _hierarchy.sort((a, b) {
-        int compare;
-        if (columnIndex == 0) {
-          compare = (a['name'] as String).compareTo(b['name'] as String);
-        } else {
-          compare = 0;
-        }
+        int compare = (a['name'] as String).toLowerCase().compareTo(
+          (b['name'] as String).toLowerCase(),
+        );
         return _isAscending ? compare : -compare;
       });
 
       for (var cluster in _hierarchy) {
         List villages = cluster['villages'] ?? [];
-        villages.sort((a, b) {
-          int vCompare = 0;
-          if (columnIndex == 1) {
-            vCompare = (a['name'] as String).compareTo(b['name'] as String);
-          }
-          return _isAscending ? vCompare : -vCompare;
-        });
+        if (columnIndex == 1) {
+          // Village Column
+          villages.sort((a, b) {
+            int vCompare = (a['name'] as String).toLowerCase().compareTo(
+              (b['name'] as String).toLowerCase(),
+            );
+            return _isAscending ? vCompare : -vCompare;
+          });
+        }
 
         for (var village in villages) {
           List schools = village['schools'] ?? [];
-          schools.sort((a, b) {
-            int sCompare = 0;
-            if (columnIndex == 2) {
-              sCompare = (a['name'] as String).compareTo(b['name'] as String);
-            }
-            return _isAscending ? sCompare : -sCompare;
-          });
+          if (columnIndex == 2) {
+            // School Column
+            schools.sort((a, b) {
+              int sCompare = (a['name'] as String).toLowerCase().compareTo(
+                (b['name'] as String).toLowerCase(),
+              );
+              return _isAscending ? sCompare : -sCompare;
+            });
+          }
         }
       }
     });
@@ -71,10 +72,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     try {
       final data = await _supabase
           .from('clusters')
-          .select('id, name, villages(id, name, schools(id, name))')
-          .order('name');
+          .select(
+            'id, name, villages(id, name, cluster_id, schools(id, name, village_id))',
+          )
+          .order('name', ascending: true); // Explicitly set ascending
 
-      if (mounted) setState(() => _hierarchy = data);
+      if (mounted) {
+        setState(() {
+          _hierarchy = data;
+          _sortColumnIndex = 0; // Point to Cluster column
+          _isAscending = true; // Match the 'ascending: true' from query
+        });
+      }
+    } catch (e) {
+      debugPrint("Fetch error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
