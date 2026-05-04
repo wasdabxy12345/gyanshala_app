@@ -11,7 +11,7 @@ class LocationManagementScreen extends StatefulWidget {
 
 class _LocationManagementScreenState extends State<LocationManagementScreen> {
   bool _isAscending = true;
-  int _sortColumnIndex = 0; // 0 for Cluster, 1 for Village, 2 for School
+  int _sortColumnIndex = 0;
   final _supabase = Supabase.instance.client;
   List<dynamic> _hierarchy = [];
   bool _isLoading = true;
@@ -31,19 +31,16 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         _isAscending = true;
       }
 
-      // Sort Clusters
       _hierarchy.sort((a, b) {
         int compare;
         if (columnIndex == 0) {
           compare = (a['name'] as String).compareTo(b['name'] as String);
         } else {
-          // Keep order if not sorting by cluster but sort sub-items
           compare = 0;
         }
         return _isAscending ? compare : -compare;
       });
 
-      // Sort nested items
       for (var cluster in _hierarchy) {
         List villages = cluster['villages'] ?? [];
         villages.sort((a, b) {
@@ -83,13 +80,54 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     }
   }
 
-  // Unified Form to ADD
   Future<void> _showAddDialog(String type) async {
     final nameController = TextEditingController();
     String? selectedClusterId;
     String? selectedVillageId;
-    List<dynamic> clusters = _hierarchy;
-    List<dynamic> villages = [];
+
+    Future<String?> showQuickAdd(String parentType) async {
+      final quickController = TextEditingController();
+      return showDialog<String>(
+        context: context,
+        builder: (qCtx) => AlertDialog(
+          title: Text("Quick Add $parentType"),
+          content: TextField(
+            controller: quickController,
+            decoration: InputDecoration(labelText: "$parentType Name"),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(qCtx),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = quickController.text.trim();
+                if (name.isEmpty) return;
+
+                final table = parentType == 'Cluster' ? 'clusters' : 'villages';
+                final Map<String, dynamic> insertData = {'name': name};
+
+                if (parentType == 'Village') {
+                  insertData['cluster_id'] = selectedClusterId;
+                }
+
+                final response = await _supabase
+                    .from(table)
+                    .insert(insertData)
+                    .select()
+                    .single();
+                await _fetchHierarchy();
+                if (qCtx.mounted)
+                  Navigator.pop(qCtx, response['id'].toString());
+              },
+              child: const Text("Create"),
+            ),
+          ],
+        ),
+      );
+    }
 
     await showDialog(
       context: context,
@@ -101,44 +139,85 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             children: [
               if (type == 'Village' || type == 'School')
                 DropdownButtonFormField<String>(
+                  initialValue: selectedClusterId,
                   hint: const Text("Select Cluster"),
-                  items: clusters
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: c['id'].toString(),
-                          child: Text(c['name']),
+                  items: [
+                    const DropdownMenuItem(
+                      value: "ADD_NEW",
+                      child: Text(
+                        "+ Add New Cluster...",
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
                         ),
-                      )
-                      .toList(),
-                  onChanged: (val) {
-                    setDialogState(() {
-                      selectedClusterId = val;
-                      villages =
-                          clusters.firstWhere(
-                            (c) => c['id'].toString() == val,
-                          )['villages'] ??
-                          [];
-                      selectedVillageId = null;
-                    });
+                      ),
+                    ),
+                    ..._hierarchy.map(
+                      (c) => DropdownMenuItem(
+                        value: c['id'].toString(),
+                        child: Text(c['name']),
+                      ),
+                    ),
+                  ],
+                  onChanged: (val) async {
+                    if (val == "ADD_NEW") {
+                      final newId = await showQuickAdd("Cluster");
+                      if (newId != null)
+                        setDialogState(() => selectedClusterId = newId);
+                    } else {
+                      setDialogState(() {
+                        selectedClusterId = val;
+                        selectedVillageId = null;
+                      });
+                    }
                   },
                 ),
+
               if (type == 'School') ...[
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  hint: const Text("Select Village"),
                   initialValue: selectedVillageId,
-                  items: villages
-                      .map(
-                        (v) => DropdownMenuItem(
-                          value: v['id'].toString(),
-                          child: Text(v['name']),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => selectedVillageId = val),
+                  hint: const Text("Select Village"),
+                  disabledHint: const Text("Select a Cluster first"),
+                  items: selectedClusterId == null
+                      ? []
+                      : [
+                          const DropdownMenuItem(
+                            value: "ADD_NEW",
+                            child: Text(
+                              "+ Add New Village...",
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          ...(_hierarchy.firstWhere(
+                                    (c) =>
+                                        c['id'].toString() == selectedClusterId,
+                                  )['villages']
+                                  as List)
+                              .map(
+                                (v) => DropdownMenuItem(
+                                  value: v['id'].toString(),
+                                  child: Text(v['name']),
+                                ),
+                              ),
+                        ],
+                  onChanged: selectedClusterId == null
+                      ? null
+                      : (val) async {
+                          if (val == "ADD_NEW") {
+                            final newId = await showQuickAdd("Village");
+                            if (newId != null)
+                              setDialogState(() => selectedVillageId = newId);
+                          } else {
+                            setDialogState(() => selectedVillageId = val);
+                          }
+                        },
                 ),
               ],
+
               TextField(
                 controller: nameController,
                 decoration: InputDecoration(labelText: "$type Name"),
@@ -158,11 +237,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 if (type == 'Cluster') {
                   await _supabase.from('clusters').insert({'name': name});
                 } else if (type == 'Village') {
+                  if (selectedClusterId == null) return;
                   await _supabase.from('villages').insert({
                     'name': name,
                     'cluster_id': selectedClusterId,
                   });
                 } else {
+                  if (selectedVillageId == null) return;
                   await _supabase.from('schools').insert({
                     'name': name,
                     'village_id': selectedVillageId,
@@ -170,8 +251,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 }
 
                 if (ctx.mounted) Navigator.pop(ctx);
-
-                if (!mounted) return;
                 _fetchHierarchy();
               },
               child: const Text("Save"),
@@ -181,8 +260,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       ),
     );
   }
-
-  // Unified Form to EDIT
 
   Future<void> _confirmDelete(String type, dynamic entity) async {
     String warning = "";
@@ -273,8 +350,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 showClusterActions: vIdx == 0,
                 showVillageActions: true,
                 clusterBorder: vIdx == 0,
-                villageBorder:
-                    vIdx > 0, // Village border if not start of cluster
+                villageBorder: vIdx > 0,
               ),
             );
           } else {
@@ -288,10 +364,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   showVillageActions: sIdx == 0,
                   showSchoolActions: true,
                   clusterBorder: vIdx == 0 && sIdx == 0,
-                  villageBorder:
-                      vIdx > 0 && sIdx == 0, // Village border for new village
-                  schoolBorder:
-                      sIdx > 0, // School border for subsequent schools
+                  villageBorder: vIdx > 0 && sIdx == 0,
+                  schoolBorder: sIdx > 0,
                 ),
               );
             }
@@ -313,22 +387,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     bool villageBorder = false,
     bool schoolBorder = false,
   }) {
-    // Determine border type for each specific column
     int clusterColBorder = clusterBorder ? 1 : 0;
-
-    int villageColBorder = 0;
-    if (clusterBorder)
-      villageColBorder = 1;
-    else if (villageBorder)
-      villageColBorder = 2;
-
-    int schoolColBorder = 0;
-    if (clusterBorder)
-      schoolColBorder = 1;
-    else if (villageBorder)
-      schoolColBorder = 2;
-    else if (schoolBorder)
-      schoolColBorder = 3;
+    int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
+    int schoolColBorder = clusterBorder
+        ? 1
+        : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
 
     return TableRow(
       children: [
@@ -415,30 +478,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Widget _buildSpeedDial() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FloatingActionButton.small(
-          heroTag: "btn1",
-          onPressed: () => _showAddDialog('Cluster'),
-          backgroundColor: Colors.indigo,
-          child: const Icon(Icons.hub, color: Colors.white),
-        ),
-        const SizedBox(height: 8),
-        FloatingActionButton.small(
-          heroTag: "btn2",
-          onPressed: () => _showAddDialog('Village'),
-          backgroundColor: Colors.orange,
-          child: const Icon(Icons.holiday_village, color: Colors.white),
-        ),
-        const SizedBox(height: 8),
-        FloatingActionButton(
-          heroTag: "btn3",
-          onPressed: () => _showAddDialog('School'),
-          backgroundColor: Colors.teal,
-          child: const Icon(Icons.school, color: Colors.white),
-        ),
-      ],
+    return FloatingActionButton(
+      heroTag: "add_location_btn",
+      onPressed: () => _showAddDialog('School'),
+      backgroundColor: Colors.teal,
+      child: const Icon(Icons.add_location_alt, color: Colors.white),
     );
   }
 
@@ -509,8 +553,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               const Divider(),
               TextButton.icon(
                 onPressed: () {
-                  Navigator.pop(ctx); // Close management dialog
-                  _confirmDelete(type, entity); // Open delete confirm
+                  Navigator.pop(ctx);
+                  _confirmDelete(type, entity);
                 },
                 icon: const Icon(Icons.delete_forever, color: Colors.red),
                 label: Text(
@@ -608,8 +652,7 @@ class _SortableHeader extends StatelessWidget {
 class _ActionCell extends StatelessWidget {
   final String text;
   final bool isBold;
-  final int
-  borderType; // 0: None, 1: Cluster (Thick), 2: Village (Medium), 3: School (Thin)
+  final int borderType;
   final VoidCallback? onTap;
 
   const _ActionCell({
@@ -622,7 +665,6 @@ class _ActionCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     BorderSide? topSide;
-
     if (borderType == 1) {
       topSide = BorderSide(color: Colors.grey.shade900, width: 2.5);
     } else if (borderType == 2) {
