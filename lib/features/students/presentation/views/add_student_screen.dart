@@ -99,25 +99,26 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
       floatingActionButton: FloatingActionButton.extended(
         label: const Text("Import Excel"),
         icon: const Icon(Icons.upload_file),
-        onPressed: isLoading
-            ? null
-            : () async {
-                try {
-                  await ref.read(studentProvider.notifier).importStudentsFromExcel();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Students imported successfully!')));
-                    Navigator.pop(context, true);
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
-                  }
-                }
-              },
+        onPressed: isLoading ? null : _handleExcelImport,
       ),
     );
+  }
+
+  Future<void> _handleExcelImport() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(studentProvider.notifier).importStudentsFromExcel();
+
+      if (!context.mounted) return;
+
+      messenger.showSnackBar(const SnackBar(content: Text('Students imported successfully!')));
+      navigator.pop(true);
+    } catch (e) {
+      if (!context.mounted) return;
+
+      messenger.showSnackBar(SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
+    }
   }
 
   Future<void> _submitForm() async {
@@ -141,13 +142,5 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to register student.')));
     }
-  }
-
-  late Future<List<Map<String, dynamic>>> _studentsFuture;
-
-  void _refreshStudents() {
-    setState(() {
-      _studentsFuture = ref.read(studentProvider.notifier).getMyStudents();
-    });
   }
 }

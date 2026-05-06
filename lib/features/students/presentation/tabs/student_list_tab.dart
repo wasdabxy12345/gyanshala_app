@@ -69,7 +69,16 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: Row(
                     children: [
-                      Text('${_selectedStudentIds.length} Selected'),
+                      Text(
+                        '${_selectedStudentIds.length} Selected',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                      ),
+                      if (_selectedStudentIds.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                          tooltip: 'Delete Selected',
+                          onPressed: () => _confirmBatchDelete(context),
+                        ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => setState(() {
@@ -215,8 +224,11 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddStudentScreen()));
-          setState(() {});
+          final navigator = Navigator.of(context);
+
+          await navigator.push(MaterialPageRoute(builder: (_) => const AddStudentScreen()));
+          if (!mounted) return;
+          _refreshStudents();
         },
         child: const Icon(Icons.add),
       ),
@@ -342,7 +354,7 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
               if (type == 'school') updates['school_id'] = selectedId;
 
               await ref.read(studentProvider.notifier).updateStudent(student['id'], updates);
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pop(context);
                 _refreshStudents();
               }
@@ -466,17 +478,15 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
 
     final success = await ref.read(studentProvider.notifier).updateStudent(student['id'], updates);
 
-    if (mounted) {
-      if (success) {
-        _refreshStudents();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Location updated successfully'), backgroundColor: Colors.green));
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to update database'), backgroundColor: Colors.red));
-      }
+    if (!mounted) return;
+
+    if (success) {
+      _refreshStudents();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Location updated'), backgroundColor: Colors.green));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Update failed'), backgroundColor: Colors.red));
     }
   }
 
@@ -492,5 +502,43 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
     setState(() {
       _studentsFuture = ref.read(studentProvider.notifier).getMyStudents();
     });
+  }
+
+  Future<void> _confirmBatchDelete(BuildContext context) async {
+    final count = _selectedStudentIds.length;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete $count selected student(s)? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final success = await ref.read(studentProvider.notifier).deleteStudents(_selectedStudentIds.toList());
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$count students deleted successfully')));
+        setState(() {
+          _selectedStudentIds.clear(); // Clear selection after deletion
+        });
+        _refreshStudents(); // Refresh the list
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to delete students'), backgroundColor: Colors.red));
+      }
+    }
   }
 }
