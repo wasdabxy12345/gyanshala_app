@@ -9,8 +9,7 @@ class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
 
   @override
-  State<LocationManagementScreen> createState() =>
-      _LocationManagementScreenState();
+  State<LocationManagementScreen> createState() => _LocationManagementScreenState();
 }
 
 class _LocationManagementScreenState extends State<LocationManagementScreen> {
@@ -38,9 +37,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       }
 
       _hierarchy.sort((a, b) {
-        int compare = (a['name'] as String).toLowerCase().compareTo(
-          (b['name'] as String).toLowerCase(),
-        );
+        int compare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
         return _isAscending ? compare : -compare;
       });
 
@@ -48,9 +45,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         List villages = cluster['villages'] ?? [];
         if (columnIndex == 1) {
           villages.sort((a, b) {
-            int vCompare = (a['name'] as String).toLowerCase().compareTo(
-              (b['name'] as String).toLowerCase(),
-            );
+            int vCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
             return _isAscending ? vCompare : -vCompare;
           });
         }
@@ -59,9 +54,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           List schools = village['schools'] ?? [];
           if (columnIndex == 2) {
             schools.sort((a, b) {
-              int sCompare = (a['name'] as String).toLowerCase().compareTo(
-                (b['name'] as String).toLowerCase(),
-              );
+              int sCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
               return _isAscending ? sCompare : -sCompare;
             });
           }
@@ -72,10 +65,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Future<void> _importFromExcel() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'csv'],
-    );
+    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls', 'csv']);
 
     if (result == null) return;
 
@@ -101,8 +91,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           final rawVillage = row[1]?.value?.toString().trim();
           final schoolName = row[2]?.value?.toString().trim();
 
-          if (rawCluster?.toLowerCase() == 'cluster' &&
-              schoolName?.toLowerCase() == 'school') {
+          if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
             continue;
           }
 
@@ -128,20 +117,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           if (lastVillageName != null && lastVillageName.isNotEmpty) {
             final villageResp = await _supabase
                 .from('villages')
-                .upsert({
-                  'name': lastVillageName,
-                  'cluster_id': clusterId,
-                }, onConflict: 'name, cluster_id')
+                .upsert({'name': lastVillageName, 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
                 .select()
                 .single();
             villageId = villageResp['id'].toString();
           }
 
           if (villageId != null) {
-            await _supabase.from('schools').upsert({
-              'name': schoolName,
-              'village_id': villageId,
-            }, onConflict: 'name, village_id');
+            await _supabase.from('schools').upsert({'name': schoolName, 'village_id': villageId}, onConflict: 'name, village_id');
           }
           importedCount++;
         }
@@ -149,16 +132,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
       await _fetchHierarchy();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Successfully processed $importedCount rows")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully processed $importedCount rows")));
       }
     } catch (e) {
       debugPrint("Import Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Import Error: ${e.toString()}")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Import Error: ${e.toString()}")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -171,9 +150,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     try {
       final data = await _supabase
           .from('clusters')
-          .select(
-            'id, name, villages(id, name, cluster_id, schools(id, name, village_id))',
-          )
+          .select('id, name, villages(id, name, cluster_id, schools(id, name, village_id))')
           .order('name', ascending: true);
 
       if (mounted) {
@@ -191,9 +168,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     } catch (e) {
       debugPrint("Fetch error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error fetching data: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error fetching data: $e")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -217,10 +192,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             autofocus: true,
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(qCtx),
-              child: const Text("Cancel"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(qCtx), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () async {
                 final name = quickController.text.trim();
@@ -233,14 +205,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   insertData['cluster_id'] = selectedClusterId;
                 }
 
-                final response = await _supabase
-                    .from(table)
-                    .insert(insertData)
-                    .select()
-                    .single();
+                final response = await _supabase.from(table).insert(insertData).select().single();
                 await _fetchHierarchy();
-                if (qCtx.mounted)
-                  Navigator.pop(qCtx, response['id'].toString());
+                if (qCtx.mounted) Navigator.pop(qCtx, response['id'].toString());
               },
               child: const Text("Create"),
             ),
@@ -265,10 +232,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   },
                   icon: const Icon(Icons.upload_file),
                   label: const Text("Import Schools via Excel"),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(40),
-                    foregroundColor: Colors.teal,
-                  ),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
                 ),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -277,10 +241,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Expanded(child: Divider()),
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text(
-                          "OR MANUALLY",
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
+                        child: Text("OR MANUALLY", style: TextStyle(fontSize: 10, color: Colors.grey)),
                       ),
                       Expanded(child: Divider()),
                     ],
@@ -297,24 +258,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       value: "ADD_NEW",
                       child: Text(
                         "+ Add New Cluster...",
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    ..._hierarchy.map(
-                      (c) => DropdownMenuItem(
-                        value: c['id'].toString(),
-                        child: Text(c['name']),
-                      ),
-                    ),
+                    ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
                   ],
                   onChanged: (val) async {
                     if (val == "ADD_NEW") {
                       final newId = await showQuickAdd("Cluster");
-                      if (newId != null)
-                        setDialogState(() => selectedClusterId = newId);
+                      if (newId != null) setDialogState(() => selectedClusterId = newId);
                     } else {
                       setDialogState(() {
                         selectedClusterId = val;
@@ -337,31 +289,19 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             value: "ADD_NEW",
                             child: Text(
                               "+ Add New Village...",
-                              style: TextStyle(
-                                color: Colors.blue,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
                             ),
                           ),
-                          ...(_hierarchy.firstWhere(
-                                    (c) =>
-                                        c['id'].toString() == selectedClusterId,
-                                  )['villages']
-                                  as List)
-                              .map(
-                                (v) => DropdownMenuItem(
-                                  value: v['id'].toString(),
-                                  child: Text(v['name']),
-                                ),
-                              ),
+                          ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List).map(
+                            (v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name'])),
+                          ),
                         ],
                   onChanged: selectedClusterId == null
                       ? null
                       : (val) async {
                           if (val == "ADD_NEW") {
                             final newId = await showQuickAdd("Village");
-                            if (newId != null)
-                              setDialogState(() => selectedVillageId = newId);
+                            if (newId != null) setDialogState(() => selectedVillageId = newId);
                           } else {
                             setDialogState(() => selectedVillageId = val);
                           }
@@ -376,10 +316,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
@@ -389,16 +326,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   await _supabase.from('clusters').insert({'name': name});
                 } else if (type == 'Village') {
                   if (selectedClusterId == null) return;
-                  await _supabase.from('villages').insert({
-                    'name': name,
-                    'cluster_id': selectedClusterId,
-                  });
+                  await _supabase.from('villages').insert({'name': name, 'cluster_id': selectedClusterId});
                 } else {
                   if (selectedVillageId == null) return;
-                  await _supabase.from('schools').insert({
-                    'name': name,
-                    'village_id': selectedVillageId,
-                  });
+                  await _supabase.from('schools').insert({'name': name, 'village_id': selectedVillageId});
                 }
 
                 if (ctx.mounted) Navigator.pop(ctx);
@@ -415,11 +346,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Future<void> _confirmDelete(String type, dynamic entity) async {
     String warning = "";
     if (type == 'Cluster') {
-      warning =
-          "\n\nWarning: Deleting this Cluster will also delete ALL associated Villages and Schools!";
+      warning = "\n\nWarning: Deleting this Cluster will also delete ALL associated Villages and Schools!";
     } else if (type == 'Village') {
-      warning =
-          "\n\nWarning: Deleting this Village will also delete ALL associated Schools!";
+      warning = "\n\nWarning: Deleting this Village will also delete ALL associated Schools!";
     }
 
     final bool? confirmed = await showDialog<bool>(
@@ -433,27 +362,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               const TextSpan(text: "Are you sure you want to delete "),
               TextSpan(
                 text: "'${entity['name']}'",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
               ),
               TextSpan(text: "?$warning"),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              "Delete Everything",
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text("Delete Everything", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -462,9 +382,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     if (!mounted) return;
 
     if (confirmed == true) {
-      String table = type == 'Cluster'
-          ? 'clusters'
-          : (type == 'Village' ? 'villages' : 'schools');
+      String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
       await _supabase.from(table).delete().eq('id', entity['id']);
       if (mounted) {
         _fetchHierarchy();
@@ -478,15 +396,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       List villages = cluster['villages'] ?? [];
 
       if (villages.isEmpty) {
-        rows.add(
-          _buildSingleRow(
-            cluster,
-            null,
-            null,
-            showClusterActions: true,
-            clusterBorder: true,
-          ),
-        );
+        rows.add(_buildSingleRow(cluster, null, null, showClusterActions: true, clusterBorder: true));
       } else {
         for (int vIdx = 0; vIdx < villages.length; vIdx++) {
           var village = villages[vIdx];
@@ -540,9 +450,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }) {
     int clusterColBorder = clusterBorder ? 1 : 0;
     int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
-    int schoolColBorder = clusterBorder
-        ? 1
-        : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
+    int schoolColBorder = clusterBorder ? 1 : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
 
     return TableRow(
       children: [
@@ -560,9 +468,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         _ActionCell(
           text: school != null ? school['name'] : "-",
           borderType: schoolColBorder,
-          onTap: school != null
-              ? () => _showManageDialog('School', school)
-              : null,
+          onTap: school != null ? () => _showManageDialog('School', school) : null,
         ),
       ],
     );
@@ -603,9 +509,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                 },
                               )
                             : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         filled: true,
                         fillColor: Colors.white,
                       ),
@@ -618,11 +522,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       left: BorderSide(color: Colors.grey.shade300),
                       right: BorderSide(color: Colors.grey.shade300),
                     ),
-                    columnWidths: const {
-                      0: FlexColumnWidth(1),
-                      1: FlexColumnWidth(1),
-                      2: FlexColumnWidth(1.2),
-                    },
+                    columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(1), 2: FlexColumnWidth(1.2)},
                     children: [
                       TableRow(
                         decoration: BoxDecoration(color: Colors.grey.shade200),
@@ -693,37 +593,19 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               if (type == 'Village')
                 DropdownButtonFormField<String>(
                   initialValue: selectedParentId,
-                  decoration: const InputDecoration(
-                    labelText: "Move to Cluster",
-                  ),
-                  items: _hierarchy
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: c['id'].toString(),
-                          child: Text(c['name']),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => selectedParentId = val),
+                  decoration: const InputDecoration(labelText: "Move to Cluster"),
+                  items: _hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
+                  onChanged: (val) => setDialogState(() => selectedParentId = val),
                 ),
               if (type == 'School')
                 DropdownButtonFormField<String>(
                   initialValue: selectedParentId,
-                  decoration: const InputDecoration(
-                    labelText: "Move to Village",
-                  ),
+                  decoration: const InputDecoration(labelText: "Move to Village"),
                   items: _hierarchy
                       .expand((c) => (c['villages'] as List))
-                      .map(
-                        (v) => DropdownMenuItem(
-                          value: v['id'].toString(),
-                          child: Text(v['name']),
-                        ),
-                      )
+                      .map((v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name'])))
                       .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => selectedParentId = val),
+                  onChanged: (val) => setDialogState(() => selectedParentId = val),
                 ),
               TextField(
                 controller: nameController,
@@ -737,18 +619,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   _confirmDelete(type, entity);
                 },
                 icon: const Icon(Icons.delete_forever, color: Colors.red),
-                label: Text(
-                  "Delete this $type",
-                  style: const TextStyle(color: Colors.red),
-                ),
+                label: Text("Delete this $type", style: const TextStyle(color: Colors.red)),
               ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
@@ -756,24 +632,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
                   final Map<String, dynamic> updateData = {'name': name};
-                  String table = type == 'Cluster'
-                      ? 'clusters'
-                      : (type == 'Village' ? 'villages' : 'schools');
-                  if (type == 'Village')
-                    updateData['cluster_id'] = selectedParentId;
-                  if (type == 'School')
-                    updateData['village_id'] = selectedParentId;
+                  String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
+                  if (type == 'Village') updateData['cluster_id'] = selectedParentId;
+                  if (type == 'School') updateData['village_id'] = selectedParentId;
 
-                  await _supabase
-                      .from(table)
-                      .update(updateData)
-                      .eq('id', entity['id']);
+                  await _supabase.from(table).update(updateData).eq('id', entity['id']);
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (!mounted) return;
                   _fetchHierarchy();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text("$type updated!")),
-                  );
+                  messenger.showSnackBar(SnackBar(content: Text("$type updated!")));
                 } catch (e) {
                   if (!mounted) return;
                   messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -808,17 +675,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             final filteredVillages = villages
                 .map((village) {
                   final villageName = village['name'].toString().toLowerCase();
-                  final bool villageMatches = villageName.contains(
-                    lowercaseQuery,
-                  );
+                  final bool villageMatches = villageName.contains(lowercaseQuery);
 
                   final schools = List.from(village['schools'] ?? []);
 
                   final filteredSchools = schools.where((school) {
                     if (clusterMatches || villageMatches) return true;
-                    return school['name'].toString().toLowerCase().contains(
-                      lowercaseQuery,
-                    );
+                    return school['name'].toString().toLowerCase().contains(lowercaseQuery);
                   }).toList();
 
                   final villageCopy = Map<String, dynamic>.from(village);
@@ -829,9 +692,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   final villageName = v['name'].toString().toLowerCase();
                   final schools = v['schools'] as List;
 
-                  return clusterMatches ||
-                      villageName.contains(lowercaseQuery) ||
-                      schools.isNotEmpty;
+                  return clusterMatches || villageName.contains(lowercaseQuery) || schools.isNotEmpty;
                 })
                 .toList();
 
@@ -856,12 +717,7 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
 
-  const _SortableHeader({
-    required this.label,
-    required this.onSort,
-    required this.isSorted,
-    required this.isAscending,
-  });
+  const _SortableHeader({required this.label, required this.onSort, required this.isSorted, required this.isAscending});
 
   @override
   Widget build(BuildContext context) {
@@ -872,15 +728,10 @@ class _SortableHeader extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             Icon(
-              isSorted
-                  ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward)
-                  : Icons.sort,
+              isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.sort,
               size: 16,
               color: isSorted ? Colors.indigo : Colors.grey,
             ),
@@ -897,12 +748,7 @@ class _ActionCell extends StatelessWidget {
   final int borderType;
   final VoidCallback? onTap;
 
-  const _ActionCell({
-    required this.text,
-    this.isBold = false,
-    this.borderType = 0,
-    this.onTap,
-  });
+  const _ActionCell({required this.text, this.isBold = false, this.borderType = 0, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -916,9 +762,7 @@ class _ActionCell extends StatelessWidget {
     }
 
     return Container(
-      decoration: BoxDecoration(
-        border: topSide != null ? Border(top: topSide) : null,
-      ),
+      decoration: BoxDecoration(border: topSide != null ? Border(top: topSide) : null),
       child: InkWell(
         onTap: (text.isEmpty || text == "-") ? null : onTap,
         child: Padding(
@@ -931,15 +775,12 @@ class _ActionCell extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
                     color: text == "-" ? Colors.grey : Colors.indigo.shade900,
-                    decoration: (text.isEmpty || text == "-")
-                        ? null
-                        : TextDecoration.underline,
+                    decoration: (text.isEmpty || text == "-") ? null : TextDecoration.underline,
                     decorationStyle: TextDecorationStyle.dotted,
                   ),
                 ),
               ),
-              if (text.isNotEmpty && text != "-")
-                const Icon(Icons.edit_note, size: 14, color: Colors.indigo),
+              if (text.isNotEmpty && text != "-") const Icon(Icons.edit_note, size: 14, color: Colors.indigo),
             ],
           ),
         ),

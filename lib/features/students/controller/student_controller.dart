@@ -1,5 +1,8 @@
 import 'dart:developer' as dev;
+import 'dart:io';
 
+import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -168,6 +171,84 @@ class StudentController extends StateNotifier<bool> {
     } catch (e, stack) {
       dev.log("Update failed in Controller", error: e, stackTrace: stack);
       return false;
+    }
+  }
+
+  Future<void> importStudentsFromExcel() async {
+    // 1. Pick File
+    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
+
+    if (result == null) return;
+
+    try {
+      final bytes = File(result.files.first.path!).readAsBytesSync();
+      final excel = Excel.decodeBytes(bytes);
+
+      // 2. Fetch current Mentor's default location data
+      final user = _client.auth.currentUser;
+      if (user == null) return;
+
+      final mentorData = await _client
+          .from('profiles')
+          .select('cluster, village, school, cluster_id, village_id, school_id')
+          .eq('id', user.id)
+          .single();
+
+      List<Map<String, dynamic>> studentsToInsert = [];
+
+      for (var table in excel.tables.keys) {
+        var sheet = excel.tables[table];
+        if (sheet == null) continue;
+
+        // Assume row 0 is header: [First Name, Last Name, Gender, Grade, Cluster, Village, School]
+        for (int i = 1; i < sheet.maxRows; i++) {
+          var row = sheet.rows[i];
+          if (row.length < 2) continue; // Skip empty rows
+
+          // Helper to get string value safely
+          String? val(int index) =>
+              (index < row.length && row[index]?.value != null) ? row[index]!.value.toString().trim() : null;
+
+          // Extract values from Excel
+          final fName = val(0);
+          final lName = val(1);
+          final gender = val(2);
+          final gradeStr = val(3);
+
+          // Optional location overrides from Excel
+          final excelCluster = val(4);
+          final excelVillage = val(5);
+          final excelSchool = val(6);
+
+          if (fName == null || fName.isEmpty) continue;
+
+          studentsToInsert.add({
+            'first_name': fName,
+            'last_name': lName ?? '',
+            'gender': gender ?? 'Other',
+            'grade': int.tryParse(gradeStr ?? '') ?? 1,
+            'mentor_id': user.id,
+            // If Excel has location name, use it; otherwise use mentor's name
+            'cluster': excelCluster ?? mentorData['cluster'],
+            'village': excelVillage ?? mentorData['village'],
+            'school': excelSchool ?? mentorData['school'],
+            // Note: cluster_id/village_id/school_id are harder to "fallback"
+            // because names in Excel might not match DB IDs.
+            // We default to the Mentor's assigned IDs.
+            'cluster_id': mentorData['cluster_id'],
+            'village_id': mentorData['village_id'],
+            'school_id': mentorData['school_id'],
+          });
+        }
+      }
+
+      // 3. Bulk Insert into Supabase
+      if (studentsToInsert.isNotEmpty) {
+        await _client.from('students').insert(studentsToInsert);
+      }
+    } catch (e) {
+      dev.log("Excel Import Error", error: e);
+      rethrow;
     }
   }
 }

@@ -43,25 +43,16 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                   Expanded(
                     child: TextFormField(
                       controller: _firstNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'First Name',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (val) => val == null || val.isEmpty
-                          ? 'Enter first name'
-                          : null,
+                      decoration: const InputDecoration(labelText: 'First Name', border: OutlineInputBorder()),
+                      validator: (val) => val == null || val.isEmpty ? 'Enter first name' : null,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: TextFormField(
                       controller: _lastNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Last Name',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (val) =>
-                          val == null || val.isEmpty ? 'Enter last name' : null,
+                      decoration: const InputDecoration(labelText: 'Last Name', border: OutlineInputBorder()),
+                      validator: (val) => val == null || val.isEmpty ? 'Enter last name' : null,
                     ),
                   ),
                 ],
@@ -69,39 +60,25 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _idController,
-                decoration: const InputDecoration(
-                  labelText: 'Student ID',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Enter student ID' : null,
+                decoration: const InputDecoration(labelText: 'Student ID', border: OutlineInputBorder()),
+                validator: (val) => val == null || val.isEmpty ? 'Enter student ID' : null,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedGender,
-                items: ['Male', 'Female', 'Other']
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
+                items: ['Male', 'Female', 'Other'].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                 onChanged: (val) => setState(() => _selectedGender = val!),
-                decoration: const InputDecoration(
-                  labelText: 'Gender',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Gender', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 initialValue: _selectedGrade,
-                items: List.generate(10, (index) => index + 1)
-                    .map(
-                      (g) =>
-                          DropdownMenuItem(value: g, child: Text('Grade $g')),
-                    )
-                    .toList(),
+                items: List.generate(
+                  10,
+                  (index) => index + 1,
+                ).map((g) => DropdownMenuItem(value: g, child: Text('Grade $g'))).toList(),
                 onChanged: (val) => setState(() => _selectedGrade = val!),
-                decoration: const InputDecoration(
-                  labelText: 'Grade',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Grade', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -110,17 +87,35 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                 child: ElevatedButton(
                   onPressed: isLoading ? null : _submitForm,
                   child: isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Save Student'),
                 ),
               ),
             ],
           ),
         ),
+      ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        label: const Text("Import Excel"),
+        icon: const Icon(Icons.upload_file),
+        onPressed: isLoading
+            ? null
+            : () async {
+                try {
+                  await ref.read(studentProvider.notifier).importStudentsFromExcel();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Students imported successfully!')));
+                    Navigator.pop(context, true);
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
+                  }
+                }
+              },
       ),
     );
   }
@@ -141,14 +136,18 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Student Registered!')));
-      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student Registered!')));
+      Navigator.pop(context, true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to register student.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to register student.')));
     }
+  }
+
+  late Future<List<Map<String, dynamic>>> _studentsFuture;
+
+  void _refreshStudents() {
+    setState(() {
+      _studentsFuture = ref.read(studentProvider.notifier).getMyStudents();
+    });
   }
 }
