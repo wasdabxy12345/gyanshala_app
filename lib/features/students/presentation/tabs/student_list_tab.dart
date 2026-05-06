@@ -12,55 +12,36 @@ class StudentListTab extends ConsumerStatefulWidget {
 }
 
 class _StudentListTabState extends ConsumerState<StudentListTab> {
+  final Set<String> _selectedStudentIds = {};
   final Set<String> selectedGenders = {};
   final Set<int> selectedGrades = {};
-  final Set<String> selectedSchools = {};
-  final Set<String> selectedVillages = {};
   final Set<String> selectedClusters = {};
+  final Set<String> selectedVillages = {};
+  final Set<String> selectedSchools = {};
 
   bool _matchesSearch(Map<String, dynamic> student, String query) {
     if (query.isEmpty) return true;
     final lowerQuery = query.toLowerCase();
 
-    return (student['student_id_custom']?.toString().toLowerCase().contains(
-              lowerQuery,
-            ) ??
-            false) ||
-        (student['full_name']?.toString().toLowerCase().contains(lowerQuery) ??
-            false) ||
-        (student['gender']?.toString().toLowerCase().contains(lowerQuery) ??
-            false) ||
-        (student['grade']?.toString().toLowerCase().contains(lowerQuery) ??
-            false) ||
-        (student['school_name']?.toString().toLowerCase().contains(
-              lowerQuery,
-            ) ??
-            false) ||
-        (student['village_name']?.toString().toLowerCase().contains(
-              lowerQuery,
-            ) ??
-            false) ||
-        (student['cluster_name']?.toString().toLowerCase().contains(
-              lowerQuery,
-            ) ??
-            false);
+    final firstName = student['first_name']?.toString().toLowerCase() ?? '';
+    final lastName = student['last_name']?.toString().toLowerCase() ?? '';
+    final fullName = "$firstName $lastName";
+
+    return (student['student_id_custom']?.toString().toLowerCase().contains(lowerQuery) ?? false) ||
+        fullName.contains(lowerQuery) ||
+        (student['gender']?.toString().toLowerCase().contains(lowerQuery) ?? false) ||
+        (student['grade']?.toString().toLowerCase().contains(lowerQuery) ?? false) ||
+        (student['cluster']?.toString().toLowerCase().contains(lowerQuery) ?? false) ||
+        (student['village']?.toString().toLowerCase().contains(lowerQuery) ?? false) ||
+        (student['school']?.toString().toLowerCase().contains(lowerQuery) ?? false);
   }
 
   bool _matchesFilters(Map<String, dynamic> student) {
-    if (selectedGenders.isNotEmpty &&
-        !selectedGenders.contains(student['gender']?.toString()))
-      return false;
-    if (selectedGrades.isNotEmpty && !selectedGrades.contains(student['grade']))
-      return false;
-    if (selectedSchools.isNotEmpty &&
-        !selectedSchools.contains(student['school_name']?.toString()))
-      return false;
-    if (selectedVillages.isNotEmpty &&
-        !selectedVillages.contains(student['village_name']?.toString()))
-      return false;
-    if (selectedClusters.isNotEmpty &&
-        !selectedClusters.contains(student['cluster_name']?.toString()))
-      return false;
+    if (selectedGenders.isNotEmpty && !selectedGenders.contains(student['gender']?.toString())) return false;
+    if (selectedGrades.isNotEmpty && !selectedGrades.contains(student['grade'])) return false;
+    if (selectedClusters.isNotEmpty && !selectedClusters.contains(student['cluster']?.toString())) return false;
+    if (selectedVillages.isNotEmpty && !selectedVillages.contains(student['village']?.toString())) return false;
+    if (selectedSchools.isNotEmpty && !selectedSchools.contains(student['school']?.toString())) return false;
     return true;
   }
 
@@ -68,57 +49,50 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: ref.read(studentProvider.notifier).getMyStudents(),
+        future: _studentsFuture,
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
           final allStudents = snapshot.data!;
-          final filteredStudents = allStudents
-              .where(
-                (s) =>
-                    _matchesSearch(s, widget.searchQuery) && _matchesFilters(s),
-              )
-              .toList();
+          final filteredStudents = allStudents.where((s) => _matchesSearch(s, widget.searchQuery) && _matchesFilters(s)).toList();
 
-          final genders =
-              allStudents
-                  .map((s) => s['gender']?.toString())
-                  .whereType<String>()
-                  .toSet()
-                  .toList()
-                ..sort();
-          final grades =
-              allStudents
-                  .map((s) => s['grade'] as int?)
-                  .whereType<int>()
-                  .toSet()
-                  .toList()
-                ..sort();
-          final schools =
-              allStudents
-                  .map((s) => s['school_name']?.toString())
-                  .whereType<String>()
-                  .toSet()
-                  .toList()
-                ..sort();
-          final villages =
-              allStudents
-                  .map((s) => s['village_name']?.toString())
-                  .whereType<String>()
-                  .toSet()
-                  .toList()
-                ..sort();
-          final clusters =
-              allStudents
-                  .map((s) => s['cluster_name']?.toString())
-                  .whereType<String>()
-                  .toSet()
-                  .toList()
-                ..sort();
+          final genders = allStudents.map((s) => s['gender']?.toString()).whereType<String>().toSet().toList()..sort();
+          final grades = allStudents.map((s) => s['grade'] as int?).whereType<int>().toSet().toList()..sort();
+          final clusters = allStudents.map((s) => s['cluster']?.toString()).whereType<String>().toSet().toList()..sort();
+          final villages = allStudents.map((s) => s['village']?.toString()).whereType<String>().toSet().toList()..sort();
+          final schools = allStudents.map((s) => s['school']?.toString()).whereType<String>().toSet().toList()..sort();
 
           return Column(
             children: [
+              if (filteredStudents.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    children: [
+                      Text('${_selectedStudentIds.length} Selected'),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          if (_selectedStudentIds.length == filteredStudents.length) {
+                            _selectedStudentIds.clear();
+                          } else {
+                            _selectedStudentIds.addAll(filteredStudents.map((s) => s['id'].toString()));
+                          }
+                        }),
+                        child: Text(_selectedStudentIds.length == filteredStudents.length ? 'Deselect All' : 'Select All'),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          final currentFilteredIds = filteredStudents.map((s) => s['id'].toString()).toSet();
+                          final newSelection = currentFilteredIds.difference(_selectedStudentIds);
+                          _selectedStudentIds.clear();
+                          _selectedStudentIds.addAll(newSelection);
+                        }),
+                        child: const Text('Invert Selection'),
+                      ),
+                    ],
+                  ),
+                ),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Padding(
@@ -127,32 +101,27 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                     children: [
                       _filterButton('Gender', genders, selectedGenders),
                       const SizedBox(width: 8),
-                      _filterButton(
-                        'Grade',
-                        grades,
-                        selectedGrades,
-                        labelBuilder: (g) => 'Grade $g',
-                      ),
+                      _filterButton('Grade', grades, selectedGrades, labelBuilder: (g) => 'Grade $g'),
                       const SizedBox(width: 8),
-                      _filterButton('School', schools, selectedSchools),
+                      _filterButton('Cluster', clusters, selectedClusters),
                       const SizedBox(width: 8),
                       _filterButton('Village', villages, selectedVillages),
                       const SizedBox(width: 8),
-                      _filterButton('Cluster', clusters, selectedClusters),
+                      _filterButton('School', schools, selectedSchools),
                       if ([
                         selectedGenders,
                         selectedGrades,
-                        selectedSchools,
-                        selectedVillages,
                         selectedClusters,
+                        selectedVillages,
+                        selectedSchools,
                       ].any((s) => s.isNotEmpty))
                         TextButton(
                           onPressed: () => setState(() {
                             selectedGenders.clear();
                             selectedGrades.clear();
-                            selectedSchools.clear();
-                            selectedVillages.clear();
                             selectedClusters.clear();
+                            selectedVillages.clear();
+                            selectedSchools.clear();
                           }),
                           child: const Text('Clear'),
                         ),
@@ -167,38 +136,71 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                         scrollDirection: Axis.horizontal,
                         child: SingleChildScrollView(
                           child: DataTable(
+                            onSelectAll: (isSelectedAll) {
+                              setState(() {
+                                if (isSelectedAll == true) {
+                                  _selectedStudentIds.addAll(filteredStudents.map((s) => s['id'].toString()));
+                                } else {
+                                  _selectedStudentIds.clear();
+                                }
+                              });
+                            },
                             columns: const [
                               DataColumn(label: Text('Student ID')),
-                              DataColumn(label: Text('Name')),
+                              DataColumn(label: Text('First Name')),
+                              DataColumn(label: Text('Last Name')),
                               DataColumn(label: Text('Gender')),
                               DataColumn(label: Text('Grade')),
-                              DataColumn(label: Text('School')),
-                              DataColumn(label: Text('Village')),
                               DataColumn(label: Text('Cluster')),
+                              DataColumn(label: Text('Village')),
+                              DataColumn(label: Text('School')),
                             ],
                             rows: filteredStudents.map((s) {
+                              final studentId = s['id'].toString();
                               return DataRow(
+                                selected: _selectedStudentIds.contains(studentId),
+                                onSelectChanged: (isSelected) {
+                                  setState(() {
+                                    if (isSelected == true) {
+                                      _selectedStudentIds.add(studentId);
+                                    } else {
+                                      _selectedStudentIds.remove(studentId);
+                                    }
+                                  });
+                                },
                                 cells: [
-                                  DataCell(
-                                    Text(
-                                      s['student_id_custom']?.toString() ?? '-',
-                                    ),
+                                  _editableCell(
+                                    currentText: s['student_id_custom'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'student_id_custom', 'Text'),
                                   ),
-                                  DataCell(
-                                    Text(s['full_name']?.toString() ?? '-'),
+                                  _editableCell(
+                                    currentText: s['first_name'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'first_name', 'Text'),
                                   ),
-                                  DataCell(
-                                    Text(s['gender']?.toString() ?? '-'),
+                                  _editableCell(
+                                    currentText: s['last_name'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'last_name', 'Text'),
                                   ),
-                                  DataCell(Text(s['grade']?.toString() ?? '-')),
-                                  DataCell(
-                                    Text(s['school_name']?.toString() ?? '-'),
+                                  _editableCell(
+                                    currentText: s['gender'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'gender', 'Dropdown', options: ['Male', 'Female', 'Other']),
                                   ),
-                                  DataCell(
-                                    Text(s['village_name']?.toString() ?? '-'),
+                                  _editableCell(
+                                    currentText: "Grade ${s['grade']}",
+                                    onTap: () =>
+                                        _showEditDialog(s, 'grade', 'Dropdown', options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
                                   ),
-                                  DataCell(
-                                    Text(s['cluster_name']?.toString() ?? '-'),
+                                  _editableCell(
+                                    currentText: s['cluster'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'cluster', 'Dependent', type: 'cluster'),
+                                  ),
+                                  _editableCell(
+                                    currentText: s['village'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'village', 'Dependent', type: 'village'),
+                                  ),
+                                  _editableCell(
+                                    currentText: s['school'] ?? '-',
+                                    onTap: () => _showEditDialog(s, 'school', 'Dependent', type: 'school'),
                                   ),
                                 ],
                               );
@@ -212,20 +214,16 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const AddStudentScreen())),
+        onPressed: () async {
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddStudentScreen()));
+          setState(() {});
+        },
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _filterButton<T>(
-    String title,
-    List<T> options,
-    Set<T> selected, {
-    String Function(T)? labelBuilder,
-  }) {
+  Widget _filterButton<T>(String title, List<T> options, Set<T> selected, {String Function(T)? labelBuilder}) {
     return OutlinedButton(
       onPressed: () => _showMultiSelectDialog<T>(
         context: context,
@@ -259,19 +257,14 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                 return CheckboxListTile(
                   title: Text(labelBuilder?.call(option) ?? option.toString()),
                   value: temp.contains(option),
-                  onChanged: (val) => setLocalState(
-                    () => val == true ? temp.add(option) : temp.remove(option),
-                  ),
+                  onChanged: (val) => setLocalState(() => val == true ? temp.add(option) : temp.remove(option)),
                 );
               }).toList(),
             ),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               setState(() {
@@ -285,5 +278,219 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
         ],
       ),
     );
+  }
+
+  DataCell _editableCell({required String currentText, required VoidCallback onTap}) {
+    return DataCell(
+      InkWell(
+        onTap: onTap,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(child: Text(currentText, overflow: TextOverflow.ellipsis)),
+            Icon(Icons.edit, size: 14, color: Colors.blue.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditDialog(
+    Map<String, dynamic> student,
+    String field,
+    String inputType, {
+    List<dynamic>? options,
+    String? type,
+  }) async {
+    if (type == 'cluster' || type == 'village' || type == 'school') {
+      _showLocationPicker(student, type!);
+      return;
+    }
+    final controller = TextEditingController(text: student[field]?.toString());
+    String? selectedId;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit ${field.replaceAll('_', ' ')}'),
+        content: SizedBox(
+          width: 400,
+          child: inputType == 'Text'
+              ? TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                )
+              : _buildSearchablePicker(
+                  student: student,
+                  type: type,
+                  options: options,
+                  onSelected: (displayValue, id) {
+                    controller.text = displayValue;
+                    selectedId = id;
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Map<String, dynamic> updates = {field: controller.text};
+
+              if (type == 'cluster') updates['cluster_id'] = selectedId;
+              if (type == 'village') updates['village_id'] = selectedId;
+              if (type == 'school') updates['school_id'] = selectedId;
+
+              await ref.read(studentProvider.notifier).updateStudent(student['id'], updates);
+              if (mounted) {
+                Navigator.pop(context);
+                _refreshStudents();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchablePicker({
+    required Map<String, dynamic> student,
+    String? type,
+    List<dynamic>? options,
+    required Function(String, String?) onSelected,
+  }) {
+    String searchQuery = "";
+
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: type == 'cluster'
+              ? ref.read(studentProvider.notifier).getClusters()
+              : type == 'village'
+              ? ref.read(studentProvider.notifier).getVillages(student['cluster_id'])
+              : ref.read(studentProvider.notifier).getSchools(student['village_id']),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(height: 150, child: Center(child: CircularProgressIndicator()));
+            }
+
+            final list = snapshot.data ?? [];
+            final filteredList = list
+                .where((item) => item['name'].toString().toLowerCase().contains(searchQuery.toLowerCase()))
+                .toList();
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(hintText: 'Search...', prefixIcon: Icon(Icons.search)),
+                  onChanged: (val) => setLocalState(() => searchQuery = val),
+                ),
+                const SizedBox(height: 8),
+                if (filteredList.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text("No items found")),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filteredList.length,
+                    itemBuilder: (context, index) {
+                      final item = filteredList[index];
+                      return ListTile(title: Text(item['name']), onTap: () => onSelected(item['name'], item['id'].toString()));
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showLocationPicker(Map<String, dynamic> student, String startAt) async {
+    String? currentClusterId = student['cluster_id'];
+    String? currentClusterName = student['cluster'];
+    String? currentVillageId = student['village_id'];
+    String? currentVillageName = student['village'];
+    String? currentSchoolId = student['school_id'];
+    String? currentSchoolName = student['school'];
+
+    Future<Map<String, dynamic>?> pick(String type, Map<String, dynamic> tempState) async {
+      return await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Select ${type.toUpperCase()}'),
+          content: SizedBox(
+            width: 400,
+            child: _buildSearchablePicker(
+              student: tempState,
+              type: type,
+              onSelected: (name, id) => Navigator.pop(context, {'name': name, 'id': id}),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (startAt == 'cluster') {
+      final res = await pick('cluster', {});
+      if (res == null) return;
+      currentClusterId = res['id'];
+      currentClusterName = res['name'];
+      currentVillageId = null;
+      currentSchoolId = null;
+    }
+
+    if (startAt == 'cluster' || startAt == 'village' || currentVillageId == null) {
+      final res = await pick('village', {'cluster_id': currentClusterId});
+      if (res == null) return;
+      currentVillageId = res['id'];
+      currentVillageName = res['name'];
+      currentSchoolId = null;
+    }
+
+    final res = await pick('school', {'village_id': currentVillageId});
+    if (res == null) return;
+    currentSchoolId = res['id'];
+    currentSchoolName = res['name'];
+
+    final updates = {
+      'cluster_id': currentClusterId,
+      'cluster': currentClusterName,
+      'village_id': currentVillageId,
+      'village': currentVillageName,
+      'school_id': currentSchoolId,
+      'school': currentSchoolName,
+    };
+
+    final success = await ref.read(studentProvider.notifier).updateStudent(student['id'], updates);
+
+    if (mounted) {
+      if (success) {
+        _refreshStudents();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Location updated successfully'), backgroundColor: Colors.green));
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to update database'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  late Future<List<Map<String, dynamic>>> _studentsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStudents();
+  }
+
+  void _refreshStudents() {
+    setState(() {
+      _studentsFuture = ref.read(studentProvider.notifier).getMyStudents();
+    });
   }
 }

@@ -179,13 +179,13 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final students = snapshot.data!
-            .where(
-              (s) => s['full_name'].toString().toLowerCase().contains(
-                widget.searchQuery.toLowerCase(),
-              ),
-            )
-            .toList();
+        final students = snapshot.data!.where((s) {
+          final firstName = s['first_name']?.toString().toLowerCase() ?? '';
+          final lastName = s['last_name']?.toString().toLowerCase() ?? '';
+          final fullName = "$firstName $lastName";
+
+          return fullName.contains(widget.searchQuery.toLowerCase());
+        }).toList();
 
         if (students.isEmpty) {
           return const Center(child: Text("No students found."));
@@ -196,8 +196,10 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           itemBuilder: (context, index) {
             final s = students[index];
             final currentStatus = statusMap[s['id']];
+            final firstName = s['first_name'] ?? '';
+            final lastName = s['last_name'] ?? '';
             return ListTile(
-              title: Text(s['full_name']),
+              title: Text("$firstName $lastName"),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

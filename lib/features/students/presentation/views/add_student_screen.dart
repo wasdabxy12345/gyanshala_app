@@ -11,7 +11,8 @@ class AddStudentScreen extends ConsumerStatefulWidget {
 
 class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _idController = TextEditingController();
 
   String _selectedGender = 'Male';
@@ -19,7 +20,8 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _idController.dispose();
     super.dispose();
   }
@@ -36,14 +38,33 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           key: _formKey,
           child: Column(
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Full Name',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Enter full name' : null,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _firstNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'First Name',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (val) => val == null || val.isEmpty
+                          ? 'Enter first name'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lastNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Last Name',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (val) =>
+                          val == null || val.isEmpty ? 'Enter last name' : null,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -110,13 +131,11 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     final success = await ref
         .read(studentProvider.notifier)
         .registerStudent(
-          name: _nameController.text.trim(),
+          firstName: _firstNameController.text.trim(),
+          lastName: _lastNameController.text.trim(),
           studentId: _idController.text.trim(),
           gender: _selectedGender,
           grade: _selectedGrade,
-          village: 'Auto-Village',
-          cluster: 'Auto-Cluster',
-          school: 'Auto-School',
         );
 
     if (!mounted) return;

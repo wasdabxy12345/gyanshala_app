@@ -20,20 +20,14 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Students"),
-          actions: [
-            IconButton(onPressed: () {}, icon: const Icon(Icons.filter_list)),
-          ],
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(100),
+            preferredSize: const Size.fromHeight(110),
             child: Column(
               children: [
                 const TabBar(
                   tabs: [
                     Tab(icon: Icon(Icons.how_to_reg), text: "Attendance"),
-                    Tab(
-                      icon: Icon(Icons.people_outline),
-                      text: "Students List",
-                    ),
+                    Tab(icon: Icon(Icons.people_outline), text: "Students List"),
                   ],
                 ),
                 Padding(
@@ -45,9 +39,7 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
                       fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
