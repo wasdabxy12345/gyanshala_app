@@ -1,0 +1,189 @@
+Future<void> _handleExcelImport() async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(studentProvider.notifier).importStudentsFromExcel();
+    if (!mounted) return;
+    messenger.showSnackBar(const SnackBar(content: Text('Import successful!')));
+    Navigator.of(context).pop(true);
+  } catch (e) {
+    String msg = e.toString();
+    if (msg.contains("CONFLICT:")) {
+      final conflictString = msg.substring(msg.indexOf("CONFLICT:") + 9);
+      final List<dynamic> rawData = jsonDecode(conflictString.split("|")[2]);
+
+      List<Map<String, dynamic>> activeConflicts = List.from(rawData);
+      Map<String, Map<String, bool>> fieldSelections = {}; // [student_id][field]
+      Set<String> selectedRowIds = {};
+      
+      // Filter/Search states
+      String searchQuery = "";
+      Map<String, String?> columnFilters = {};
+      int? sortColumnIndex;
+      bool isAscending = true;
+
+      const fields = [
+        'student_id_custom', 'first_name', 'last_name', 
+        'gender', 'grade', 'school', 'village', 'cluster'
+      ];
+
+      showDialog(
+        context: context,
+        builder: (dialogCtx) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            
+            List<Map<String, dynamic>> filteredList = activeConflicts.where((item) {
+              final current = item['current'] as Map<String, dynamic>;
+              bool matchesSearch = searchQuery.isEmpty || 
+                  current.values.any((v) => v.toString().toLowerCase().contains(searchQuery.toLowerCase()));
+              
+              bool matchesFilters = columnFilters.entries.every((filter) {
+                if (filter.value == null) return true;
+                return current[filter.key].toString() == filter.value;
+              });
+
+              return matchesSearch && matchesFilters;
+            }).toList();
+
+            if (sortColumnIndex != null) {
+              final field = fields[sortColumnIndex!];
+              filteredList.sort((a, b) {
+                int cmp = a['current'][field].toString().compareTo(b['current'][field].toString());
+                return isAscending ? cmp : -cmp;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text("Conflict Workspace"),
+              content: SizedBox(
+                width: MediaQuery.of(context).size.width * 0.95,
+                child: Column(
+                  children: [
+                    // TOP BAR: Search and Batch Actions
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: "Search students...",
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (val) => setDialogState(() => searchQuery = val),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text("Apply Selected"),
+                          onPressed: selectedRowIds.isEmpty ? null : () {
+                            setDialogState(() {
+                              activeConflicts.removeWhere((item) => 
+                                selectedRowIds.contains(item['current']['student_id_custom']));
+                              selectedRowIds.clear();
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    
+                    // DATA TABLE
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            sortColumnIndex: sortColumnIndex,
+                            sortAscending: isAscending,
+                            showCheckboxColumn: true,
+                            columns: fields.map((f) => DataColumn(
+                              onSort: (index, asc) => setDialogState(() {
+                                sortColumnIndex = index;
+                                isAscending = asc;
+                              }),
+                              label: Row(
+                                children: [
+                                  Text(f.replaceFirst('student_id_custom', 'ID').toUpperCase()),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.filter_list, size: 16),
+                                    onSelected: (val) => setDialogState(() => columnFilters[f] = val == "ALL" ? null : val),
+                                    itemBuilder: (ctx) {
+                                      var uniqueVals = activeConflicts.map((item) => item['current'][f].toString()).toSet().toList();
+                                      return [
+                                        const PopupMenuItem(value: "ALL", child: Text("- Clear Filter -")),
+                                        ...uniqueVals.map((v) => PopupMenuItem(value: v, child: Text(v))),
+                                      ];
+                                    },
+                                  ),
+                                ],
+                              ),
+                            )).toList(),
+                            rows: filteredList.map((item) {
+                              final id = item['current']['student_id_custom'].toString();
+                              return DataRow(
+                                selected: selectedRowIds.contains(id),
+                                onSelectChanged: (val) => setDialogState(() {
+                                  val! ? selectedRowIds.add(id) : selectedRowIds.remove(id);
+                                }),
+                                cells: fields.map((f) {
+                                  final curVal = item['current'][f].toString();
+                                  final incVal = item['incoming'][f].toString();
+                                  if (curVal == incVal) return DataCell(Text(curVal));
+
+                                  // Decision State
+                                  fieldSelections[id] ??= {};
+                                  bool isExcel = fieldSelections[id]![f] ?? true;
+
+                                  return DataCell(
+                                    Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        _buildCompactOption(curVal, !isExcel, () => setDialogState(() => fieldSelections[id]![f] = false), Colors.blueGrey),
+                                        const Divider(height: 4),
+                                        _buildCompactOption(incVal, isExcel, () => setDialogState(() => fieldSelections[id]![f] = true), Colors.red),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text("Close")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    // Logic to process ONLY the items that were "decided" and removed from active list
+                    // OR process all currently visible if you prefer a final sync.
+                  }, 
+                  child: const Text("Finalize & Sync"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+}
+
+Widget _buildCompactOption(String val, bool active, VoidCallback tap, Color color) {
+  return InkWell(
+    onTap: tap,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(active ? Icons.radio_button_checked : Icons.radio_button_off, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(val, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.bold : FontWeight.normal)),
+      ],
+    ),
+  );
+}

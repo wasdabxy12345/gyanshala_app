@@ -55,10 +55,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     });
 
     try {
-      final status = await ref
-          .read(authRepositoryProvider)
-          .getSignupStatus(id)
-          .timeout(const Duration(seconds: 10));
+      final status = await ref.read(authRepositoryProvider).getSignupStatus(id).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
@@ -72,7 +69,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         }
       });
     } catch (e) {
-      debugPrint("Status check error: $e");
       if (mounted) {
         setState(() => _state = ApprovalState.none);
       }
@@ -98,10 +94,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             final prefs = await SharedPreferences.getInstance();
             await prefs.remove('pending_id');
             if (!mounted) return;
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (_) => false,
-            );
+            Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
           },
         ),
       ),
@@ -118,10 +111,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_state != ApprovalState.none) ...[
-                  _buildStatusCard(),
-                  const SizedBox(height: 30),
-                ],
+                if (_state != ApprovalState.none) ...[_buildStatusCard(), const SizedBox(height: 30)],
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -139,22 +129,16 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 Text(
                   'Student Management System',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 48),
                 if (_state == ApprovalState.none) ...[
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.of(context)
-                          .push(
-                            MaterialPageRoute(
-                              builder: (_) => const SignupScreen(),
-                            ),
-                          )
-                          .then((_) => _checkStatus()),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus()),
                       child: const Text(AppStrings.signUp),
                     ),
                   ),
@@ -163,9 +147,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    ),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
                     child: const Text(AppStrings.logIn),
                   ),
                 ),
@@ -216,10 +198,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         borderColor = Colors.red.shade200;
         icon = Icons.error_outline;
         message = "Your signup request was declined.";
-        action = TextButton(
-          onPressed: _clearPending,
-          child: const Text("Clear & Try Again"),
-        );
+        action = TextButton(onPressed: _clearPending, child: const Text("Clear & Try Again"));
         break;
       case ApprovalState.none:
         return const SizedBox.shrink();
@@ -237,19 +216,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           Row(
             children: [
               if (_state == ApprovalState.loading)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
               else
                 Icon(icon, color: borderColor.withValues(alpha: 1.0), size: 24),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+                child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
           ),

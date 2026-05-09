@@ -11,22 +11,12 @@ class AuthRepositoryImpl implements AuthRepository {
   GoTrueClient get _auth => _supabase.auth;
 
   @override
-  Future<UserModel> login({
-    required String identifier,
-    required String password,
-  }) async {
-    final response = await _supabase.auth.signInWithPassword(
-      phone: identifier,
-      password: password,
-    );
+  Future<UserModel> login({required String identifier, required String password}) async {
+    final response = await _supabase.auth.signInWithPassword(phone: identifier, password: password);
 
     if (response.user == null) throw Exception("Login failed");
 
-    final profileData = await _supabase
-        .from('profiles')
-        .select()
-        .eq('id', response.user!.id)
-        .single();
+    final profileData = await _supabase.from('profiles').select().eq('id', response.user!.id).single();
 
     return UserModel.fromJson(profileData);
   }
@@ -64,10 +54,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> sendOtp({
-    required String identifier,
-    bool requireApprovedSignup = true,
-  }) async {
+  Future<void> sendOtp({required String identifier, bool requireApprovedSignup = true}) async {
     final phone = _normalizePhone(identifier);
 
     final status = await getSignupStatus(identifier);
@@ -87,27 +74,16 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> verifyOtp({
-    required String identifier,
-    required String otp,
-  }) async {
+  Future<void> verifyOtp({required String identifier, required String otp}) async {
     try {
-      final response = await _supabase.auth.verifyOTP(
-        phone: identifier,
-        token: otp,
-        type: OtpType.sms,
-      );
+      final response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.sms);
 
       if (response.user != null) {
         int retryCount = 0;
         bool profileExists = false;
 
         while (retryCount < 3 && !profileExists) {
-          final profile = await _supabase
-              .from('profiles')
-              .select()
-              .eq('id', response.user!.id)
-              .maybeSingle();
+          final profile = await _supabase.from('profiles').select().eq('id', response.user!.id).maybeSingle();
 
           if (profile != null) {
             profileExists = true;
@@ -132,18 +108,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> updatePassword({
-    required String password,
-    String? identifier,
-    String? oldPassword,
-  }) async {
+  Future<void> updatePassword({required String password, String? identifier, String? oldPassword}) async {
     try {
       if (identifier != null) {
         final phone = _normalizePhone(identifier);
-        final requestRows = await _fetchSignupRequestsByPhone(
-          phone,
-          columns: 'first_name,last_name,role',
-        );
+        final requestRows = await _fetchSignupRequestsByPhone(phone, columns: 'first_name,last_name,role');
 
         Map<String, dynamic> metadata = {};
         if (requestRows.isNotEmpty) {
@@ -154,13 +123,8 @@ class AuthRepositoryImpl implements AuthRepository {
           };
         }
 
-        await _auth.updateUser(
-          UserAttributes(password: password, data: metadata),
-        );
-        await _supabase
-            .from('signup_requests')
-            .update({'status': 'completed'})
-            .eq('phone', phone);
+        await _auth.updateUser(UserAttributes(password: password, data: metadata));
+        await _supabase.from('signup_requests').update({'status': 'completed'}).eq('phone', phone);
       }
     } on AuthException catch (e) {
       if (e.message.contains('Invalid login credentials')) {
@@ -184,24 +148,16 @@ class AuthRepositoryImpl implements AuthRepository {
   String _normalizePhone(String value) {
     final trimmed = value.trim();
     final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
-    debugPrint('Normalized phone for query: $digitsOnly');
     if (Validators.isValidPhone(trimmed)) {
       return digitsOnly;
     }
     throw Exception('Enter a valid phone number.');
   }
 
-  Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(
-    String phone, {
-    String columns = 'status',
-  }) async {
+  Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(String phone, {String columns = 'status'}) async {
     final candidates = _phoneCandidates(phone);
     for (final candidate in candidates) {
-      final rows = await _supabase
-          .from('signup_requests')
-          .select(columns)
-          .eq('phone', candidate)
-          .limit(1);
+      final rows = await _supabase.from('signup_requests').select(columns).eq('phone', candidate).limit(1);
       if (rows.isNotEmpty) return List<Map<String, dynamic>>.from(rows);
     }
     return [];
@@ -234,9 +190,7 @@ class AuthRepositoryImpl implements AuthRepository {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception("No authenticated user found.");
 
-    final String role = (user.userMetadata?['role'] ?? '')
-        .toString()
-        .toLowerCase();
+    final String role = (user.userMetadata?['role'] ?? '').toString().toLowerCase();
     final bool isAdmin = role == 'admin';
 
     final Map<String, dynamic> updateData = {
@@ -254,10 +208,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
     await _supabase.from('profiles').update(updateData).eq('id', user.id);
 
-    await _auth.updateUser(
-      UserAttributes(
-        data: {'first_name': firstName.trim(), 'last_name': lastName.trim()},
-      ),
-    );
+    await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
   }
 }

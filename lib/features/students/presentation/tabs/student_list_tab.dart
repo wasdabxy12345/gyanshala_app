@@ -195,9 +195,9 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                                     onTap: () => _showEditDialog(s, 'gender', 'Dropdown', options: ['Male', 'Female', 'Other']),
                                   ),
                                   _editableCell(
-                                    currentText: "Grade ${s['grade']}",
+                                    currentText: s['grade'] == 0 ? 'BV' : "${s['grade']}",
                                     onTap: () =>
-                                        _showEditDialog(s, 'grade', 'Dropdown', options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+                                        _showEditDialog(s, 'grade', 'Dropdown', options: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
                                   ),
                                   _editableCell(
                                     currentText: s['cluster'] ?? '-',
@@ -523,22 +523,24 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
       ),
     );
 
-    if (confirm == true && mounted) {
-      final success = await ref.read(studentProvider.notifier).deleteStudents(_selectedStudentIds.toList());
+    if (confirm != true) return;
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$count students deleted successfully')));
-        setState(() {
-          _selectedStudentIds.clear(); // Clear selection after deletion
-        });
-        _refreshStudents(); // Refresh the list
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to delete students'), backgroundColor: Colors.red));
-      }
+    final success = await ref.read(studentProvider.notifier).deleteStudents(_selectedStudentIds.toList());
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('$count students deleted successfully')));
+      setState(() {
+        _selectedStudentIds.clear();
+      });
+      _refreshStudents();
+    } else {
+      ScaffoldMessenger.of(
+        this.context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to delete students'), backgroundColor: Colors.red));
     }
   }
 }

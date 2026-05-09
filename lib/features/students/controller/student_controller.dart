@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -176,23 +178,25 @@ class StudentController extends StateNotifier<bool> {
 
   Future<void> importStudentsFromExcel() async {
     FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
-
     if (result == null) return;
-
     try {
       final bytes = File(result.files.first.path!).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
-
       final user = _client.auth.currentUser;
       if (user == null) return;
 
-      final mentorData = await _client
-          .from('profiles')
-          .select('cluster, village, school, cluster_id, village_id, school_id')
-          .eq('id', user.id)
-          .single();
+      final List<dynamic> dbClusters = await _client.from('clusters').select('id, name');
+      final List<dynamic> dbVillages = await _client.from('villages').select('id, name');
+      final List<dynamic> dbSchools = await _client.from('schools').select('id, name');
 
-      List<Map<String, dynamic>> studentsToInsert = [];
+      final existingStudents = await _client
+          .from('students')
+          .select('student_id_custom, first_name, last_name, gender, grade, cluster, village, school')
+          .eq('mentor_id', user.id);
+
+      List<Map<String, dynamic>> newStudents = [];
+      List<Map<String, dynamic>> conflictingStudents = [];
+      List<String> errorMessages = [];
 
       for (var table in excel.tables.keys) {
         var sheet = excel.tables[table];
@@ -200,40 +204,128 @@ class StudentController extends StateNotifier<bool> {
 
         for (int i = 1; i < sheet.maxRows; i++) {
           var row = sheet.rows[i];
-          if (row.length < 2) continue;
-
+          if (row.isEmpty || row.every((cell) => cell == null)) continue;
           String? val(int index) =>
               (index < row.length && row[index]?.value != null) ? row[index]!.value.toString().trim() : null;
 
-          final fName = val(0);
-          final lName = val(1);
-          final gender = val(2);
-          final gradeStr = val(3);
+          final customId = val(0);
+          final fName = val(1);
+          final lName = val(2);
+          final genderRaw = val(3);
+          final gradeRaw = val(4);
+          final excelCluster = val(5);
+          final excelVillage = val(6);
+          final excelSchool = val(7);
 
-          final excelCluster = val(4);
-          final excelVillage = val(5);
-          final excelSchool = val(6);
+          List<String> rowErrors = [];
 
-          if (fName == null || fName.isEmpty) continue;
+          if (customId == null || customId.isEmpty) rowErrors.add("ID");
+          if (fName == null || fName.isEmpty) rowErrors.add("First Name");
+          if (lName == null || lName.isEmpty) rowErrors.add("Last Name");
+          int? finalGrade;
+          if (gradeRaw == null || gradeRaw.isEmpty) {
+            rowErrors.add("Grade");
+          } else if (gradeRaw.toUpperCase() == 'BV') {
+            finalGrade = 0;
+          } else {
+            finalGrade = int.tryParse(gradeRaw);
+            if (finalGrade == null || finalGrade < 1 || finalGrade > 10) {
+              rowErrors.add("Grade (must be BV or 1-10)");
+            }
+          }
+          String? finalGender;
+          if (genderRaw == null || genderRaw.isEmpty) {
+            rowErrors.add("Gender");
+          } else {
+            finalGender = genderRaw.substring(0, 1).toUpperCase() + genderRaw.substring(1).toLowerCase();
+            if (!['Male', 'Female', 'Other'].contains(finalGender)) {
+              rowErrors.add("Gender (must be Male, Female, or Other)");
+            }
+          }
 
-          studentsToInsert.add({
+          String? clusterId, villageId, schoolId;
+
+          if (excelCluster != null && excelCluster.isNotEmpty) {
+            final matchC = dbClusters.firstWhereOrNull((c) => c['name'].toString().toLowerCase() == excelCluster.toLowerCase());
+            if (matchC != null)
+              clusterId = matchC['id'];
+            else
+              rowErrors.add("Cluster '$excelCluster' not found");
+          } else {
+            rowErrors.add("Cluster is missing");
+          }
+
+          if (excelVillage != null && excelVillage.isNotEmpty) {
+            final matchV = dbVillages.firstWhereOrNull((v) => v['name'].toString().toLowerCase() == excelVillage.toLowerCase());
+            if (matchV != null)
+              villageId = matchV['id'];
+            else
+              rowErrors.add("Village '$excelVillage' not found");
+          } else {
+            rowErrors.add("Village is missing");
+          }
+
+          if (excelSchool != null && excelSchool.isNotEmpty) {
+            final matchS = dbSchools.firstWhereOrNull((s) => s['name'].toString().toLowerCase() == excelSchool.toLowerCase());
+            if (matchS != null)
+              schoolId = matchS['id'];
+            else
+              rowErrors.add("School '$excelSchool' not found");
+          } else {
+            rowErrors.add("School is missing");
+          }
+
+          if (rowErrors.isNotEmpty) {
+            errorMessages.add("Row ${i + 1}: Missing ${rowErrors.join(', ')}");
+            continue;
+          }
+
+          final incomingData = {
+            'student_id_custom': customId,
             'first_name': fName,
-            'last_name': lName ?? '',
-            'gender': gender ?? 'Other',
-            'grade': int.tryParse(gradeStr ?? '') ?? 1,
+            'last_name': lName,
+            'gender': finalGender,
+            'grade': finalGrade,
             'mentor_id': user.id,
-            'cluster': excelCluster ?? mentorData['cluster'],
-            'village': excelVillage ?? mentorData['village'],
-            'school': excelSchool ?? mentorData['school'],
-            'cluster_id': mentorData['cluster_id'],
-            'village_id': mentorData['village_id'],
-            'school_id': mentorData['school_id'],
-          });
+            'cluster': excelCluster,
+            'village': excelVillage,
+            'school': excelSchool,
+            'cluster_id': clusterId,
+            'village_id': villageId,
+            'school_id': schoolId,
+          };
+
+          final existingMatch = existingStudents.firstWhereOrNull((s) => s['student_id_custom'] == customId);
+          if (existingMatch == null) {
+            newStudents.add(incomingData);
+          } else {
+            bool isIdentical =
+                existingMatch['first_name'] == fName &&
+                existingMatch['last_name'] == lName &&
+                existingMatch['gender'] == finalGender &&
+                existingMatch['grade'] == finalGrade;
+
+            if (!isIdentical) {
+              conflictingStudents.add({'current': existingMatch, 'incoming': incomingData});
+            }
+          }
         }
       }
 
-      if (studentsToInsert.isNotEmpty) {
-        await _client.from('students').insert(studentsToInsert);
+      if (newStudents.isNotEmpty) {
+        await _client.from('students').insert(newStudents);
+      }
+
+      String partialSuffix = errorMessages.isNotEmpty ? "&&PARTIAL:${errorMessages.join('\n')}" : "";
+
+      if (conflictingStudents.isNotEmpty) {
+        throw Exception(
+          "CONFLICT:${newStudents.length}|${conflictingStudents.length}|${jsonEncode(conflictingStudents)}$partialSuffix",
+        );
+      }
+
+      if (errorMessages.isNotEmpty) {
+        throw Exception("PARTIAL:${errorMessages.join('\n')}");
       }
     } catch (e) {
       dev.log("Excel Import Error", error: e);
@@ -241,16 +333,35 @@ class StudentController extends StateNotifier<bool> {
     }
   }
 
+  Future<void> processUpsert(List<Map<String, dynamic>> students) async {
+    await _client.from('students').upsert(students, onConflict: 'student_id_custom');
+  }
+
   Future<bool> deleteStudents(List<String> ids) async {
     state = true;
     try {
+      final response = await _client.from('students').delete().inFilter('id', ids).select();
+
+      if (response.isEmpty) {
+        dev.log("Delete called, but no rows were affected. Check RLS or IDs.");
+        return false;
+      }
+      dev.log("Delete Success: $response");
       return true;
-    } catch (e) {
+    } catch (e, stack) {
+      dev.log("Delete failed in Controller", error: e, stackTrace: stack);
       return false;
     } finally {
       state = false;
     }
   }
+}
+
+class StudentImportException implements Exception {
+  final int newCount;
+  final int conflictCount;
+  final List<Map<String, dynamic>> conflictData;
+  StudentImportException(this.newCount, this.conflictCount, this.conflictData);
 }
 
 final studentProvider = StateNotifierProvider<StudentController, bool>((ref) {

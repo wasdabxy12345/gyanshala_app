@@ -19,8 +19,7 @@ class UpdateService {
       final int latestVersionCode = data['version_code'];
       final String apkUrl = data['apk_url'];
       final bool isForced = data['is_forced'];
-      final String notes =
-          data['release_notes'] ?? "New features and bug fixes.";
+      final String notes = data['release_notes'] ?? "New features and bug fixes.";
 
       final packageInfo = await PackageInfo.fromPlatform();
       final int currentVersionCode = int.parse(packageInfo.buildNumber);
@@ -35,12 +34,7 @@ class UpdateService {
     }
   }
 
-  static void _showUpdateDialog(
-    BuildContext context,
-    String url,
-    bool isForced,
-    String notes,
-  ) {
+  static void _showUpdateDialog(BuildContext context, String url, bool isForced, String notes) {
     showDialog(
       context: context,
       barrierDismissible: !isForced,
@@ -57,19 +51,12 @@ class UpdateService {
             children: [
               const Text('A new version of the app is ready to install.'),
               const SizedBox(height: 10),
-              const Text(
-                'What\'s new:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text('What\'s new:', style: TextStyle(fontWeight: FontWeight.bold)),
               Text(notes),
             ],
           ),
           actions: [
-            if (!isForced)
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Later'),
-              ),
+            if (!isForced) TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
             ElevatedButton(
               onPressed: () {
                 if (!isForced) Navigator.pop(context);
@@ -85,11 +72,7 @@ class UpdateService {
 
   static void _executeOtaUpdate(String url) {
     try {
-      OtaUpdate()
-          .execute(url, destinationFilename: 'gyanshala_update.apk')
-          .listen((OtaEvent event) {
-            debugPrint('Update status: ${event.status}');
-          });
+      OtaUpdate().execute(url, destinationFilename: 'gyanshala_update.apk').listen((OtaEvent event) {});
     } catch (e) {
       debugPrint('OTA Update failed: $e');
     }

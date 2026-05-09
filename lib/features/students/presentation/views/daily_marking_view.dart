@@ -9,12 +9,7 @@ class DailyMarkingView extends ConsumerStatefulWidget {
   final String searchQuery;
   final Function(DateTime) onDateChanged;
 
-  const DailyMarkingView({
-    super.key,
-    required this.date,
-    required this.searchQuery,
-    required this.onDateChanged,
-  });
+  const DailyMarkingView({super.key, required this.date, required this.searchQuery, required this.onDateChanged});
 
   @override
   ConsumerState<DailyMarkingView> createState() => _DailyMarkingViewState();
@@ -37,7 +32,6 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
       final list = await ref.read(studentProvider.notifier).getHolidays();
       if (mounted) setState(() => _holidays = list);
     } catch (e, stack) {
-      debugPrint('Failed to load holidays: $e');
       debugPrintStack(stackTrace: stack);
     }
   }
@@ -48,15 +42,10 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     if (date.weekday == DateTime.sunday) return true;
 
     final isHoliday = _holidays.any(
-      (h) =>
-          h.year == normalizedDate.year &&
-          h.month == normalizedDate.month &&
-          h.day == normalizedDate.day,
+      (h) => h.year == normalizedDate.year && h.month == normalizedDate.month && h.day == normalizedDate.day,
     );
 
-    if (normalizedDate.year == 2026 &&
-        normalizedDate.month == 4 &&
-        normalizedDate.day == 18) {}
+    if (normalizedDate.year == 2026 && normalizedDate.month == 4 && normalizedDate.day == 18) {}
 
     return isHoliday;
   }
@@ -73,10 +62,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     final client = Supabase.instance.client;
     final dateStr = DateFormat('yyyy-MM-dd').format(widget.date);
 
-    final data = await client
-        .from('student_attendance')
-        .select('student_id, status')
-        .eq('date', dateStr);
+    final data = await client.from('student_attendance').select('student_id, status').eq('date', dateStr);
 
     final Map<String, String> existing = {};
     for (var row in data) {
@@ -105,9 +91,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
               fontWeight: holidaySelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-          subtitle: holidaySelected
-              ? const Text("School is closed today")
-              : null,
+          subtitle: holidaySelected ? const Text("School is closed today") : null,
           trailing: const Icon(Icons.calendar_today),
           onTap: () async {
             final d = await showDatePicker(
@@ -121,11 +105,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           },
         ),
         const Divider(height: 0),
-        Expanded(
-          child: holidaySelected
-              ? _buildHolidayPlaceholder()
-              : _buildStudentList(),
-        ),
+        Expanded(child: holidaySelected ? _buildHolidayPlaceholder() : _buildStudentList()),
         if (!holidaySelected)
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -134,14 +114,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _saveAttendance,
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Text("SAVE ATTENDANCE"),
               ),
             ),
@@ -159,11 +132,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
           const SizedBox(height: 16),
           const Text(
             "Holiday / Sunday",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey),
           ),
           const Text("Attendance cannot be marked for this date."),
         ],
@@ -217,10 +186,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
   Widget _statusBtn(String id, String label, Color color, bool isSelected) {
     return ChoiceChip(
-      label: Text(
-        label,
-        style: TextStyle(color: isSelected ? Colors.white : Colors.black),
-      ),
+      label: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black)),
       selected: isSelected,
       selectedColor: color,
       onSelected: (val) {
@@ -233,9 +199,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
   Future<void> _saveAttendance() async {
     if (statusMap.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No attendance marked to save")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No attendance marked to save")));
       return;
     }
 
@@ -245,27 +209,16 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     final mentorId = Supabase.instance.client.auth.currentUser?.id;
 
     final List<Map<String, dynamic>> records = statusMap.entries.map((e) {
-      return {
-        'student_id': e.key,
-        'date': dateStr,
-        'status': e.value == 'P' ? 'present' : 'absent',
-        'mentor_id': mentorId,
-      };
+      return {'student_id': e.key, 'date': dateStr, 'status': e.value == 'P' ? 'present' : 'absent', 'mentor_id': mentorId};
     }).toList();
 
-    final success = await ref
-        .read(studentProvider.notifier)
-        .submitAttendance(records);
+    final success = await ref.read(studentProvider.notifier).submitAttendance(records);
 
     if (mounted) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            success
-                ? "Attendance Saved Successfully!"
-                : "Failed to save attendance",
-          ),
+          content: Text(success ? "Attendance Saved Successfully!" : "Failed to save attendance"),
           backgroundColor: success ? Colors.green : Colors.red,
         ),
       );

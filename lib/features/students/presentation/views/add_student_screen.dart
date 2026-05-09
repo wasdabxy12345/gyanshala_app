@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/features/students/controller/student_controller.dart';
+import 'package:gyanshala_app/features/students/presentation/widgets/conflict_workspace_dialog.dart';
 
 class AddStudentScreen extends ConsumerStatefulWidget {
   const AddStudentScreen({super.key});
@@ -73,17 +76,16 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 initialValue: _selectedGrade,
-                items: List.generate(
-                  10,
-                  (index) => index + 1,
-                ).map((g) => DropdownMenuItem(value: g, child: Text('Grade $g'))).toList(),
+                items: [
+                  const DropdownMenuItem(value: 0, child: Text('Balvatika (BV)')),
+                  ...List.generate(10, (index) => index + 1).map((g) => DropdownMenuItem(value: g, child: Text('$g'))),
+                ],
                 onChanged: (val) => setState(() => _selectedGrade = val!),
                 decoration: const InputDecoration(labelText: 'Grade', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
+              Align(
+                alignment: Alignment.center,
                 child: ElevatedButton(
                   onPressed: isLoading ? null : _submitForm,
                   child: isLoading
@@ -95,7 +97,6 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           ),
         ),
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         label: const Text("Import Excel"),
         icon: const Icon(Icons.upload_file),
@@ -104,26 +105,8 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     );
   }
 
-  Future<void> _handleExcelImport() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-    try {
-      await ref.read(studentProvider.notifier).importStudentsFromExcel();
-
-      if (!context.mounted) return;
-
-      messenger.showSnackBar(const SnackBar(content: Text('Students imported successfully!')));
-      navigator.pop(true);
-    } catch (e) {
-      if (!context.mounted) return;
-
-      messenger.showSnackBar(SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
-    }
-  }
-
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-
     final success = await ref
         .read(studentProvider.notifier)
         .registerStudent(
@@ -133,14 +116,34 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           gender: _selectedGender,
           grade: _selectedGrade,
         );
-
     if (!mounted) return;
-
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student Registered!')));
       Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to register student.')));
+    }
+  }
+
+  Future<void> _handleExcelImport() async {
+    try {
+      await ref.read(studentProvider.notifier).importStudentsFromExcel();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import successful!')));
+    } catch (e) {
+      String msg = e.toString();
+      if (msg.contains("CONFLICT:")) {
+        final conflictString = msg.substring(msg.indexOf("CONFLICT:") + 9);
+
+        final parts = conflictString.split("|");
+        if (parts.length < 3) return;
+
+        jsonDecode(parts.sublist(2).join("|"));
+
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => ConflictWorkspaceDialog(conflictRawString: msg),
+        );
+      }
     }
   }
 }
