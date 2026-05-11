@@ -6,7 +6,8 @@ import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
 class MentorDashboardScreen extends ConsumerWidget {
-  const MentorDashboardScreen({super.key});
+  final String mentorName;
+  const MentorDashboardScreen({super.key, required this.mentorName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,41 +20,36 @@ class MentorDashboardScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
           ),
         ],
       ),
-      body: const HomeContent(),
+      body: HomeContent(mentorName: mentorName),
     );
   }
 }
 
 class HomeContent extends StatelessWidget {
-  const HomeContent({super.key});
+  final String mentorName;
+  const HomeContent({super.key, required this.mentorName});
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
+    return SingleChildScrollView(
       child: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Welcome, Mentor",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              "Welcome, ${mentorName.trim().isEmpty ? 'Mentor' : mentorName}",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 20),
             AttendanceCard(),
             SizedBox(height: 24),
-            Text(
-              "Quick Actions",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
+            Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             SizedBox(height: 12),
             ActionGrid(),
           ],

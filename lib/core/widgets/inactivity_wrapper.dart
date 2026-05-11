@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
+import 'package:gyanshala_app/main.dart';
 
 class InactivityWrapper extends ConsumerStatefulWidget {
   final Widget child;
@@ -14,16 +17,25 @@ class InactivityWrapper extends ConsumerStatefulWidget {
 
 class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
   Timer? _timer;
-
-  static const _inactivityDuration = Duration(minutes: 15);
-
-  void _resetTimer() {
+  Duration _getDuration(int minutes) => Duration(minutes: minutes);
+  void _resetTimer() async {
     _timer?.cancel();
-    _timer = Timer(_inactivityDuration, _logoutUser);
+
+    final timeoutMinutes = await ref.read(inactivityTimeoutProvider.future);
+
+    _timer = Timer(_getDuration(timeoutMinutes), _logoutUser);
   }
 
-  void _logoutUser() {
-    ref.read(authRepositoryProvider).signOut();
+  void _logoutUser() async {
+    ref.read(inactivityLogoutProvider.notifier).state = true;
+    await ref.read(authRepositoryProvider).signOut();
+
+    if (mounted) {
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const WelcomeScreen(showInactivityLogoutMessage: true)),
+        (_) => false,
+      );
+    }
   }
 
   @override
@@ -40,10 +52,6 @@ class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => _resetTimer(),
-      behavior: HitTestBehavior.translucent,
-      child: widget.child,
-    );
+    return Listener(onPointerDown: (_) => _resetTimer(), behavior: HitTestBehavior.translucent, child: widget.child);
   }
 }

@@ -6,11 +6,13 @@ import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
 class SeniorMentorDashboardScreen extends ConsumerWidget {
-  const SeniorMentorDashboardScreen({super.key});
+  final String seniorMentorName;
+  const SeniorMentorDashboardScreen({super.key, required this.seniorMentorName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: const Text("GS + UNM Portal"),
         centerTitle: true,
@@ -18,41 +20,36 @@ class SeniorMentorDashboardScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
           ),
         ],
       ),
-      body: const HomeContent(),
+      body: HomeContent(seniorMentorName: seniorMentorName),
     );
   }
 }
 
 class HomeContent extends StatelessWidget {
-  const HomeContent({super.key});
+  final String seniorMentorName;
+  const HomeContent({super.key, required this.seniorMentorName});
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
+    return SingleChildScrollView(
       child: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Welcome, Senior Mentor",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              "Welcome, ${seniorMentorName.trim().isEmpty ? 'Senior Mentor' : seniorMentorName}",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 20),
             AttendanceCard(),
             SizedBox(height: 24),
-            Text(
-              "Quick Actions",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
+            Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             SizedBox(height: 12),
             ActionGrid(),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/constants/app_strings.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
 import 'package:gyanshala_app/core/services/update_service.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
@@ -13,8 +14,9 @@ enum ApprovalState { loading, pending, approved, denied, none }
 
 class WelcomeScreen extends ConsumerStatefulWidget {
   final bool showPendingMessage;
+  final bool showInactivityLogoutMessage;
 
-  const WelcomeScreen({super.key, this.showPendingMessage = false});
+  const WelcomeScreen({super.key, this.showPendingMessage = false, this.showInactivityLogoutMessage = false});
 
   @override
   ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -28,9 +30,47 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   void initState() {
     super.initState();
     _checkStatus();
+
+    if (widget.showInactivityLogoutMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showInactivityLogoutMessage();
+        }
+      });
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         UpdateService.checkForUpdates(context);
+      }
+    });
+  }
+
+  Future<void> _showInactivityLogoutMessage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timeout = prefs.getInt('inactivity_timeout_minutes') ?? 15;
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('You were automatically logged out after $timeout minutes of inactivity.'),
+        backgroundColor: Color(0xFF00afef),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+
+    // Reset the inactivity logout flag
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        ref.read(inactivityLogoutProvider.notifier).state = false;
       }
     });
   }
@@ -81,8 +121,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     _checkStatus();
   }
 
+  void _dismissSnackBar() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  }
+
   Future<void> _handleNavigateToOtp() async {
     if (_pendingId == null) return;
+    _dismissSnackBar();
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -136,9 +181,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus()),
+                      onPressed: () {
+                        _dismissSnackBar();
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
+                      },
                       child: const Text(AppStrings.signUp),
                     ),
                   ),
@@ -147,7 +195,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+                    onPressed: () {
+                      _dismissSnackBar();
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                    },
                     child: const Text(AppStrings.logIn),
                   ),
                 ),
@@ -177,7 +228,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         icon = Icons.timer_outlined;
         message = "Your signup is pending admin approval.";
         action = TextButton.icon(
-          onPressed: _checkStatus,
+          onPressed: () {
+            _dismissSnackBar();
+            _checkStatus();
+          },
           icon: const Icon(Icons.refresh, size: 18),
           label: const Text("Refresh"),
         );
@@ -188,7 +242,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         icon = Icons.check_circle_outline;
         message = "Approved! Verify your phone to continue.";
         action = ElevatedButton(
-          onPressed: _handleNavigateToOtp,
+          onPressed: () {
+            _dismissSnackBar();
+            _handleNavigateToOtp();
+          },
           style: ElevatedButton.styleFrom(visualDensity: VisualDensity.compact),
           child: const Text("Verify Phone via SMS OTP"),
         );
@@ -198,7 +255,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         borderColor = Colors.red.shade200;
         icon = Icons.error_outline;
         message = "Your signup request was declined.";
-        action = TextButton(onPressed: _clearPending, child: const Text("Clear & Try Again"));
+        action = TextButton(
+          onPressed: () {
+            _dismissSnackBar();
+            _clearPending();
+          },
+          child: const Text("Clear & Try Again"),
+        );
         break;
       case ApprovalState.none:
         return const SizedBox.shrink();
