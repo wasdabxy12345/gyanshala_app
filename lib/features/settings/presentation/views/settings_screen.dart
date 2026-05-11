@@ -85,7 +85,7 @@ class SettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.schedule),
               title: const Text("Auto-Logout Timeout"),
               subtitle: const Text("Error loading setting"),
-              onTap: () => _showInactivityTimeoutDialog(context, ref, 15),
+              onTap: () => _showInactivityTimeoutDialog(context, ref, 999),
             ),
           ),
           const Divider(),
