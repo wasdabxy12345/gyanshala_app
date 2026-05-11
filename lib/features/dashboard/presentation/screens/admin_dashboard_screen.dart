@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
-import 'package:gyanshala_app/features/admin/presentation/screens/mentor_list_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
+import 'package:gyanshala_app/features/mentors/presentation/mentor_hub_page.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
@@ -63,13 +63,12 @@ class AdminHomeContent extends StatelessWidget {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupRequestsScreen()));
                   },
                 ),
-                _AdminActionTile(title: "Track Attendance", icon: Icons.analytics_outlined, color: Colors.green, onTap: () {}),
                 _AdminActionTile(
-                  title: "Mentor List",
+                  title: "Mentor Records",
                   icon: Icons.groups,
                   color: Colors.purple,
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MentorListScreen()));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MentorHubPage()));
                   },
                 ),
                 _AdminActionTile(
