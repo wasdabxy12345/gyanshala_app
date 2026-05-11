@@ -8,12 +8,7 @@ class AttendanceRecordsView extends StatelessWidget {
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
 
-  const AttendanceRecordsView({
-    super.key,
-    required this.range,
-    required this.searchQuery,
-    required this.onRangeChanged,
-  });
+  const AttendanceRecordsView({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +20,7 @@ class AttendanceRecordsView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Text(
             '${_formatDateWithMonth(range.start)} - ${_formatDateWithMonth(range.end)}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
             textAlign: TextAlign.center,
           ),
         ),
@@ -44,23 +35,15 @@ class AttendanceRecordsView extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.arrow_left),
                       onPressed: () {
-                        final newEnd = range.start.subtract(
-                          const Duration(days: 1),
-                        );
-                        final newStart = newEnd.subtract(
-                          const Duration(days: 6),
-                        );
-                        onRangeChanged(
-                          DateTimeRange(start: newStart, end: newEnd),
-                        );
+                        final newEnd = range.start.subtract(const Duration(days: 1));
+                        final newStart = newEnd.subtract(const Duration(days: 6));
+                        onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
                       },
                       tooltip: 'Previous week',
                     ),
                     Expanded(
                       child: _quickBtn("This Week", () {
-                        final start = now.subtract(
-                          Duration(days: now.weekday - 1),
-                        );
+                        final start = now.subtract(Duration(days: now.weekday - 1));
                         final end = start.add(const Duration(days: 6));
                         onRangeChanged(DateTimeRange(start: start, end: end));
                       }),
@@ -70,9 +53,7 @@ class AttendanceRecordsView extends StatelessWidget {
                       onPressed: () {
                         final newStart = range.end.add(const Duration(days: 1));
                         final newEnd = newStart.add(const Duration(days: 6));
-                        onRangeChanged(
-                          DateTimeRange(start: newStart, end: newEnd),
-                        );
+                        onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
                       },
                       tooltip: 'Next week',
                     ),
@@ -86,19 +67,9 @@ class AttendanceRecordsView extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.arrow_left),
                       onPressed: () {
-                        final newMonthEnd = DateTime(
-                          range.start.year,
-                          range.start.month,
-                          0,
-                        );
-                        final newMonthStart = DateTime(
-                          newMonthEnd.year,
-                          newMonthEnd.month,
-                          1,
-                        );
-                        onRangeChanged(
-                          DateTimeRange(start: newMonthStart, end: newMonthEnd),
-                        );
+                        final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
+                        final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
+                        onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
                       },
                       tooltip: 'Previous month',
                     ),
@@ -112,19 +83,9 @@ class AttendanceRecordsView extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.arrow_right),
                       onPressed: () {
-                        final newMonthStart = DateTime(
-                          range.end.year,
-                          range.end.month + 1,
-                          1,
-                        );
-                        final newMonthEnd = DateTime(
-                          newMonthStart.year,
-                          newMonthStart.month + 1,
-                          0,
-                        );
-                        onRangeChanged(
-                          DateTimeRange(start: newMonthStart, end: newMonthEnd),
-                        );
+                        final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
+                        final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
+                        onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
                       },
                       tooltip: 'Next month',
                     ),
@@ -134,11 +95,7 @@ class AttendanceRecordsView extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.date_range),
                 onPressed: () async {
-                  final r = await showDateRangePicker(
-                    context: context,
-                    firstDate: DateTime(2024),
-                    lastDate: DateTime.now(),
-                  );
+                  final r = await showDateRangePicker(context: context, firstDate: DateTime(2024), lastDate: DateTime.now());
                   if (r != null) onRangeChanged(r);
                 },
               ),
@@ -147,11 +104,7 @@ class AttendanceRecordsView extends StatelessWidget {
         ),
         const Divider(),
         Expanded(
-          child: AttendanceReportTab(
-            searchQuery: searchQuery,
-            startDate: range.start,
-            endDate: range.end,
-          ),
+          child: AttendanceReportTab(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
         ),
       ],
     );
@@ -159,9 +112,7 @@ class AttendanceRecordsView extends StatelessWidget {
 
   Widget _quickBtn(String label, VoidCallback action) {
     return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-      ),
+      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
       onPressed: action,
       child: Text(label, style: const TextStyle(fontSize: 12)),
     );
