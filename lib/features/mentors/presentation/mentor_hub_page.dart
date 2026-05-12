@@ -28,7 +28,7 @@ class _MentorHubPageState extends ConsumerState<MentorHubPage> {
               children: [
                 const TabBar(
                   tabs: [
-                    Tab(icon: Icon(Icons.history), text: "Past Records"),
+                    Tab(icon: Icon(Icons.history), text: "Mentor Attendance"),
                     Tab(icon: Icon(Icons.people_outline), text: "Mentor List"),
                   ],
                 ),

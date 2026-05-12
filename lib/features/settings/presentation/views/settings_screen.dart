@@ -9,7 +9,7 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   void _showInactivityTimeoutDialog(BuildContext context, WidgetRef ref, int currentTimeout) {
-    final timeoutOptions = [1, 2, 5, 10, 15, 20, 30];
+    final timeoutOptions = [1, 2, 5, 10, 15, 20, 30, 999];
 
     showDialog(
       context: context,

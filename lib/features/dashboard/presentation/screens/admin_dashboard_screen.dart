@@ -64,7 +64,7 @@ class AdminHomeContent extends StatelessWidget {
                   },
                 ),
                 _AdminActionTile(
-                  title: "Mentor Records",
+                  title: "Mentor List and Attendance",
                   icon: Icons.groups,
                   color: Colors.purple,
                   onTap: () {

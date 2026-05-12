@@ -28,7 +28,7 @@ class _MentorAttendanceReportTabState extends ConsumerState<MentorAttendanceRepo
 
     final attendanceResponse = await supabase
         .from('attendance')
-        .select('user_id, status, recorded_at')
+        .select('user_id, status, recorded_at, school_id, schools(name)')
         .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
         .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String());
     final attendanceRecords = (attendanceResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -47,13 +47,13 @@ class _MentorAttendanceReportTabState extends ConsumerState<MentorAttendanceRepo
       final status = record['status'];
       final recordedAt = DateTime.parse(record['recorded_at']).toUtc();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
+      final schoolData = record['schools'];
+      final schoolName = schoolData != null ? schoolData['name'] : "Off-site";
 
       if (mentorData.containsKey(userId)) {
         final currentMap = mentorData[userId]!['attendance_map'] as Map<String, dynamic>;
         if (status == 'check_in') {
-          currentMap[dateKey] = 'present';
-        } else if (currentMap[dateKey] != 'present') {
-          currentMap[dateKey] = status;
+          currentMap[dateKey] = {'status': 'present', 'location': schoolName};
         }
       }
     }
@@ -198,27 +198,33 @@ class _MentorAttendanceReportTabState extends ConsumerState<MentorAttendanceRepo
                             DataCell(_buildNameCell(mentor['full_name'] ?? 'Unknown')),
                             ...dates.map((d) {
                               final key = DateFormat('yyyy-MM-dd').format(d.toUtc());
-                              final status = attMap[key];
+                              final record = attMap[key];
                               final holiday = _isHoliday(d);
-                              final isPresent = status == 'present' || status == 'check_in';
+                              final isPresent = record != null && record['status'] == 'present';
+                              final location = record != null ? record['location'] : "";
                               if (!holiday && isPresent) {
                                 presentCount++;
                               }
 
                               return DataCell(
-                                Container(
-                                  width: 35,
-                                  color: holiday ? Colors.grey[100] : null,
-                                  alignment: Alignment.center,
-                                  child: holiday
-                                      ? const Text("-", style: TextStyle(color: Colors.grey))
-                                      : Text(
-                                          isPresent ? 'P' : (status == 'absent' ? 'A' : '-'),
-                                          style: TextStyle(
-                                            color: isPresent ? Colors.green : Colors.red,
-                                            fontWeight: FontWeight.bold,
+                                Tooltip(
+                                  message: isPresent ? "Location: $location" : "No record",
+                                  child: Container(
+                                    width: 35,
+                                    color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.orange[100] : null),
+                                    alignment: Alignment.center,
+                                    child: holiday
+                                        ? const Text("-")
+                                        : Text(
+                                            isPresent ? 'P' : '-',
+                                            style: TextStyle(
+                                              color: isPresent
+                                                  ? (location == "off-site" ? Colors.orange : Colors.green)
+                                                  : Colors.red,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                        ),
+                                  ),
                                 ),
                               );
                             }),

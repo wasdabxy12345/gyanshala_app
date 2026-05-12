@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../widgets/attendance_report_tab.dart';
+import '../widgets/student_attendance_report_tab.dart';
 
 class AttendanceRecordsView extends StatelessWidget {
   final DateTimeRange range;
@@ -104,7 +104,7 @@ class AttendanceRecordsView extends StatelessWidget {
         ),
         const Divider(),
         Expanded(
-          child: AttendanceReportTab(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
+          child: StudentAttendanceReportTab(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
         ),
       ],
     );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/students/presentation/tabs/attendance_parent_tab.dart';
+import 'package:gyanshala_app/features/students/presentation/tabs/student_attendance_parent_tab.dart';
 import 'package:gyanshala_app/features/students/presentation/tabs/student_list_tab.dart';
 
 class StudentHubPage extends ConsumerStatefulWidget {
@@ -49,7 +49,7 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
         ),
         body: TabBarView(
           children: [
-            AttendanceParentTab(searchQuery: _searchQuery),
+            StudentAttendanceParentTab(searchQuery: _searchQuery),
             StudentListTab(searchQuery: _searchQuery),
           ],
         ),

@@ -1,24 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/attendance/presentation/controller/attendance_controller.dart';
+import 'package:gyanshala_app/features/mentor%20attendance/presentation/controller/mentor_attendance_controller.dart';
 
 class AttendanceCard extends ConsumerWidget {
   const AttendanceCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the AsyncValue state
-    final attendanceState = ref.watch(attendanceProvider);
-
-    // Derived states for clarity
+    final attendanceState = ref.watch(mentorAttendanceProvider);
     final bool isCheckedIn = attendanceState.value ?? false;
     final bool isLoading = attendanceState.isLoading;
-
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        // Gray out border if loading
         side: BorderSide(color: isLoading ? Colors.grey.shade300 : (isCheckedIn ? Colors.green : Colors.blue)),
       ),
       color: isLoading
@@ -55,12 +50,11 @@ class AttendanceCard extends ConsumerWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, maxWidth: 100),
                 child: ElevatedButton(
-                  // SETTING ONPRESSED TO NULL DISABLES THE BUTTON AUTOMATICALLY
-                  onPressed: isLoading ? null : () => ref.read(attendanceProvider.notifier).processCheckIn(),
+                  onPressed: isLoading ? null : () => ref.read(mentorAttendanceProvider.notifier).processCheckIn(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isCheckedIn ? Colors.red : Colors.blue,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300, // Gray color when disabled
+                    disabledBackgroundColor: Colors.grey.shade300,
                     padding: EdgeInsets.zero,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),

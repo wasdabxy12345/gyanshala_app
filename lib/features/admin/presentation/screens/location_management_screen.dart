@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:gyanshala_app/features/admin/presentation/widgets/boundary_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LocationManagementScreen extends StatefulWidget {
@@ -179,6 +181,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final nameController = TextEditingController();
     String? selectedClusterId;
     String? selectedVillageId;
+    List<LatLng> schoolBoundary = [];
 
     Future<String?> showQuickAdd(String parentType) async {
       final quickController = TextEditingController();
@@ -221,99 +224,112 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text("Add New $type"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (type == 'School') ...[
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _importFromExcel();
-                  },
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text("Import Schools via Excel"),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text("OR MANUALLY", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                ),
-              ],
-
-              if (type == 'Village' || type == 'School')
-                DropdownButtonFormField<String>(
-                  initialValue: selectedClusterId,
-                  hint: const Text("Select Cluster"),
-                  items: [
-                    const DropdownMenuItem(
-                      value: "ADD_NEW",
-                      child: Text(
-                        "+ Add New Cluster...",
-                        style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (type == 'School') ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _importFromExcel();
+                      },
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text("Import Schools via Excel"),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(child: Divider()),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text("OR MANUALLY", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          ),
+                          Expanded(child: Divider()),
+                        ],
                       ),
                     ),
-                    ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
+                    const Text(
+                      "Draw School Boundary (Tap 3+ points)",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    BoundaryPicker(
+                      onBoundaryChanged: (points) {
+                        schoolBoundary = points;
+                      },
+                    ),
+                    const SizedBox(height: 16),
                   ],
-                  onChanged: (val) async {
-                    if (val == "ADD_NEW") {
-                      final newId = await showQuickAdd("Cluster");
-                      if (newId != null) setDialogState(() => selectedClusterId = newId);
-                    } else {
-                      setDialogState(() {
-                        selectedClusterId = val;
-                        selectedVillageId = null;
-                      });
-                    }
-                  },
-                ),
-
-              if (type == 'School') ...[
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedVillageId,
-                  hint: const Text("Select Village"),
-                  disabledHint: const Text("Select a Cluster first"),
-                  items: selectedClusterId == null
-                      ? []
-                      : [
-                          const DropdownMenuItem(
-                            value: "ADD_NEW",
-                            child: Text(
-                              "+ Add New Village...",
-                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-                            ),
+                  if (type == 'Village' || type == 'School')
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedClusterId,
+                      hint: const Text("Select Cluster"),
+                      items: [
+                        const DropdownMenuItem(
+                          value: "ADD_NEW",
+                          child: Text(
+                            "+ Add New Cluster...",
+                            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
                           ),
-                          ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List).map(
-                            (v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name'])),
-                          ),
-                        ],
-                  onChanged: selectedClusterId == null
-                      ? null
-                      : (val) async {
-                          if (val == "ADD_NEW") {
-                            final newId = await showQuickAdd("Village");
-                            if (newId != null) setDialogState(() => selectedVillageId = newId);
-                          } else {
-                            setDialogState(() => selectedVillageId = val);
-                          }
-                        },
-                ),
-              ],
-
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(labelText: "$type Name"),
+                        ),
+                        ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
+                      ],
+                      onChanged: (val) async {
+                        if (val == "ADD_NEW") {
+                          final newId = await showQuickAdd("Cluster");
+                          if (newId != null) setDialogState(() => selectedClusterId = newId);
+                        } else {
+                          setDialogState(() {
+                            selectedClusterId = val;
+                            selectedVillageId = null;
+                          });
+                        }
+                      },
+                    ),
+                  if (type == 'School') ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedVillageId,
+                      hint: const Text("Select Village"),
+                      disabledHint: const Text("Select a Cluster first"),
+                      items: selectedClusterId == null
+                          ? []
+                          : [
+                              const DropdownMenuItem(
+                                value: "ADD_NEW",
+                                child: Text(
+                                  "+ Add New Village...",
+                                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List).map(
+                                (v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name'])),
+                              ),
+                            ],
+                      onChanged: selectedClusterId == null
+                          ? null
+                          : (val) async {
+                              if (val == "ADD_NEW") {
+                                final newId = await showQuickAdd("Village");
+                                if (newId != null) setDialogState(() => selectedVillageId = newId);
+                              } else {
+                                setDialogState(() => selectedVillageId = val);
+                              }
+                            },
+                    ),
+                  ],
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: "$type Name"),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
@@ -321,17 +337,46 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isEmpty) return;
-
-                if (type == 'Cluster') {
-                  await _supabase.from('clusters').insert({'name': name});
-                } else if (type == 'Village') {
-                  if (selectedClusterId == null) return;
-                  await _supabase.from('villages').insert({'name': name, 'cluster_id': selectedClusterId});
-                } else {
-                  if (selectedVillageId == null) return;
-                  await _supabase.from('schools').insert({'name': name, 'village_id': selectedVillageId});
+                final Map<String, dynamic> insertData = {'name': name};
+                String table = '';
+                try {
+                  if (type == 'Cluster') {
+                    table = 'clusters';
+                  } else if (type == 'Village') {
+                    if (selectedClusterId == null) return;
+                    table = 'villages';
+                    insertData['cluster_id'] = selectedClusterId;
+                  } else if (type == 'School') {
+                    if (selectedVillageId == null) return;
+                    table = 'schools';
+                    insertData['village_id'] = selectedVillageId;
+                    if (schoolBoundary.length >= 3) {
+                      var coords = schoolBoundary.map((p) => [p.longitude, p.latitude]).toList();
+                      coords.add(coords.first);
+                      insertData['boundary'] = {
+                        'type': 'Polygon',
+                        'coordinates': [coords],
+                      };
+                    } else {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text("Please draw a valid boundary with at least 3 points.")));
+                      return;
+                    }
+                  }
+                  try {
+                    await _supabase.from(table).insert(insertData);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchHierarchy();
+                  } catch (e) {
+                    debugPrint("Insert Error: $e");
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error saving $type: ${e.toString()}")));
+                    }
+                  }
+                } catch (e) {
+                  debugPrint("Save Error: $e");
                 }
-
                 if (ctx.mounted) Navigator.pop(ctx);
                 _fetchHierarchy();
               },
