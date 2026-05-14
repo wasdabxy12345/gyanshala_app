@@ -10,7 +10,7 @@ final resetInactivityFlagProvider = Provider<void>((ref) {
 
 final inactivityTimeoutProvider = FutureProvider<int>((ref) async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt('inactivity_timeout_minutes') ?? 15;
+  return prefs.getInt('inactivity_timeout_minutes') ?? 999;
 });
 
 final setInactivityTimeoutProvider = FutureProvider.family<void, int>((ref, minutes) async {
