@@ -10,7 +10,10 @@
 analyzer:
   errors:
     curly_braces_in_flow_control_structures: ignore
-include: package:flutter_lints/flutter.yaml
+
+# The flutter_lints package is not available in this project, so the
+# included configuration file is disabled to avoid analysis errors.
+# include: package:flutter_lints/flutter.yaml
 
 linter:
   # The lint rules applied to this project can be customized in the

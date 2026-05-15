@@ -410,39 +410,6 @@ class _BoundaryPickerState extends State<BoundaryPicker> {
     );
   }
 
-  void _toggleMapType([VoidCallback? onRefresh]) {
-    late final MapType newType;
-
-    switch (_mapType) {
-      case MapType.normal:
-        newType = MapType.satellite;
-        break;
-
-      case MapType.satellite:
-        newType = MapType.hybrid;
-        break;
-
-      case MapType.hybrid:
-        newType = MapType.normal;
-        break;
-
-      default:
-        newType = MapType.normal;
-    }
-
-    setState(() {
-      _mapType = newType;
-
-      // force native map recreation
-      _mapController = null;
-      _mapRefreshKey++;
-    });
-
-    onRefresh?.call();
-
-    debugPrint("Changed map type to $newType");
-  }
-
   @override
   void initState() {
     super.initState();
