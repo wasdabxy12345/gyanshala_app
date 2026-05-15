@@ -168,8 +168,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               Text(
                 'Student Management System',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 2.0, color: const Color(0xFF0D47A1)),
               ),
+
+              const SizedBox(height: 6),
+
+              Container(width: 80, height: 3, color: Color(0xFF0D47A1)),
+
+              const SizedBox(height: 6),
 
               SizedBox(height: MediaQuery.of(context).size.height * 0.13),
 
