@@ -633,14 +633,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       onChanged: (val) => setDialogState(() => selectedParentId = val),
                     ),
                   if (type == 'School') ...[
-                    const Text("Edit School Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    BoundaryPicker(
-                      initialPoints: schoolBoundary,
-                      onBoundaryChanged: (points) {
-                        schoolBoundary = points;
-                      },
-                    ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: selectedParentId,
@@ -662,6 +654,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(labelText: "$type Name"),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text("Edit School Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
+                    BoundaryPicker(
+                      initialPoints: schoolBoundary,
+                      onBoundaryChanged: (points) {
+                        schoolBoundary = points;
+                      },
                     ),
                     const SizedBox(height: 20),
                     const Divider(),
