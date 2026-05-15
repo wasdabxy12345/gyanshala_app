@@ -157,26 +157,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (_state != ApprovalState.none) ...[_buildStatusCard(), const SizedBox(height: 30)],
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Image.network(
-                    //   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSe_22gfL9zHbi-fK8pMJotQofStQyhuB-fvA&s',
-                    //   height: 80,
-                    // ),
-                    // Image.network(
-                    //   'https://scontent.famd4-1.fna.fbcdn.net/v/t39.30808-6/432152915_122100178058257935_5259036002784278436_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=1A-IPcds02oQ7kNvwHPPAAk&_nc_oc=AdpZwBIr0S9wSBypdHGry0UoS8I-XFI36Gfu3HjU31gL9WWkTm2A--l1ch-BNbuEIuo&_nc_zt=23&_nc_ht=scontent.famd4-1.fna&_nc_gid=vwwDhwcUofBF20uKmatx4w&_nc_ss=7a389&oh=00_Af0eK4t7dhM2NlLta1vJQ1c97FMvCs5zoFb-OvvLp9TTAw&oe=69DFE63C',
-                    //   height: 150,
-                    // ),
-                  ],
-                ),
-                const SizedBox(height: 30),
+                Image.asset('assets/images/shiksha_setu_logo.png', width: 555, fit: BoxFit.contain),
+                const SizedBox(height: 22),
                 Text(
                   'Student Management System',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 22),
                 if (_state == ApprovalState.none) ...[
                   SizedBox(
                     width: double.infinity,
