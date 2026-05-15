@@ -150,48 +150,64 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_state != ApprovalState.none) ...[_buildStatusCard(), const SizedBox(height: 30)],
-                Image.asset('assets/images/shiksha_setu_logo.png', width: 555, fit: BoxFit.contain),
-                const SizedBox(height: 22),
-                Text(
-                  'Student Management System',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 22),
-                if (_state == ApprovalState.none) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _dismissSnackBar();
-                        Navigator.of(
-                          context,
-                        ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
-                      },
-                      child: const Text(AppStrings.signUp),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(height: MediaQuery.of(context).size.height * 0.03),
+
+              Image.asset(
+                'assets/images/shiksha_setu_logo.png',
+                width: MediaQuery.of(context).size.width * 0.75,
+                fit: BoxFit.contain,
+              ),
+
+              SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+
+              Text(
+                'Student Management System',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+
+              SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+
+              if (_state != ApprovalState.none) ...[
+                _buildStatusCard(),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+              ],
+
+              if (_state == ApprovalState.none) ...[
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton(
+                  child: ElevatedButton(
                     onPressed: () {
                       _dismissSnackBar();
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+                      Navigator.of(
+                        context,
+                      ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
                     },
-                    child: const Text(AppStrings.logIn),
+                    child: const Text(AppStrings.signUp),
                   ),
                 ),
+
+                const SizedBox(height: 16),
               ],
-            ),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    _dismissSnackBar();
+
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                  },
+                  child: const Text(AppStrings.logIn),
+                ),
+              ),
+            ],
           ),
         ),
       ),
