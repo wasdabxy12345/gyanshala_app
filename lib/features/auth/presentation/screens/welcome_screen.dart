@@ -150,71 +150,158 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(height: MediaQuery.of(context).size.height * 0.03),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWeb = constraints.maxWidth > 800;
 
-              Image.asset(
-                'assets/images/shiksha_setu_logo.png',
-                width: MediaQuery.of(context).size.width * 0.75,
-                fit: BoxFit.contain,
+            if (isWeb) {
+              return _buildWebLayout(context, constraints.maxWidth);
+            }
+
+            // 👇 MOBILE: untouched original UI
+            return _buildMobileLayout(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.03),
+
+          Image.asset(
+            'assets/images/shiksha_setu_logo.png',
+            width: MediaQuery.of(context).size.width * 0.75,
+            fit: BoxFit.contain,
+          ),
+
+          SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+
+          Text(
+            'Student Management System',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 2.0, color: const Color(0xFF0D47A1)),
+          ),
+
+          const SizedBox(height: 6),
+
+          Container(width: 80, height: 3, color: Color(0xFF0D47A1)),
+
+          const SizedBox(height: 6),
+
+          SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+
+          if (_state != ApprovalState.none) ...[_buildStatusCard(), SizedBox(height: MediaQuery.of(context).size.height * 0.13)],
+
+          if (_state == ApprovalState.none) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  _dismissSnackBar();
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
+                },
+                child: const Text(AppStrings.signUp),
               ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
-              SizedBox(height: MediaQuery.of(context).size.height * 0.13),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                _dismissSnackBar();
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+              },
+              child: const Text(AppStrings.logIn),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              Text(
-                'Student Management System',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 2.0, color: const Color(0xFF0D47A1)),
-              ),
+  Widget _buildWebLayout(BuildContext context, double width) {
+    final logoSize = width * 0.22;
+    final buttonWidth = width * 0.18;
 
-              const SizedBox(height: 6),
-
-              Container(width: 80, height: 3, color: Color(0xFF0D47A1)),
-
-              const SizedBox(height: 6),
-
-              SizedBox(height: MediaQuery.of(context).size.height * 0.13),
-
-              if (_state != ApprovalState.none) ...[
-                _buildStatusCard(),
-                SizedBox(height: MediaQuery.of(context).size.height * 0.13),
-              ],
-
-              if (_state == ApprovalState.none) ...[
+    return Center(
+      child: SizedBox(
+        width: width * 0.9,
+        height: width * 0.45,
+        child: Stack(
+          children: [
+            Positioned(
+              left: (width * 0.9) / 2,
+              top: width * 0.08,
+              bottom: width * 0.08,
+              child: Container(width: 1, color: Colors.grey.shade300),
+            ),
+            Row(
+              children: [
                 SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _dismissSnackBar();
-
-                      Navigator.of(
-                        context,
-                      ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
-                    },
-                    child: const Text(AppStrings.signUp),
+                  width: (width * 0.9) / 2,
+                  child: Center(
+                    child: Image.asset('assets/images/shiksha_setu_logo.png', width: logoSize, fit: BoxFit.contain),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-              ],
-
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () {
-                    _dismissSnackBar();
-
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-                  },
-                  child: const Text(AppStrings.logIn),
+                SizedBox(
+                  width: (width * 0.9) / 2,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Student Management System',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: width * 0.02,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                            color: const Color(0xFF0D47A1),
+                          ),
+                        ),
+                        SizedBox(height: width * 0.01),
+                        Container(width: width * 0.08, height: 3, color: const Color(0xFF0D47A1)),
+                        SizedBox(height: width * 0.03),
+                        if (_state != ApprovalState.none) ...[_buildStatusCard(), SizedBox(height: width * 0.03)],
+                        SizedBox(
+                          width: buttonWidth,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              _dismissSnackBar();
+                              Navigator.of(
+                                context,
+                              ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
+                            },
+                            child: const Text(AppStrings.signUp),
+                          ),
+                        ),
+                        SizedBox(height: width * 0.015),
+                        SizedBox(
+                          width: buttonWidth,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              _dismissSnackBar();
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                            },
+                            child: const Text(AppStrings.logIn),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -226,7 +313,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     IconData icon = Icons.info_outline;
     String message = "";
     Widget? action;
-
     switch (_state) {
       case ApprovalState.loading:
         message = "Checking your signup status...";
@@ -276,7 +362,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       case ApprovalState.none:
         return const SizedBox.shrink();
     }
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
