@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/constants/app_strings.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
-import 'package:gyanshala_app/core/services/update_service.dart';
+import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,7 +41,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        UpdateService.checkForUpdates(context);
+        _runGitHubUpdateCheck();
       }
     });
   }
@@ -66,8 +66,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         ),
       ),
     );
-
-    // Reset the inactivity logout flag
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
         ref.read(inactivityLogoutProvider.notifier).state = false;
@@ -146,6 +144,66 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     );
   }
 
+  Future<void> _runGitHubUpdateCheck() async {
+    final downloadUrl = await UpdateChecker.checkForUpdate();
+    if (downloadUrl != null && mounted) {
+      _showUpdateDialog(downloadUrl);
+    }
+  }
+
+  void _showUpdateDialog(String downloadUrl) {
+    bool isDownloading = false;
+    double downloadProgress = 0.0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Update Available'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('A new version of Gyanshala is available. Please update to ensure system compatibility.'),
+                  if (isDownloading) ...[
+                    const SizedBox(height: 20),
+                    LinearProgressIndicator(value: downloadProgress),
+                    const SizedBox(height: 10),
+                    Text('${(downloadProgress * 100).toStringAsFixed(0)}% Downloaded'),
+                  ],
+                ],
+              ),
+              actions: isDownloading
+                  ? []
+                  : [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
+                      ElevatedButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            isDownloading = true;
+                          });
+
+                          UpdateChecker.downloadAndInstallApk(downloadUrl, (progress) {
+                            setDialogState(() {
+                              downloadProgress = progress;
+                            });
+                          }).then((_) {
+                            if (mounted) Navigator.pop(context);
+                          });
+                        },
+                        child: const Text('Update Now'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -157,8 +215,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             if (isWeb) {
               return _buildWebLayout(context, constraints.maxWidth);
             }
-
-            // 👇 MOBILE: untouched original UI
             return _buildMobileLayout(context);
           },
         ),

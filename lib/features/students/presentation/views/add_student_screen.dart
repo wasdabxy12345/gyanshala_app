@@ -21,12 +21,73 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   String _selectedGender = 'Male';
   int _selectedGrade = 1;
 
+  String? _selectedClusterId;
+  String? _selectedVillageId;
+  String? _selectedSchoolId;
+
+  List<Map<String, dynamic>> _clusters = [];
+  List<Map<String, dynamic>> _villages = [];
+  List<Map<String, dynamic>> _schools = [];
+
+  bool _isLoadingLocations = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClusters();
+  }
+
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _idController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadClusters() async {
+    setState(() => _isLoadingLocations = true);
+    final clusters = await ref.read(studentProvider.notifier).getClusters();
+    setState(() {
+      _clusters = clusters;
+      _isLoadingLocations = false;
+    });
+  }
+
+  Future<void> _onClusterChanged(String? clusterId) async {
+    setState(() {
+      _selectedClusterId = clusterId;
+      _selectedVillageId = null;
+      _selectedSchoolId = null;
+      _villages = [];
+      _schools = [];
+      _isLoadingLocations = true;
+    });
+
+    if (clusterId != null) {
+      final villages = await ref.read(studentProvider.notifier).getVillages(clusterId);
+      setState(() {
+        _villages = villages;
+      });
+    }
+    setState(() => _isLoadingLocations = false);
+  }
+
+  Future<void> _onVillageChanged(String? villageId) async {
+    setState(() {
+      _selectedVillageId = villageId;
+      _selectedSchoolId = null;
+      _schools = [];
+      _isLoadingLocations = true;
+    });
+
+    if (villageId != null) {
+      final schools = await ref.read(studentProvider.notifier).getSchools(villageId);
+      setState(() {
+        _schools = schools;
+      });
+    }
+    setState(() => _isLoadingLocations = false);
   }
 
   @override
@@ -41,6 +102,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           key: _formKey,
           child: Column(
             children: [
+              if (_isLoadingLocations) const Padding(padding: EdgeInsets.only(bottom: 16.0), child: LinearProgressIndicator()),
               Row(
                 children: [
                   Expanded(
@@ -83,6 +145,32 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                 onChanged: (val) => setState(() => _selectedGrade = val!),
                 decoration: const InputDecoration(labelText: 'Grade', border: OutlineInputBorder()),
               ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedClusterId,
+                items: _clusters.map((c) => DropdownMenuItem<String>(value: c['id'].toString(), child: Text(c['name']))).toList(),
+                onChanged: _onClusterChanged,
+                decoration: const InputDecoration(labelText: 'Cluster', border: OutlineInputBorder()),
+                validator: (val) => val == null ? 'Select a cluster' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedVillageId,
+                items: _villages.map((v) => DropdownMenuItem<String>(value: v['id'].toString(), child: Text(v['name']))).toList(),
+                onChanged: _onVillageChanged,
+                decoration: const InputDecoration(labelText: 'Village', border: OutlineInputBorder()),
+                validator: (val) => val == null ? 'Select a village' : null,
+                disabledHint: const Text('Select a cluster first'),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedSchoolId,
+                items: _schools.map((s) => DropdownMenuItem<String>(value: s['id'].toString(), child: Text(s['name']))).toList(),
+                onChanged: (val) => setState(() => _selectedSchoolId = val),
+                decoration: const InputDecoration(labelText: 'School', border: OutlineInputBorder()),
+                validator: (val) => val == null ? 'Select a school' : null,
+                disabledHint: const Text('Select a village first'),
+              ),
               const SizedBox(height: 32),
               Align(
                 alignment: Alignment.center,
@@ -107,6 +195,9 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
+    final selectedCluster = _clusters.firstWhere((c) => c['id'] == _selectedClusterId);
+    final selectedVillage = _villages.firstWhere((v) => v['id'] == _selectedVillageId);
+    final selectedSchool = _schools.firstWhere((s) => s['id'] == _selectedSchoolId);
     final success = await ref
         .read(studentProvider.notifier)
         .registerStudent(
@@ -115,6 +206,12 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           studentId: _idController.text.trim(),
           gender: _selectedGender,
           grade: _selectedGrade,
+          clusterId: _selectedClusterId!,
+          clusterName: selectedCluster['name'],
+          villageId: _selectedVillageId!,
+          villageName: selectedVillage['name'],
+          schoolId: _selectedSchoolId!,
+          schoolName: selectedSchool['name'],
         );
     if (!mounted) return;
     if (success) {

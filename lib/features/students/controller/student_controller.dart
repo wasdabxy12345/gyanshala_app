@@ -55,13 +55,19 @@ class StudentController extends StateNotifier<bool> {
     required String studentId,
     required String gender,
     required int grade,
+    required String clusterId,
+    required String clusterName,
+    required String villageId,
+    required String villageName,
+    required String schoolId,
+    required String schoolName,
   }) async {
     state = true;
     try {
       final user = _client.auth.currentUser;
       if (user == null) return false;
 
-      final mentorData = await _client
+      await _client
           .from('profiles')
           .select('cluster, village, school, cluster_id, village_id, school_id')
           .eq('id', user.id)
@@ -74,12 +80,12 @@ class StudentController extends StateNotifier<bool> {
         'gender': gender,
         'grade': grade,
         'mentor_id': user.id,
-        'cluster': mentorData['cluster'],
-        'village': mentorData['village'],
-        'school': mentorData['school'],
-        'cluster_id': mentorData['cluster_id'],
-        'village_id': mentorData['village_id'],
-        'school_id': mentorData['school_id'],
+        'cluster': clusterName,
+        'village': villageName,
+        'school': schoolName,
+        'cluster_id': clusterId,
+        'village_id': villageId,
+        'school_id': schoolId,
       });
 
       state = false;
