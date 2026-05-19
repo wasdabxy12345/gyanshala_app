@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,9 @@ import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
 import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
-import 'package:ota_update/ota_update.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'otp_verification_screen.dart';
@@ -158,11 +161,11 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     bool isDownloading = false;
     double downloadProgress = 0.0;
     String statusMessage = "A new version of Gyanshala is available. Please update to continue.";
-    StreamSubscription? otaSubscription; // To track and close the stream safely
+    http.Client? client;
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevents users from tapping outside and killing the process
+      barrierDismissible: false,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -185,61 +188,68 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 ],
               ),
               actions: isDownloading
-                  ? [] // Hide action buttons during download to prevent double-clicks
+                  ? []
                   : [
                       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
                       ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           setDialogState(() {
                             isDownloading = true;
-                            statusMessage = "Downloading your update from secure servers. Please wait...";
+                            statusMessage = "Downloading update file. Please wait...";
                           });
 
                           try {
-                            // Execute OTA Update cleanly
-                            otaSubscription = OtaUpdate()
-                                .execute(downloadUrl, destinationFilename: 'gyanshala_update.apk')
-                                .listen(
-                                  (OtaEvent event) {
-                                    if (event.status == OtaStatus.DOWNLOADING) {
-                                      setDialogState(() {
-                                        // Parse string percentage safely to a 0.0 - 1.0 double scale
-                                        downloadProgress = double.tryParse(event.value ?? '0') ?? 0.0;
-                                        downloadProgress /= 100;
-                                      });
-                                    } else if (event.status == OtaStatus.INSTALLING) {
-                                      setDialogState(() {
-                                        statusMessage = "Opening installer...";
-                                      });
-                                      otaSubscription?.cancel();
-                                      if (mounted) Navigator.pop(context);
-                                    } else if (event.status == OtaStatus.PERMISSION_NOT_GRANTED_ERROR) {
-                                      setDialogState(() {
-                                        isDownloading = false;
-                                        statusMessage = "Permission denied. Please grant storage/install permissions.";
-                                      });
-                                      otaSubscription?.cancel();
-                                    } else {
-                                      // Handles errors like OtaStatus.DOWNLOAD_ERROR
-                                      setDialogState(() {
-                                        isDownloading = false;
-                                        statusMessage = "Download failed. Please check your internet and try again.";
-                                      });
-                                      otaSubscription?.cancel();
-                                    }
-                                  },
-                                  onError: (error) {
-                                    setDialogState(() {
-                                      isDownloading = false;
-                                      statusMessage = "An unexpected network error occurred.";
-                                    });
-                                    otaSubscription?.cancel();
-                                  },
-                                );
+                            client = http.Client();
+                            final request = http.Request('GET', Uri.parse(downloadUrl));
+                            final response = await client!.send(request);
+
+                            if (response.statusCode != 200) {
+                              throw Exception('Server error: ${response.statusCode}');
+                            }
+
+                            final contentLength = response.contentLength ?? 0;
+                            final directory = await getTemporaryDirectory();
+                            final apkPath = '${directory.path}/gyanshala_update.apk';
+                            final file = File(apkPath);
+                            if (await file.exists()) {
+                              await file.delete();
+                            }
+
+                            List<int> bytes = [];
+
+                            response.stream.listen(
+                              (chunk) {
+                                bytes.addAll(chunk);
+                                if (contentLength > 0) {
+                                  setDialogState(() {
+                                    downloadProgress = bytes.length / contentLength;
+                                  });
+                                }
+                              },
+                              onDone: () async {
+                                await file.writeAsBytes(bytes);
+                                client?.close();
+
+                                setDialogState(() {
+                                  statusMessage = "Opening installer...";
+                                });
+                                if (mounted) Navigator.pop(context);
+                                await OpenFilex.open(apkPath);
+                              },
+                              onError: (error) {
+                                client?.close();
+                                setDialogState(() {
+                                  isDownloading = false;
+                                  statusMessage = "Download stream interrupted.";
+                                });
+                              },
+                              cancelOnError: true,
+                            );
                           } catch (e) {
+                            client?.close();
                             setDialogState(() {
                               isDownloading = false;
-                              statusMessage = "Installer failed to initiate.";
+                              statusMessage = "Failed to launch network download.";
                             });
                           }
                         },
