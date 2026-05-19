@@ -50,6 +50,12 @@ class UpdateChecker {
       final request = http.Request('GET', Uri.parse(url));
       final response = await client.send(request);
 
+      if (response.statusCode != 200) {
+        print('Server error: ${response.statusCode}');
+        client.close();
+        return;
+      }
+
       final contentLength = response.contentLength ?? 0;
       List<int> bytes = [];
 
@@ -66,9 +72,11 @@ class UpdateChecker {
         },
         onDone: () async {
           await file.writeAsBytes(bytes);
+          client.close();
           await OpenFilex.open(apkPath);
         },
         onError: (e) {
+          client.close();
           throw e;
         },
         cancelOnError: true,

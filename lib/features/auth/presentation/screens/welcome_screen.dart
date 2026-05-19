@@ -6,6 +6,7 @@ import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
 import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
+import 'package:ota_update/ota_update.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'otp_verification_screen.dart';
@@ -167,7 +168,9 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('A new version of Gyanshala is available. Please update to ensure system compatibility.'),
+                  const Text(
+                    'A new version of the app is available. Please update by clicking on the "Update Now" button below.',
+                  ),
                   if (isDownloading) ...[
                     const SizedBox(height: 20),
                     LinearProgressIndicator(value: downloadProgress),
@@ -182,20 +185,36 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
                       ElevatedButton(
                         onPressed: () {
-                          setDialogState(() {
-                            isDownloading = true;
-                          });
+                          Navigator.pop(context);
+                          try {
+                            OtaUpdate().execute(downloadUrl, destinationFilename: 'gyanshala_update.apk').listen((
+                              OtaEvent event,
+                            ) {
+                              print('OTA Status: ${event.status}, Progress: ${event.value}');
 
-                          UpdateChecker.downloadAndInstallApk(downloadUrl, (progress) {
-                            setDialogState(() {
-                              downloadProgress = progress;
-                            });
-                          }).then((_) {
-                            if (mounted) Navigator.pop(context);
-                          });
+                              if (event.status == OtaStatus.DOWNLOADING) {
+                                print('Progress: ${event.value}%');
+                              } else if (event.status == OtaStatus.INSTALLING) {
+                                print('Success! Opening installer...');
+                              }
+                            }, onError: (e) => print('OTA Error: $e'));
+                          } catch (e) {
+                            print('OTA Execution failed: $e');
+                          }
                         },
                         child: const Text('Update Now'),
                       ),
+                      // setDialogState(() {
+                      //   isDownloading = true;
+                      // });
+
+                      // UpdateChecker.downloadAndInstallApk(downloadUrl, (progress) {
+                      //   setDialogState(() {
+                      //     downloadProgress = progress;
+                      //   });
+                      // }).then((_) {
+                      //   if (mounted) Navigator.pop(context);
+                      // });
                     ],
             );
           },
