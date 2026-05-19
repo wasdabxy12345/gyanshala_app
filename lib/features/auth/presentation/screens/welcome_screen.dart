@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/constants/app_strings.dart';
@@ -155,10 +157,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   void _showUpdateDialog(String downloadUrl) {
     bool isDownloading = false;
     double downloadProgress = 0.0;
+    String statusMessage = "A new version of Gyanshala is available. Please update to continue.";
+    StreamSubscription? otaSubscription; // To track and close the stream safely
 
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: false, // Prevents users from tapping outside and killing the process
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -168,53 +172,79 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'A new version of the app is available. Please update by clicking on the "Update Now" button below.',
-                  ),
+                  Text(statusMessage),
                   if (isDownloading) ...[
                     const SizedBox(height: 20),
                     LinearProgressIndicator(value: downloadProgress),
                     const SizedBox(height: 10),
-                    Text('${(downloadProgress * 100).toStringAsFixed(0)}% Downloaded'),
+                    Text(
+                      '${(downloadProgress * 100).toStringAsFixed(0)}% Downloaded',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ],
               ),
               actions: isDownloading
-                  ? []
+                  ? [] // Hide action buttons during download to prevent double-clicks
                   : [
                       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.pop(context);
-                          try {
-                            OtaUpdate().execute(downloadUrl, destinationFilename: 'gyanshala_update.apk').listen((
-                              OtaEvent event,
-                            ) {
-                              print('OTA Status: ${event.status}, Progress: ${event.value}');
+                          setDialogState(() {
+                            isDownloading = true;
+                            statusMessage = "Downloading your update from secure servers. Please wait...";
+                          });
 
-                              if (event.status == OtaStatus.DOWNLOADING) {
-                                print('Progress: ${event.value}%');
-                              } else if (event.status == OtaStatus.INSTALLING) {
-                                print('Success! Opening installer...');
-                              }
-                            }, onError: (e) => print('OTA Error: $e'));
+                          try {
+                            // Execute OTA Update cleanly
+                            otaSubscription = OtaUpdate()
+                                .execute(downloadUrl, destinationFilename: 'gyanshala_update.apk')
+                                .listen(
+                                  (OtaEvent event) {
+                                    if (event.status == OtaStatus.DOWNLOADING) {
+                                      setDialogState(() {
+                                        // Parse string percentage safely to a 0.0 - 1.0 double scale
+                                        downloadProgress = double.tryParse(event.value ?? '0') ?? 0.0;
+                                        downloadProgress /= 100;
+                                      });
+                                    } else if (event.status == OtaStatus.INSTALLING) {
+                                      setDialogState(() {
+                                        statusMessage = "Opening installer...";
+                                      });
+                                      otaSubscription?.cancel();
+                                      if (mounted) Navigator.pop(context);
+                                    } else if (event.status == OtaStatus.PERMISSION_NOT_GRANTED_ERROR) {
+                                      setDialogState(() {
+                                        isDownloading = false;
+                                        statusMessage = "Permission denied. Please grant storage/install permissions.";
+                                      });
+                                      otaSubscription?.cancel();
+                                    } else {
+                                      // Handles errors like OtaStatus.DOWNLOAD_ERROR
+                                      setDialogState(() {
+                                        isDownloading = false;
+                                        statusMessage = "Download failed. Please check your internet and try again.";
+                                      });
+                                      otaSubscription?.cancel();
+                                    }
+                                  },
+                                  onError: (error) {
+                                    setDialogState(() {
+                                      isDownloading = false;
+                                      statusMessage = "An unexpected network error occurred.";
+                                    });
+                                    otaSubscription?.cancel();
+                                  },
+                                );
                           } catch (e) {
-                            print('OTA Execution failed: $e');
+                            setDialogState(() {
+                              isDownloading = false;
+                              statusMessage = "Installer failed to initiate.";
+                            });
                           }
                         },
                         child: const Text('Update Now'),
                       ),
-                      // setDialogState(() {
-                      //   isDownloading = true;
-                      // });
-
-                      // UpdateChecker.downloadAndInstallApk(downloadUrl, (progress) {
-                      //   setDialogState(() {
-                      //     downloadProgress = progress;
-                      //   });
-                      // }).then((_) {
-                      //   if (mounted) Navigator.pop(context);
-                      // });
                     ],
             );
           },
