@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-cache-path name="my_cache" path="." />
-    <cache-path name="my_internal_cache" path="." />
+    <!-- Grants the Android system installer permission to read files stored in your app's internal cache storage -->
+    <external-cache-path name="external_cache" path="." />
+    <cache-path name="internal_cache" path="." />
+    
+    <!-- Backup paths to ensure compatibility across older and newer Android OS variants -->
+    <external-path name="external_files" path="." />
     <files-path name="internal_files" path="." />
 </paths>
