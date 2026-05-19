@@ -1,6 +1,6 @@
 name: gyanshala_app
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 
 flutter_launcher_icons:
   android: true
@@ -44,14 +44,14 @@ dependencies:
   excel: ^4.0.6
   collection: ^1.18.0
   google_maps_flutter: ^2.17.0
-  google_maps_flutter_web: ^0.6.2+1
   flutter_native_splash: ^2.4.4
+  webview_flutter: ^4.7.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-flutter_lints: ^6.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

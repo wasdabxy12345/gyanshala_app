@@ -38,16 +38,14 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
 
   bool _isHoliday(DateTime date) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
-
     if (date.weekday == DateTime.sunday) return true;
 
-    final isHoliday = _holidays.any(
-      (h) => h.year == normalizedDate.year && h.month == normalizedDate.month && h.day == normalizedDate.day,
-    );
+    return _holidays.any((h) => h.year == normalizedDate.year && h.month == normalizedDate.month && h.day == normalizedDate.day);
+  }
 
-    if (normalizedDate.year == 2026 && normalizedDate.month == 4 && normalizedDate.day == 18) {}
-
-    return isHoliday;
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
   @override
@@ -79,34 +77,12 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
   @override
   Widget build(BuildContext context) {
     final bool holidaySelected = _isHoliday(widget.date);
+    final bool isCurrentDay = _isToday(widget.date);
 
     return Column(
       children: [
-        ListTile(
-          tileColor: holidaySelected ? Colors.orange.shade50 : null,
-          title: Text(
-            "Date: ${DateFormat('dd MMM yyyy (EEEE)').format(widget.date)}",
-            style: TextStyle(
-              color: holidaySelected ? Colors.orange.shade900 : Colors.black,
-              fontWeight: holidaySelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          subtitle: holidaySelected ? const Text("School is closed today") : null,
-          trailing: const Icon(Icons.calendar_today),
-          onTap: () async {
-            final d = await showDatePicker(
-              context: context,
-              initialDate: widget.date,
-              firstDate: DateTime(2024),
-              lastDate: DateTime.now(),
-              selectableDayPredicate: (DateTime val) => !_isHoliday(val),
-            );
-            if (d != null) widget.onDateChanged(d);
-          },
-        ),
-        const Divider(height: 0),
-        Expanded(child: holidaySelected ? _buildHolidayPlaceholder() : _buildStudentList()),
-        if (!holidaySelected)
+        Expanded(child: holidaySelected ? _buildHolidayPlaceholder() : _buildStudentList(isEditable: isCurrentDay)),
+        if (!holidaySelected && isCurrentDay)
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SizedBox(
@@ -140,7 +116,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     );
   }
 
-  Widget _buildStudentList() {
+  Widget _buildStudentList({required bool isEditable}) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: ref.read(studentProvider.notifier).getMyStudents(),
       builder: (context, snapshot) {
@@ -172,9 +148,9 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _statusBtn(s['id'], 'P', Colors.green, currentStatus == 'P'),
+                  _statusBtn(s['id'], 'P', Colors.green, currentStatus == 'P', isEditable),
                   const SizedBox(width: 8),
-                  _statusBtn(s['id'], 'A', Colors.red, currentStatus == 'A'),
+                  _statusBtn(s['id'], 'A', Colors.red, currentStatus == 'A', isEditable),
                 ],
               ),
             );
@@ -184,20 +160,27 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     );
   }
 
-  Widget _statusBtn(String id, String label, Color color, bool isSelected) {
+  Widget _statusBtn(String id, String label, Color color, bool isSelected, bool isEditable) {
     return ChoiceChip(
       label: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black)),
       selected: isSelected,
       selectedColor: color,
-      onSelected: (val) {
-        setState(() {
-          statusMap[id] = val ? label : '';
-        });
-      },
+      onSelected: isEditable
+          ? (val) {
+              setState(() {
+                statusMap[id] = val ? label : '';
+              });
+            }
+          : null,
     );
   }
 
   Future<void> _saveAttendance() async {
+    if (!_isToday(widget.date)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You can only save attendance for today.")));
+      return;
+    }
+
     if (statusMap.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No attendance marked to save")));
       return;

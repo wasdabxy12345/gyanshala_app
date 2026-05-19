@@ -22,5 +22,6 @@
     "net"
   ],
   "java.configuration.updateBuildConfiguration": "automatic",
-  "cmake.ignoreCMakeListsMissing": true
+  "cmake.ignoreCMakeListsMissing": true,
+  "java.compile.nullAnalysis.mode": "automatic"
 }

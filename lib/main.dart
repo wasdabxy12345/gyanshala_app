@@ -12,8 +12,7 @@ import 'firebase_options.dart';
 const _supabaseUrl = 'https://ntrniclejneisdzepntv.supabase.co';
 const _supabaseAnonKey = 'sb_publishable_sTcOrSy3ODTZyPOjUHLlHg_j6uS7P9N';
 
-final FlutterLocalNotificationsPlugin _localNotif =
-    FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _localNotif = FlutterLocalNotificationsPlugin();
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -25,17 +24,12 @@ Future<void> main() async {
   await _setupForegroundNotifications();
 
   try {
-    await Supabase.initialize(
-      url: _supabaseUrl,
-      anonKey: _supabaseAnonKey,
-      debug: true,
-    );
+    await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey, debug: true);
   } catch (e) {
     debugPrint("Supabase Initialization Error: $e");
   }
 
-  RemoteMessage? initialMessage = await FirebaseMessaging.instance
-      .getInitialMessage();
+  RemoteMessage? initialMessage = await FirebaseMessaging.instance.getInitialMessage();
 
   if (initialMessage != null) {
     Future.delayed(const Duration(seconds: 1), () {
@@ -86,7 +80,5 @@ Future<void> _setupForegroundNotifications() async {
 }
 
 void _handleNotificationTap() {
-  navigatorKey.currentState?.push(
-    MaterialPageRoute(builder: (_) => const SignupVerificationScreen()),
-  );
+  navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const SignupVerificationScreen()));
 }

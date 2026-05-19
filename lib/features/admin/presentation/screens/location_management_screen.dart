@@ -22,6 +22,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   bool _isLoading = true;
   final _searchController = TextEditingController();
   List<dynamic> _filteredHierarchy = [];
+  Set<String>? _selectedClusterFilters;
+  Set<String>? _selectedVillageFilters;
+  Set<String>? _selectedSchoolFilters;
   @override
   void initState() {
     super.initState();
@@ -57,7 +60,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             });
           }
         }
-        _runSearch(_searchController.text);
+        _applyAllFilters();
       }
     });
   }
@@ -149,7 +152,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           _sortColumnIndex = 0;
           _isAscending = true;
           if (_searchController.text.isNotEmpty) {
-            _runSearch(_searchController.text);
+            _applyAllFilters();
           } else {
             _filteredHierarchy = data;
           }
@@ -495,6 +498,158 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
+  List<String> _getUniqueValues(int columnIndex) {
+    final Set<String> values = {};
+
+    for (final cluster in _hierarchy) {
+      final clusterName = cluster['name'].toString();
+
+      // Respect selected cluster filter
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
+        continue;
+      }
+
+      if (columnIndex == 0) {
+        values.add(clusterName);
+      }
+
+      for (final village in (cluster['villages'] ?? [])) {
+        final villageName = village['name'].toString();
+
+        // Respect selected village filter
+        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) {
+          continue;
+        }
+
+        if (columnIndex == 1) {
+          values.add(villageName);
+        }
+
+        for (final school in (village['schools'] ?? [])) {
+          final schoolName = school['name'].toString();
+
+          if (columnIndex == 2) {
+            values.add(schoolName);
+          }
+        }
+      }
+    }
+
+    return values.toList()..sort();
+  }
+
+  Future<void> _showFilterMenu({required BuildContext context, required int columnIndex}) async {
+    final allValues = _getUniqueValues(columnIndex);
+
+    Set<String> currentSelection;
+
+    if (columnIndex == 0) {
+      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
+    } else if (columnIndex == 1) {
+      currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
+    } else {
+      currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
+    }
+
+    final searchController = TextEditingController();
+    List<String> filteredValues = List.from(allValues);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Filter"),
+              content: SizedBox(
+                width: 320,
+                height: 450,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: searchController,
+                      decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
+                      onChanged: (value) {
+                        setStateDialog(() {
+                          filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    CheckboxListTile(
+                      dense: true,
+                      value:
+                          currentSelection.length == allValues.length ||
+                          (columnIndex == 0 && _selectedClusterFilters == null) ||
+                          (columnIndex == 1 && _selectedVillageFilters == null) ||
+                          (columnIndex == 2 && _selectedSchoolFilters == null),
+                      title: const Text("Select All"),
+                      onChanged: (checked) {
+                        setStateDialog(() {
+                          if (checked == true) {
+                            currentSelection = Set.from(allValues);
+                          } else {
+                            currentSelection.clear();
+                          }
+                        });
+                      },
+                    ),
+
+                    const Divider(),
+
+                    Expanded(
+                      child: ListView(
+                        children: filteredValues.map((value) {
+                          return CheckboxListTile(
+                            dense: true,
+                            value: currentSelection.contains(value),
+                            title: Text(value),
+                            onChanged: (checked) {
+                              setStateDialog(() {
+                                if (checked == true) {
+                                  currentSelection.add(value);
+                                } else {
+                                  currentSelection.remove(value);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      if (columnIndex == 0) {
+                        _selectedClusterFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                      } else if (columnIndex == 1) {
+                        _selectedVillageFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                      } else {
+                        _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                      }
+
+                      _applyAllFilters();
+                    });
+
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text("Apply"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -517,7 +672,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     padding: const EdgeInsets.all(12.0),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: _runSearch,
+                      onChanged: (_) => _applyAllFilters(),
                       decoration: InputDecoration(
                         hintText: "Search clusters, villages, or schools...",
                         prefixIcon: const Icon(Icons.search),
@@ -526,7 +681,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                 icon: const Icon(Icons.clear),
                                 onPressed: () {
                                   _searchController.clear();
-                                  _runSearch('');
+                                  _applyAllFilters();
                                 },
                               )
                             : null,
@@ -551,20 +706,28 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           _SortableHeader(
                             label: "Cluster",
                             onSort: () => _onSort(0),
+                            onFilter: () => _showFilterMenu(context: context, columnIndex: 0),
                             isSorted: _sortColumnIndex == 0,
                             isAscending: _isAscending,
+                            hasFilter: _selectedClusterFilters != null,
                           ),
+
                           _SortableHeader(
                             label: "Village",
                             onSort: () => _onSort(1),
+                            onFilter: () => _showFilterMenu(context: context, columnIndex: 1),
                             isSorted: _sortColumnIndex == 1,
                             isAscending: _isAscending,
+                            hasFilter: _selectedVillageFilters != null,
                           ),
+
                           _SortableHeader(
                             label: "School",
                             onSort: () => _onSort(2),
+                            onFilter: () => _showFilterMenu(context: context, columnIndex: 2),
                             isSorted: _sortColumnIndex == 2,
                             isAscending: _isAscending,
+                            hasFilter: _selectedSchoolFilters != null,
                           ),
                         ],
                       ),
@@ -718,49 +881,74 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
-  void _runSearch(String query) {
-    final lowercaseQuery = query.toLowerCase();
-    if (lowercaseQuery.isEmpty) {
-      setState(() {
-        _filteredHierarchy = _hierarchy;
-      });
-      return;
+  void _applyAllFilters() {
+    final query = _searchController.text.toLowerCase().trim();
+
+    final List<dynamic> result = [];
+
+    for (final cluster in _hierarchy) {
+      final clusterName = cluster['name'].toString();
+
+      // CLUSTER FILTER
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
+        continue;
+      }
+
+      final List<dynamic> filteredVillages = [];
+
+      for (final village in (cluster['villages'] ?? [])) {
+        final villageName = village['name'].toString();
+
+        // VILLAGE FILTER
+        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
+          continue;
+        }
+
+        final List<dynamic> filteredSchools = [];
+
+        for (final school in (village['schools'] ?? [])) {
+          final schoolName = school['name'].toString();
+
+          // SCHOOL FILTER
+          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
+            continue;
+          }
+
+          // SEARCH FILTER
+          final matchesSearch =
+              query.isEmpty ||
+              clusterName.toLowerCase().contains(query) ||
+              villageName.toLowerCase().contains(query) ||
+              schoolName.toLowerCase().contains(query);
+
+          if (matchesSearch) {
+            filteredSchools.add(school);
+          }
+        }
+
+        // Keep village if:
+        // - it has schools
+        // - OR search matches village/cluster
+        final villageMatchesSearch =
+            query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
+
+        if (filteredSchools.isNotEmpty || villageMatchesSearch) {
+          filteredVillages.add({...village, 'schools': filteredSchools});
+        }
+      }
+
+      // Keep cluster if:
+      // - it has villages
+      // - OR search matches cluster
+      final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
+
+      if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
+        result.add({...cluster, 'villages': filteredVillages});
+      }
     }
+
     setState(() {
-      _filteredHierarchy = _hierarchy
-          .map((cluster) {
-            final clusterName = cluster['name'].toString().toLowerCase();
-            final bool clusterMatches = clusterName.contains(lowercaseQuery);
-            final villages = List.from(cluster['villages'] ?? []);
-            final filteredVillages = villages
-                .map((village) {
-                  final villageName = village['name'].toString().toLowerCase();
-                  final bool villageMatches = villageName.contains(lowercaseQuery);
-                  final schools = List.from(village['schools'] ?? []);
-                  final filteredSchools = schools.where((school) {
-                    if (clusterMatches || villageMatches) return true;
-                    return school['name'].toString().toLowerCase().contains(lowercaseQuery);
-                  }).toList();
-                  final villageCopy = Map<String, dynamic>.from(village);
-                  villageCopy['schools'] = filteredSchools;
-                  return villageCopy;
-                })
-                .where((v) {
-                  final villageName = v['name'].toString().toLowerCase();
-                  final schools = v['schools'] as List;
-                  return clusterMatches || villageName.contains(lowercaseQuery) || schools.isNotEmpty;
-                })
-                .toList();
-            final clusterCopy = Map<String, dynamic>.from(cluster);
-            clusterCopy['villages'] = filteredVillages;
-            return clusterCopy;
-          })
-          .where((c) {
-            final clusterName = c['name'].toString().toLowerCase();
-            final villages = c['villages'] as List;
-            return clusterName.contains(lowercaseQuery) || villages.isNotEmpty;
-          })
-          .toList();
+      _filteredHierarchy = result;
     });
   }
 }
@@ -768,27 +956,58 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 class _SortableHeader extends StatelessWidget {
   final String label;
   final VoidCallback onSort;
+  final VoidCallback onFilter;
   final bool isSorted;
   final bool isAscending;
-  const _SortableHeader({required this.label, required this.onSort, required this.isSorted, required this.isAscending});
+  final bool hasFilter;
+
+  const _SortableHeader({
+    required this.label,
+    required this.onSort,
+    required this.onFilter,
+    required this.isSorted,
+    required this.isAscending,
+    required this.hasFilter,
+  });
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onSort,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: onSort,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
+                    size: 16,
+                    color: isSorted ? Colors.indigo : Colors.grey,
+                  ),
+                ],
+              ),
             ),
-            Icon(
-              isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.sort,
-              size: 16,
-              color: isSorted ? Colors.indigo : Colors.grey,
+          ),
+
+          InkWell(
+            onTap: onFilter,
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: hasFilter ? Colors.indigo.withValues(alpha: 0.12) : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(Icons.filter_alt, size: 18, color: hasFilter ? Colors.indigo : Colors.grey.shade700),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

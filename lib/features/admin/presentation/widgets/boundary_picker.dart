@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/streetview_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class BoundaryPicker extends StatefulWidget {
   final List<LatLng> initialPoints;
@@ -112,24 +114,18 @@ class _BoundaryPickerState extends State<BoundaryPicker> {
 
   Widget _buildMapTypeButton({required IconData icon, required String label, required MapType type, VoidCallback? onRefresh}) {
     final bool isSelected = _mapType == type;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: () {
           if (_mapType == type) return;
-
           setState(() {
             _mapType = type;
-
-            // force native map rebuild
             _mapController = null;
             _mapRefreshKey++;
           });
-
           onRefresh?.call();
-
           debugPrint("Changed map type to $type");
         },
         child: AnimatedContainer(
@@ -301,10 +297,34 @@ class _BoundaryPickerState extends State<BoundaryPicker> {
                 position: pos,
                 draggable: true,
                 onDragEnd: (newPos) => _onMarkerDragEnd(idx, newPos),
-                onTap: () => _removePoint(idx),
-                infoWindow: const InfoWindow(title: "Tap to remove, Drag to move"),
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (_) => Wrap(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.streetview, color: Colors.blue),
+                          title: const Text("Street View"),
+                          subtitle: const Text("Open Google Street View at this point"),
+                          onTap: () => openStreetView(pos),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.delete, color: Colors.red),
+                          title: const Text("Delete Marker"),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _removePoint(idx);
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
             }).toSet(),
+            onLongPress: (LatLng point) {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => StreetViewScreen(position: point)));
+            },
             gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
             onMapCreated: (controller) {
               _mapController = controller;
@@ -390,6 +410,9 @@ class _BoundaryPickerState extends State<BoundaryPicker> {
                                   infoWindow: const InfoWindow(title: "Tap to remove, Drag to move"),
                                 );
                               }).toSet(),
+                              onLongPress: (LatLng point) {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => StreetViewScreen(position: point)));
+                              },
                               gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
                               onMapCreated: (controller) {
                                 _mapController = controller;
@@ -408,6 +431,20 @@ class _BoundaryPickerState extends State<BoundaryPicker> {
         },
       ),
     );
+  }
+
+  Future<void> openStreetView(LatLng position) async {
+    final url = Uri.parse("google.streetview:cbll=${position.latitude},${position.longitude}");
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      // fallback to browser
+      final fallback = Uri.parse(
+        "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${position.latitude},${position.longitude}",
+      );
+      await launchUrl(fallback, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
