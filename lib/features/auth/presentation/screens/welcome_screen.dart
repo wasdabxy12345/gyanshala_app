@@ -306,7 +306,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           SizedBox(height: MediaQuery.of(context).size.height * 0.13),
 
           Text(
-            'Student Management System',
+            'Sadsfdsatudent Management System',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 2.0, color: const Color(0xFF0D47A1)),
           ),
