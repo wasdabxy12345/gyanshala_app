@@ -23,8 +23,7 @@ class OtpVerificationScreen extends ConsumerStatefulWidget {
   final String buttonText;
 
   @override
-  ConsumerState<OtpVerificationScreen> createState() =>
-      _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
 class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
@@ -34,7 +33,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   bool _isLoading = false;
   int _timerSeconds = 0;
   Timer? _timer;
-
   void _startTimer() {
     setState(() => _timerSeconds = 60);
     _timer?.cancel();
@@ -59,20 +57,21 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .sendOtp(identifier: widget.identifier, requireApprovedSignup: true);
-      _startTimer();
-      if (mounted) {
+      if (AppConfig.useDevBypass) {
+        _startTimer();
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("OTP request sent!")));
+        ).showSnackBar(const SnackBar(content: Text("[DEV MODE] Bypass active: Enter '123456' to proceed.")));
+        return;
+      }
+      await ref.read(authRepositoryProvider).sendOtp(identifier: widget.identifier, requireApprovedSignup: true);
+      _startTimer();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP request sent!")));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -82,27 +81,20 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   Future<void> _onVerifyPressed() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
+
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .verifyOtp(
-            identifier: widget.identifier,
-            otp: _otpController.text.trim(),
-          );
-      if (!mounted) return;
-      try {
-        await widget.onVerified();
-      } catch (e) {
-        if (e.toString().contains('same_password')) {
-        } else {
-          rethrow;
+      if (AppConfig.useDevBypass) {
+        if (mounted) {
+          await widget.onVerified();
         }
+        return;
       }
+      await ref.read(authRepositoryProvider).verifyOtp(identifier: widget.identifier, otp: _otpController.text.trim());
+      if (!mounted) return;
+      await widget.onVerified();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -120,10 +112,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
             TextFormField(
               controller: _otpController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'OTP',
-                prefixIcon: Icon(Icons.password_outlined),
-              ),
+              decoration: const InputDecoration(labelText: 'OTP', prefixIcon: Icon(Icons.password_outlined)),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'OTP is required';
@@ -136,11 +125,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: (_isLoading || _timerSeconds > 0) ? null : _sendOtp,
-                child: Text(
-                  _timerSeconds > 0
-                      ? "Resend OTP in ${_timerSeconds}s"
-                      : "Send OTP",
-                ),
+                child: Text(_timerSeconds > 0 ? "Resend OTP in ${_timerSeconds}s" : "Send OTP"),
               ),
             ),
             const SizedBox(height: 24),
@@ -149,11 +134,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _onVerifyPressed,
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : Text(widget.buttonText),
               ),
             ),

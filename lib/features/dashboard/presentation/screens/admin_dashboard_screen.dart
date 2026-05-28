@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
-import 'package:gyanshala_app/features/mentors/presentation/mentor_hub_page.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
@@ -15,7 +16,7 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("GS + UNM Admin"),
         centerTitle: true,
-        backgroundColor: Colors.indigo,
+        backgroundColor: Color(0xFF00AFEF),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -43,10 +44,7 @@ class AdminHomeContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Welcome, ${adminName.trim().isEmpty ? 'Admin' : adminName}",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+            Text("Welcome, ${adminName}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             GridView.count(
               shrinkWrap: true,
@@ -64,11 +62,11 @@ class AdminHomeContent extends StatelessWidget {
                   },
                 ),
                 _AdminActionTile(
-                  title: "Mentor List and Attendance",
+                  title: "Employee List and Attendance",
                   icon: Icons.groups,
                   color: Colors.purple,
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const MentorHubPage()));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeHubPage()));
                   },
                 ),
                 _AdminActionTile(
@@ -79,7 +77,14 @@ class AdminHomeContent extends StatelessWidget {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationManagementScreen()));
                   },
                 ),
-                _AdminActionTile(title: "Reports", icon: Icons.description_outlined, color: Colors.teal, onTap: () {}),
+                _AdminActionTile(
+                  title: "Manage Forms",
+                  icon: Icons.description_outlined,
+                  color: Colors.teal,
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const FormManagementScreen()));
+                  },
+                ),
               ],
             ),
           ],

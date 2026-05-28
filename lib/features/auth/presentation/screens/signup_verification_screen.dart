@@ -16,12 +16,10 @@ class SignupVerificationScreen extends ConsumerStatefulWidget {
   const SignupVerificationScreen({super.key, this.identifier, this.password});
 
   @override
-  ConsumerState<SignupVerificationScreen> createState() =>
-      _SignupVerificationScreenState();
+  ConsumerState<SignupVerificationScreen> createState() => _SignupVerificationScreenState();
 }
 
-class _SignupVerificationScreenState
-    extends ConsumerState<SignupVerificationScreen> {
+class _SignupVerificationScreenState extends ConsumerState<SignupVerificationScreen> {
   String? _persistedIdentifier;
   ApprovalState _state = ApprovalState.loading;
 
@@ -64,9 +62,7 @@ class _SignupVerificationScreenState
   Future<void> _fetchStatus() async {
     setState(() => _state = ApprovalState.loading);
     try {
-      final status = await ref
-          .read(authRepositoryProvider)
-          .getSignupStatus(_persistedIdentifier!);
+      final status = await ref.read(authRepositoryProvider).getSignupStatus(_persistedIdentifier!);
       setState(() {
         if (status == 'approved') {
           _state = ApprovalState.approved;
@@ -84,7 +80,19 @@ class _SignupVerificationScreenState
 
   Future<void> _handleSendOtp() async {
     if (_isSendingOtp || _persistedIdentifier == null) return;
+    if (AppConfig.useDevBypass) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pending_id');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("[DEV] Account verified dynamically! Please login."), backgroundColor: Colors.green),
+      );
 
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
+      return;
+    }
+
+    // Production Path
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OtpVerificationScreen(
@@ -93,17 +101,10 @@ class _SignupVerificationScreenState
           subtitle: 'Enter OTP sent to your phone',
           onVerified: () async {
             setState(() => _isSendingOtp = true);
-
             try {
-              await ref
-                  .read(authRepositoryProvider)
-                  .sendOtp(
-                    identifier: _persistedIdentifier!,
-                    requireApprovedSignup: true,
-                  );
+              await ref.read(authRepositoryProvider).sendOtp(identifier: _persistedIdentifier!, requireApprovedSignup: true);
 
               if (!mounted) return;
-
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => OtpVerificationScreen(
@@ -117,9 +118,7 @@ class _SignupVerificationScreenState
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text(
-                                "Account verified! Please login with your password.",
-                              ),
+                              content: Text("Account verified! Please login with your password."),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -128,21 +127,14 @@ class _SignupVerificationScreenState
                         await Future.delayed(const Duration(seconds: 2));
 
                         if (!mounted) return;
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                          (_) => false,
-                        );
+                        Navigator.of(
+                          context,
+                        ).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                "Finalizing failed: ${e.toString()}",
-                              ),
-                            ),
-                          );
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text("Finalizing failed: ${e.toString()}")));
                         }
                       }
                     },
@@ -153,9 +145,7 @@ class _SignupVerificationScreenState
             } catch (e) {
               setState(() => _isSendingOtp = false);
               if (!mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(e.toString())));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
             }
           },
         ),
@@ -168,10 +158,7 @@ class _SignupVerificationScreenState
     return AuthShell(
       title: _getTitle(),
       subtitle: _getSubtitle(),
-      formChild: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [_buildContent()],
-      ),
+      formChild: Column(mainAxisSize: MainAxisSize.min, children: [_buildContent()]),
       footer: const SizedBox.shrink(),
     );
   }
@@ -214,31 +201,17 @@ class _SignupVerificationScreenState
 
     return Column(
       children: [
-        if (_state == ApprovalState.pending)
-          ElevatedButton(
-            onPressed: _fetchStatus,
-            child: const Text("Refresh Status"),
-          ),
-        if (_state == ApprovalState.approved)
-          ElevatedButton(
-            onPressed: _handleSendOtp,
-            child: const Text("Send OTP"),
-          ),
+        if (_state == ApprovalState.pending) ElevatedButton(onPressed: _fetchStatus, child: const Text("Refresh Status")),
+        if (_state == ApprovalState.approved) ElevatedButton(onPressed: _handleSendOtp, child: const Text("Send OTP")),
         if (_state == ApprovalState.denied)
           ElevatedButton(
             onPressed: () {
-              SharedPreferences.getInstance().then(
-                (prefs) => prefs.remove('pending_id'),
-              );
+              SharedPreferences.getInstance().then((prefs) => prefs.remove('pending_id'));
               Navigator.of(context).pop();
             },
             child: const Text("Try Signup Again"),
           ),
-        if (_state == ApprovalState.error)
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Go Back"),
-          ),
+        if (_state == ApprovalState.error) TextButton(onPressed: () => Navigator.pop(context), child: const Text("Go Back")),
       ],
     );
   }

@@ -76,28 +76,29 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> verifyOtp({required String identifier, required String otp}) async {
     try {
-      final response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.sms);
-
+      AuthResponse response;
+      try {
+        response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.phoneChange);
+      } on AuthException catch (e) {
+        if (kDebugMode) {
+          print("phoneChange verification failed, attempting standard sms fallback: ${e.message}");
+        }
+        response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.sms);
+      }
       if (response.user != null) {
         int retryCount = 0;
         bool profileExists = false;
-
         while (retryCount < 3 && !profileExists) {
           final profile = await _supabase.from('profiles').select().eq('id', response.user!.id).maybeSingle();
-
           if (profile != null) {
             profileExists = true;
             break;
           }
-
-          await Future.delayed(Duration(seconds: 1));
+          await Future.delayed(const Duration(seconds: 1));
           retryCount++;
         }
-
-        if (!profileExists) {
-          if (kDebugMode) {
-            print("Warning: Profile record still not found after retries.");
-          }
+        if (!profileExists && kDebugMode) {
+          print("Warning: Profile record still not found after retries.");
         }
       }
     } on AuthException catch (e) {
@@ -191,7 +192,7 @@ class AuthRepositoryImpl implements AuthRepository {
     if (user == null) throw Exception("No authenticated user found.");
 
     final String role = (user.userMetadata?['role'] ?? '').toString().toLowerCase();
-    final bool isAdmin = role == 'admin';
+    final bool isAdmin = role == 'Admin';
 
     final Map<String, dynamic> updateData = {
       'first_name': firstName.trim(),

@@ -133,6 +133,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     if (_pendingId == null) return;
     _dismissSnackBar();
 
+    if (AppConfig.useDevBypass) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pending_id');
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OtpVerificationScreen(

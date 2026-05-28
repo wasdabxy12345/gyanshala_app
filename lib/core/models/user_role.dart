@@ -1,12 +1,12 @@
 enum UserRole {
-  mentor,
+  shikshaMitra,
   seniorMentor,
   admin;
 
   static UserRole fromString(String? value) {
     return UserRole.values.firstWhere(
       (role) => role.name.toLowerCase() == value?.toLowerCase(),
-      orElse: () => UserRole.mentor,
+      orElse: () => UserRole.shikshaMitra,
     );
   }
 }
@@ -14,12 +14,12 @@ enum UserRole {
 extension UserRoleLabel on UserRole {
   String get label {
     switch (this) {
-      case UserRole.mentor:
-        return 'mentor';
+      case UserRole.shikshaMitra:
+        return 'Shiksha Mitra';
       case UserRole.seniorMentor:
-        return 'seniorMentor';
+        return 'Senior Mentor';
       case UserRole.admin:
-        return 'admin';
+        return 'Admin';
     }
   }
 }

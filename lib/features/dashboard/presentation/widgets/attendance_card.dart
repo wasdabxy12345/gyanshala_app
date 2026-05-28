@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/mentor%20attendance/presentation/controller/mentor_attendance_controller.dart';
+import 'package:gyanshala_app/features/employees/presentation/controller/employee_attendance_controller.dart';
 
 class AttendanceCard extends ConsumerWidget {
   const AttendanceCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final attendanceState = ref.watch(mentorAttendanceProvider);
+    final attendanceState = ref.watch(employeeAttendanceProvider);
     final bool isCheckedIn = attendanceState.value ?? false;
     final bool isLoading = attendanceState.isLoading;
     return Card(
@@ -50,7 +50,7 @@ class AttendanceCard extends ConsumerWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, maxWidth: 100),
                 child: ElevatedButton(
-                  onPressed: isLoading ? null : () => ref.read(mentorAttendanceProvider.notifier).processCheckIn(),
+                  onPressed: isLoading ? null : () => ref.read(employeeAttendanceProvider.notifier).processCheckIn(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isCheckedIn ? Colors.red : Colors.blue,
                     foregroundColor: Colors.white,

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
-import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_mentor_dashboard_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/shiksha_mitra_dashboard_screen.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
@@ -43,16 +44,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       Widget nextScreen;
-      switch (user.role) {
-        case 'admin':
+      final userRole = UserRole.fromString(user.role);
+      switch (userRole) {
+        case UserRole.admin:
           nextScreen = AdminDashboardScreen(adminName: name);
           break;
-        case 'seniorMentor':
+        case UserRole.seniorMentor:
           nextScreen = SeniorMentorDashboardScreen(seniorMentorName: name);
           break;
-        case 'mentor':
-        default:
-          nextScreen = MentorDashboardScreen(mentorName: name);
+        case UserRole.shikshaMitra:
+          nextScreen = ShikshaMitraDashboardScreen(shikshaMitraName: name);
           break;
       }
 

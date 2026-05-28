@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@supabase/functions-js": "jsr:@supabase/functions-js@^2",
+    "standardwebhooks": "https://esm.sh/standardwebhooks@1.0.0",
+    "std/server": "https://deno.land/std@0.168.0/http/server.ts"
+  }
+}

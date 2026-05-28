@@ -11,8 +11,7 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() =>
-      _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -31,12 +30,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
     try {
       final identifier = _phoneController.text.trim();
-      await ref
-          .read(authRepositoryProvider)
-          .sendOtp(
-            identifier: _phoneController.text.trim(),
-            requireApprovedSignup: false,
-          );
+      if (AppConfig.useDevBypass) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => ResetPasswordScreen(
+              identifier: identifier,
+              title: 'Reset Password',
+              subtitle: 'Create a new password for your account',
+              successMessage: 'Password reset successful',
+            ),
+          ),
+        );
+        return;
+      }
+      await ref.read(authRepositoryProvider).sendOtp(identifier: identifier, requireApprovedSignup: false);
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -61,9 +69,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
     }
   }
 
@@ -79,10 +85,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
+              decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
               validator: (value) {
                 final phone = value?.trim() ?? '';
                 if (phone.isEmpty) {
@@ -97,10 +100,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _onGenerateOtpPressed,
-                child: const Text('Generate OTP'),
-              ),
+              child: ElevatedButton(onPressed: _onGenerateOtpPressed, child: const Text('Generate OTP')),
             ),
           ],
         ),

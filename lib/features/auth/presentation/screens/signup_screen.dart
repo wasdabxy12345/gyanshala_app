@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
+import 'otp_verification_screen.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -30,7 +31,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.mentor;
+  UserRole _selectedRole = UserRole.shikshaMitra;
 
   final List<LocationItem> _clusters = [];
   final List<LocationItem> _villages = [];
@@ -101,7 +102,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             lastName: _lastNameController.text.trim(),
             identifier: _phoneController.text.trim(),
             password: _passwordController.text,
-            role: _selectedRole.label,
+            role: _selectedRole.name,
             pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
             cluster: clusterName,
@@ -113,11 +114,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       await prefs.setString('pending_id', _phoneController.text.trim());
 
       if (!mounted) return;
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
-        (route) => false,
-      );
+      if (AppConfig.useDevBypass) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(
+              identifier: _phoneController.text.trim(),
+              title: 'Verify OTP',
+              subtitle: 'Enter the verification code sent to your device',
+              onVerified: () async {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
+                  (route) => false,
+                );
+              },
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
@@ -126,7 +144,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMentorType = _selectedRole == UserRole.mentor || _selectedRole == UserRole.seniorMentor;
+    final isNotAdmin = _selectedRole == UserRole.shikshaMitra || _selectedRole == UserRole.seniorMentor;
 
     return AuthShell(
       title: 'Signup',
@@ -189,7 +207,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
             const SizedBox(height: 14),
 
-            if (isMentorType) ...[
+            if (isNotAdmin) ...[
               TextFormField(
                 controller: _qualificationController,
                 decoration: const InputDecoration(labelText: 'Qualification *', prefixIcon: Icon(Icons.school_outlined)),

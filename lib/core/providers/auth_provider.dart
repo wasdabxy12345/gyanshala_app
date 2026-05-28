@@ -5,10 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_provider.dart';
 
+class AppConfig {
+  // enable/disable otp bypass
+  static const bool useDevBypass = true;
+}
+
 final authStateProvider = StreamProvider<User?>((ref) {
-  return Supabase.instance.client.auth.onAuthStateChange.map(
-    (event) => event.session?.user,
-  );
+  return Supabase.instance.client.auth.onAuthStateChange.map((event) => event.session?.user);
 });
 
 final currentUserProvider = Provider<User?>((ref) {

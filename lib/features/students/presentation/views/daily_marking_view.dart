@@ -189,10 +189,15 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
     setState(() => _isLoading = true);
 
     final dateStr = DateFormat('yyyy-MM-dd').format(widget.date);
-    final mentorId = Supabase.instance.client.auth.currentUser?.id;
+    final shikshaMitraId = Supabase.instance.client.auth.currentUser?.id;
 
     final List<Map<String, dynamic>> records = statusMap.entries.map((e) {
-      return {'student_id': e.key, 'date': dateStr, 'status': e.value == 'P' ? 'present' : 'absent', 'mentor_id': mentorId};
+      return {
+        'student_id': e.key,
+        'date': dateStr,
+        'status': e.value == 'P' ? 'present' : 'absent',
+        'shiksha_mitra_id': shikshaMitraId,
+      };
     }).toList();
 
     final success = await ref.read(studentProvider.notifier).submitAttendance(records);

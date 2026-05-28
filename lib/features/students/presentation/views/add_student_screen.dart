@@ -47,11 +47,16 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
 
   Future<void> _loadClusters() async {
     setState(() => _isLoadingLocations = true);
-    final clusters = await ref.read(studentProvider.notifier).getClusters();
-    setState(() {
-      _clusters = clusters;
-      _isLoadingLocations = false;
-    });
+    try {
+      final clusters = await ref.read(studentProvider.notifier).getClusters();
+      setState(() {
+        _clusters = clusters;
+      });
+    } catch (e) {
+      _showErrorSnackBar('Failed to load clusters: ${e.toString()}');
+    } finally {
+      setState(() => _isLoadingLocations = false);
+    }
   }
 
   Future<void> _onClusterChanged(String? clusterId) async {
@@ -65,10 +70,14 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     });
 
     if (clusterId != null) {
-      final villages = await ref.read(studentProvider.notifier).getVillages(clusterId);
-      setState(() {
-        _villages = villages;
-      });
+      try {
+        final villages = await ref.read(studentProvider.notifier).getVillages(clusterId);
+        setState(() {
+          _villages = villages;
+        });
+      } catch (e) {
+        _showErrorSnackBar('Failed to load villages: ${e.toString()}');
+      }
     }
     setState(() => _isLoadingLocations = false);
   }
@@ -82,12 +91,28 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     });
 
     if (villageId != null) {
-      final schools = await ref.read(studentProvider.notifier).getSchools(villageId);
-      setState(() {
-        _schools = schools;
-      });
+      try {
+        final schools = await ref.read(studentProvider.notifier).getSchools(villageId);
+        setState(() {
+          _schools = schools;
+        });
+      } catch (e) {
+        _showErrorSnackBar('Failed to load schools: ${e.toString()}');
+      }
     }
     setState(() => _isLoadingLocations = false);
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade800,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ),
+    );
   }
 
   @override
@@ -195,28 +220,38 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-    final selectedCluster = _clusters.firstWhere((c) => c['id'] == _selectedClusterId);
-    final selectedVillage = _villages.firstWhere((v) => v['id'] == _selectedVillageId);
-    final selectedSchool = _schools.firstWhere((s) => s['id'] == _selectedSchoolId);
-    final success = await ref
-        .read(studentProvider.notifier)
-        .registerStudent(
-          firstName: _firstNameController.text.trim(),
-          lastName: _lastNameController.text.trim(),
-          studentId: _idController.text.trim(),
-          gender: _selectedGender,
-          grade: _selectedGrade,
-          clusterId: _selectedClusterId!,
-          clusterName: selectedCluster['name'],
-          villageId: _selectedVillageId!,
-          villageName: selectedVillage['name'],
-          schoolId: _selectedSchoolId!,
-          schoolName: selectedSchool['name'],
-        );
-    if (!mounted) return;
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student Registered!')));
-      Navigator.pop(context, true);
+
+    try {
+      final selectedCluster = _clusters.firstWhere((c) => c['id'].toString() == _selectedClusterId);
+      final selectedVillage = _villages.firstWhere((v) => v['id'].toString() == _selectedVillageId);
+      final selectedSchool = _schools.firstWhere((s) => s['id'].toString() == _selectedSchoolId);
+
+      final success = await ref
+          .read(studentProvider.notifier)
+          .registerStudent(
+            firstName: _firstNameController.text.trim(),
+            lastName: _lastNameController.text.trim(),
+            studentId: _idController.text.trim(),
+            gender: _selectedGender,
+            grade: _selectedGrade,
+            clusterId: _selectedClusterId!,
+            clusterName: selectedCluster['name'],
+            villageId: _selectedVillageId!,
+            villageName: selectedVillage['name'],
+            schoolId: _selectedSchoolId!,
+            schoolName: selectedSchool['name'],
+          );
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student Registered Successfully!')));
+        Navigator.pop(context, true);
+      } else {
+        _showErrorSnackBar('Registration failed. Check database permissions or properties.');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error: ${e.toString()}');
     }
   }
 
@@ -227,19 +262,24 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import successful!')));
     } catch (e) {
       String msg = e.toString();
+
       if (msg.contains("CONFLICT:")) {
         final conflictString = msg.substring(msg.indexOf("CONFLICT:") + 9);
-
         final parts = conflictString.split("|");
         if (parts.length < 3) return;
 
-        jsonDecode(parts.sublist(2).join("|"));
-
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => ConflictWorkspaceDialog(conflictRawString: msg),
-        );
+        try {
+          jsonDecode(parts.sublist(2).join("|"));
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => ConflictWorkspaceDialog(conflictRawString: msg),
+          );
+        } catch (_) {
+          _showErrorSnackBar('Conflict found, but data is malformed.');
+        }
+      } else {
+        _showErrorSnackBar('Excel Import Failed: $msg');
       }
     }
   }

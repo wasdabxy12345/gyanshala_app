@@ -27,7 +27,7 @@ class UserModel {
       phone: json['phone'] as String,
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
-      role: json['role'] as String? ?? 'mentor',
+      role: json['role'] as String? ?? 'Shiksha Mitra',
       qualification: json['qualification'] as String?,
       village: json['village'] as String?,
       cluster: json['cluster'] as String?,

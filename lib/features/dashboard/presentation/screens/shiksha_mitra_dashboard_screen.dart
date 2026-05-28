@@ -5,9 +5,9 @@ import 'package:gyanshala_app/features/settings/presentation/views/settings_scre
 import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
-class SeniorMentorDashboardScreen extends ConsumerWidget {
-  final String seniorMentorName;
-  const SeniorMentorDashboardScreen({super.key, required this.seniorMentorName});
+class ShikshaMitraDashboardScreen extends ConsumerWidget {
+  final String shikshaMitraName;
+  const ShikshaMitraDashboardScreen({super.key, required this.shikshaMitraName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,14 +25,14 @@ class SeniorMentorDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: HomeContent(seniorMentorName: seniorMentorName),
+      body: HomeContent(shikshaMitraName: shikshaMitraName),
     );
   }
 }
 
 class HomeContent extends StatelessWidget {
-  final String seniorMentorName;
-  const HomeContent({super.key, required this.seniorMentorName});
+  final String shikshaMitraName;
+  const HomeContent({super.key, required this.shikshaMitraName});
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +42,7 @@ class HomeContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Welcome, ${seniorMentorName}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text("Welcome, ${shikshaMitraName}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             SizedBox(height: 20),
             AttendanceCard(),
             SizedBox(height: 24),

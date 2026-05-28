@@ -39,7 +39,7 @@ class StudentController extends StateNotifier<bool> {
         params: {
           'p_start_date': start.toIso8601String().split('T')[0],
           'p_end_date': end.toIso8601String().split('T')[0],
-          'p_mentor_id': _client.auth.currentUser?.id,
+          'p_shiksha_mitra_id': _client.auth.currentUser?.id,
         },
       );
       return List<Map<String, dynamic>>.from(response);
@@ -79,7 +79,7 @@ class StudentController extends StateNotifier<bool> {
         'student_id_custom': studentId,
         'gender': gender,
         'grade': grade,
-        'mentor_id': user.id,
+        'shiksha_mitra_id': user.id,
         'cluster': clusterName,
         'village': villageName,
         'school': schoolName,
@@ -103,7 +103,7 @@ class StudentController extends StateNotifier<bool> {
       final data = await _client
           .from('students')
           .select('*')
-          .eq('mentor_id', user?.id ?? '')
+          .eq('shiksha_mitra_id', user?.id ?? '')
           .order('first_name', ascending: true);
       return List<Map<String, dynamic>>.from(data);
     } catch (e) {
@@ -198,7 +198,7 @@ class StudentController extends StateNotifier<bool> {
       final existingStudents = await _client
           .from('students')
           .select('student_id_custom, first_name, last_name, gender, grade, cluster, village, school')
-          .eq('mentor_id', user.id);
+          .eq('shiksha_mitra_id', user.id);
 
       List<Map<String, dynamic>> newStudents = [];
       List<Map<String, dynamic>> conflictingStudents = [];
@@ -292,7 +292,7 @@ class StudentController extends StateNotifier<bool> {
             'last_name': lName,
             'gender': finalGender,
             'grade': finalGrade,
-            'mentor_id': user.id,
+            'shiksha_mitra_id': user.id,
             'cluster': excelCluster,
             'village': excelVillage,
             'school': excelSchool,
