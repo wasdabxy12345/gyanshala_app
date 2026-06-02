@@ -183,10 +183,24 @@ class StudentController extends StateNotifier<bool> {
   }
 
   Future<void> importStudentsFromExcel() async {
-    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls'],
+      withData: true,
+    );
     if (result == null) return;
     try {
-      final bytes = File(result.files.first.path!).readAsBytesSync();
+      final platformFile = result.files.first;
+      List<int> bytes;
+      if (platformFile.bytes != null) {
+        // This path runs on Web and small desktop uploads
+        bytes = platformFile.bytes!;
+      } else if (platformFile.path != null) {
+        // This path runs on Mobile/Desktop
+        bytes = File(platformFile.path!).readAsBytesSync();
+      } else {
+        throw Exception("Could not read file data contents.");
+      }
       final excel = Excel.decodeBytes(bytes);
       final user = _client.auth.currentUser;
       if (user == null) return;

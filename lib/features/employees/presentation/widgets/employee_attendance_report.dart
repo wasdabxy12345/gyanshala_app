@@ -2,7 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/attendance_details_page.dart';
 import 'package:intl/intl.dart';
+
+// Import your new details page here (Adjust path as needed)
+// import 'attendance_details_page.dart';
 
 class EmployeeAttendanceReportTab extends ConsumerStatefulWidget {
   final String searchQuery;
@@ -26,9 +30,10 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
     final employees = (employeesResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
+    // 1. UPDATED: Added 'id' to the select query so we can pass it to the details page
     final attendanceResponse = await supabase
         .from('attendance')
-        .select('user_id, status, recorded_at, school_id, schools(name)')
+        .select('id, user_id, status, recorded_at, school_id, schools(name)')
         .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
         .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String());
     final attendanceRecords = (attendanceResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
@@ -45,6 +50,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
     for (final record in attendanceRecords) {
       final userId = record['user_id'];
       final status = record['status'];
+      final recordId = record['id']; // Captured ID
       final recordedAt = DateTime.parse(record['recorded_at']).toUtc();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
       final schoolData = record['schools'];
@@ -53,7 +59,8 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
       if (employeeData.containsKey(userId)) {
         final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
         if (status == 'check_in') {
-          currentMap[dateKey] = {'status': 'present', 'location': schoolName};
+          // 1. UPDATED: Passing the record ID into the UI data map
+          currentMap[dateKey] = {'id': recordId, 'status': 'present', 'location': schoolName};
         }
       }
     }
@@ -103,8 +110,8 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
             final attMap = (m['attendance_map'] as dynamic ?? {}) is Map
                 ? Map<String, dynamic>.from(m['attendance_map'] as Map)
                 : <String, dynamic>{};
-            final status = attMap[key];
-            return status == 'check_in' || status == 'present';
+            final statusData = attMap[key];
+            return statusData != null && (statusData['status'] == 'present');
           }).length;
           grandTotalPresent += count;
           return DataCell(
@@ -202,28 +209,44 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                               final holiday = _isHoliday(d);
                               final isPresent = record != null && record['status'] == 'present';
                               final location = record != null ? record['location'] : "";
+                              final recordId = record != null ? record['id'] : null;
+
                               if (!holiday && isPresent) {
                                 presentCount++;
                               }
 
                               return DataCell(
                                 Tooltip(
-                                  message: isPresent ? "Location: $location" : "No record",
-                                  child: Container(
-                                    width: 35,
-                                    color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.orange[100] : null),
-                                    alignment: Alignment.center,
-                                    child: holiday
-                                        ? const Text("-")
-                                        : Text(
-                                            isPresent ? 'P' : '-',
-                                            style: TextStyle(
-                                              color: isPresent
-                                                  ? (location == "off-site" ? Colors.orange : Colors.green)
-                                                  : Colors.red,
-                                              fontWeight: FontWeight.bold,
+                                  message: isPresent ? "Location: $location\nClick to view details" : "No record",
+                                  child: InkWell(
+                                    // 2. UPDATED: Wrap cell container with InkWell for click action
+                                    onTap: isPresent && recordId != null
+                                        ? () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => AttendanceDetailsPage(attendanceId: recordId),
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                    child: Container(
+                                      width: 35,
+                                      height: double.infinity,
+                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.orange[100] : null),
+                                      alignment: Alignment.center,
+                                      child: holiday
+                                          ? const Text("-")
+                                          : Text(
+                                              isPresent ? 'P' : '-',
+                                              style: TextStyle(
+                                                color: isPresent
+                                                    ? (location == "off-site" ? Colors.orange : Colors.green)
+                                                    : Colors.red,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
-                                          ),
+                                    ),
                                   ),
                                 ),
                               );

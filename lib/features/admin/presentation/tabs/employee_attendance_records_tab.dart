@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../employees/presentation/widgets/employee_attendance_report_tab.dart';
+import '../../../employees/presentation/widgets/employee_attendance_report.dart';
 
 class EmployeeAttendanceRecordsTab extends StatelessWidget {
   final DateTimeRange range;

@@ -7,8 +7,6 @@ class ExcelWebParser {
     try {
       final excel = Excel.decodeBytes(bytes);
       if (excel.tables.isEmpty) return [];
-
-      // Get the first sheet
       final firstSheetName = excel.tables.keys.first;
       final table = excel.tables[firstSheetName];
       if (table == null) return [];
