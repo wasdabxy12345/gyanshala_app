@@ -5,9 +5,6 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/attendance_details_page.dart';
 import 'package:intl/intl.dart';
 
-// Import your new details page here (Adjust path as needed)
-// import 'attendance_details_page.dart';
-
 class EmployeeAttendanceReportTab extends ConsumerStatefulWidget {
   final String searchQuery;
   final DateTime startDate;
@@ -30,18 +27,19 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
     final employees = (employeesResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-    // 1. UPDATED: Added 'id' to the select query so we can pass it to the details page
     final attendanceResponse = await supabase
         .from('attendance')
         .select('id, user_id, status, recorded_at, school_id, schools(name)')
         .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
         .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String());
+
     final attendanceRecords = (attendanceResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
     Map<String, Map<String, dynamic>> employeeData = {};
 
     for (final employee in employees) {
       employeeData[employee['id']] = {
+        'user_id': employee['id'], // ✅ SAVED USER ID FOR NAV ROUTING
         'full_name': "${employee['first_name']} ${employee['last_name']}",
         'attendance_map': <String, dynamic>{},
       };
@@ -50,7 +48,6 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
     for (final record in attendanceRecords) {
       final userId = record['user_id'];
       final status = record['status'];
-      final recordId = record['id']; // Captured ID
       final recordedAt = DateTime.parse(record['recorded_at']).toUtc();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
       final schoolData = record['schools'];
@@ -58,12 +55,15 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
       if (employeeData.containsKey(userId)) {
         final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
-        if (status == 'check_in') {
-          // 1. UPDATED: Passing the record ID into the UI data map
-          currentMap[dateKey] = {'id': recordId, 'status': 'present', 'location': schoolName};
+
+        // If a check_in exists, mark present. If a checkout comes later, it maintains status
+        // but lets us map activity tracking back cleanly.
+        if (status == 'check_in' || !currentMap.containsKey(dateKey)) {
+          currentMap[dateKey] = {'status': 'present', 'location': schoolName};
         }
       }
     }
+
     if (kDebugMode) {
       print("Fetched ${attendanceRecords.length} records for range: ${widget.startDate} to ${widget.endDate}");
     }
@@ -199,6 +199,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                             ? Map<String, dynamic>.from(employee['attendance_map'] as Map)
                             : <String, dynamic>{};
                         int presentCount = 0;
+                        final String targetUserId = employee['user_id'] ?? '';
 
                         return DataRow(
                           cells: [
@@ -209,7 +210,6 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                               final holiday = _isHoliday(d);
                               final isPresent = record != null && record['status'] == 'present';
                               final location = record != null ? record['location'] : "";
-                              final recordId = record != null ? record['id'] : null;
 
                               if (!holiday && isPresent) {
                                 presentCount++;
@@ -219,13 +219,14 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                 Tooltip(
                                   message: isPresent ? "Location: $location\nClick to view details" : "No record",
                                   child: InkWell(
-                                    // 2. UPDATED: Wrap cell container with InkWell for click action
-                                    onTap: isPresent && recordId != null
+                                    onTap: isPresent && targetUserId.isNotEmpty
                                         ? () {
+                                            // ✅ FIXED NAVIGATION ROUTING
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (context) => AttendanceDetailsPage(attendanceId: recordId),
+                                                builder: (context) =>
+                                                    AttendanceDetailsPage(userId: targetUserId, dateString: key),
                                               ),
                                             );
                                           }

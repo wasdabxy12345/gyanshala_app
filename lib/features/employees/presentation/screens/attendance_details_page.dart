@@ -7,31 +7,31 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:intl/intl.dart';
 
 class AttendanceDetailsPage extends ConsumerWidget {
-  final String attendanceId;
-
-  const AttendanceDetailsPage({super.key, required this.attendanceId});
-
-  Future<Map<String, dynamic>> _fetchAttendanceRecordDetails(WidgetRef ref) async {
+  final String userId;
+  final String dateString;
+  const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
+  Future<List<Map<String, dynamic>>> _fetchDailyAttendanceLogs(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
-
     try {
-      final attendanceResponse = await supabase.from('attendance').select('*, schools(name)').eq('id', attendanceId).single();
-
-      final attendanceData = Map<String, dynamic>.from(attendanceResponse);
-      final userId = attendanceData['user_id'];
-
-      if (userId != null) {
+      final response = await supabase
+          .from('attendance')
+          .select('*, schools(name)')
+          .eq('user_id', userId)
+          .gte('recorded_at', '$dateString 00:00:00+00')
+          .lte('recorded_at', '$dateString 23:59:59+00')
+          .order('recorded_at', ascending: true);
+      final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(response);
+      if (logs.isNotEmpty) {
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
-
-          attendanceData['profiles'] = profileResponse;
+          for (var log in logs) {
+            log['profiles'] = profileResponse;
+          }
         } catch (profileError) {
           debugPrint("Profile Fetch Error: $profileError");
-          attendanceData['profiles'] = null;
         }
       }
-
-      return attendanceData;
+      return logs;
     } catch (e, stackTrace) {
       debugPrint("Database Exception in AttendanceDetailsPage: $e");
       debugPrint("Stacktrace: $stackTrace");
@@ -39,12 +39,47 @@ class AttendanceDetailsPage extends ConsumerWidget {
     }
   }
 
+  String _calculateTotalHours(List<Map<String, dynamic>> logs) {
+    Map<String, dynamic>? checkInLog;
+    Map<String, dynamic>? checkOutLog;
+    for (var log in logs) {
+      if (log['status'] == 'check_in' && checkInLog == null) {
+        checkInLog = log;
+      }
+      if (log['status'] == 'check_out') {
+        checkOutLog = log;
+      }
+    }
+    if (checkInLog != null && checkOutLog != null) {
+      final start = DateTime.parse(checkInLog['recorded_at']);
+      final end = DateTime.parse(checkOutLog['recorded_at']);
+      final difference = end.difference(start);
+
+      final hours = difference.inHours;
+      final minutes = difference.inMinutes.remainder(60);
+      final seconds = difference.inSeconds.remainder(60);
+
+      if (hours > 0) {
+        return "$hours hr $minutes min";
+      } else if (minutes > 0) {
+        return "$minutes min $seconds sec";
+      } else {
+        return "$seconds sec";
+      }
+    }
+    return "Incomplete Cycle";
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Attendance Details'), backgroundColor: Colors.indigo, foregroundColor: Colors.white),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchAttendanceRecordDetails(ref),
+      appBar: AppBar(
+        title: const Text('Daily Attendance Summary'),
+        backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _fetchDailyAttendanceLogs(ref),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -55,7 +90,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  'Failed to load details.\nError: ${snapshot.error}',
+                  'Error loading details:\n${snapshot.error}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.red),
                 ),
@@ -63,28 +98,19 @@ class AttendanceDetailsPage extends ConsumerWidget {
             );
           }
 
-          if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text('No details available for this record.'));
+          final logs = snapshot.data ?? [];
+          if (logs.isEmpty) {
+            return const Center(child: Text('No details available for this day.'));
           }
 
-          final data = snapshot.data!;
-          final profile = data['profiles'] as Map<String, dynamic>?;
-          final school = data['schools'] as Map<String, dynamic>?;
-
+          final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null
               ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
               : "Unknown Employee";
-
           final role = profile?['role'] ?? 'N/A';
-          final recordedAtRaw = data['recorded_at'];
-          final parsedDate = recordedAtRaw != null ? DateTime.parse(recordedAtRaw).toLocal() : DateTime.now();
 
-          final double? lat = data['latitude'] != null ? double.tryParse(data['latitude'].toString()) : null;
-          final double? lng = data['longitude'] != null ? double.tryParse(data['longitude'].toString()) : null;
-          LatLng? checkInLocation;
-          if (lat != null && lng != null) {
-            checkInLocation = LatLng(lat, lng);
-          }
+          final formattedDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(logs.first['recorded_at']).toLocal());
+          final totalHours = _calculateTotalHours(logs);
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -98,43 +124,41 @@ class AttendanceDetailsPage extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          employeeName.isEmpty ? "Unknown Employee" : employeeName,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
+                        Text(employeeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
                         const Divider(height: 24),
-
-                        _buildDetailRow(Icons.calendar_today, "Date", DateFormat('dd MMMM yyyy').format(parsedDate)),
-                        _buildDetailRow(Icons.access_time, "Time", DateFormat('hh:mm a').format(parsedDate)),
-                        _buildDetailRow(Icons.check_circle, "Status", data['status']?.toString().toUpperCase() ?? 'N/A'),
-                        _buildDetailRow(Icons.school, "School/Location", school?['name'] ?? "Off-site"),
-
+                        _buildDetailRow(Icons.calendar_today, "Date Summary", formattedDate),
+                        _buildDetailRow(Icons.timelapse, "Total Time Active", totalHours, valueColor: Colors.teal.shade700),
                         const Divider(height: 24),
-
-                        if (checkInLocation != null) ...[
-                          AttendanceMapView(location: checkInLocation, employeeName: employeeName),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailRow(Icons.location_on, "Latitude", "$lat")),
-                              Expanded(child: _buildDetailRow(Icons.location_on, "Longitude", "$lng")),
-                            ],
-                          ),
-                        ] else ...[
-                          Container(
-                            height: 120,
-                            width: double.infinity,
-                            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-                            child: const Center(
-                              child: Text(
-                                "No GPS Coordinates Captured for this Record",
-                                style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                              ),
+                        const Text(
+                          "Activity Timeline",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+                        ...logs.map((log) {
+                          final isCheckIn = log['status'] == 'check_in';
+                          final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
+                          final schoolName = log['schools']?['name'] ?? "Off-site Location";
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
+                              color: isCheckIn ? Colors.green : Colors.orange,
                             ),
-                          ),
-                        ],
+                            title: Text(
+                              isCheckIn ? "Checked In" : "Checked Out",
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(schoolName),
+                            trailing: Text(
+                              timeStr,
+                              style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w500),
+                            ),
+                          );
+                        }),
+                        const Divider(height: 24),
+                        AttendanceMultiMapView(logs: logs, employeeName: employeeName),
                       ],
                     ),
                   ),
@@ -147,7 +171,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Widget _buildDetailRow(IconData icon, String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
@@ -158,7 +182,10 @@ class AttendanceDetailsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              Text(
+                value,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: valueColor),
+              ),
             ],
           ),
         ],
@@ -167,20 +194,83 @@ class AttendanceDetailsPage extends ConsumerWidget {
   }
 }
 
-class AttendanceMapView extends StatefulWidget {
-  final LatLng location;
+class AttendanceMultiMapView extends StatefulWidget {
+  final List<Map<String, dynamic>> logs;
   final String employeeName;
 
-  const AttendanceMapView({super.key, required this.location, required this.employeeName});
+  const AttendanceMultiMapView({super.key, required this.logs, required this.employeeName});
 
   @override
-  State<AttendanceMapView> createState() => _AttendanceMapViewState();
+  State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
 }
 
-class _AttendanceMapViewState extends State<AttendanceMapView> {
+class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   MapType _mapType = MapType.normal;
   int _mapRefreshKey = 0;
-  GoogleMapController? _mapController; // Linter warning resolved below!
+  GoogleMapController? _mapController;
+
+  final Set<Marker> _markers = {};
+  final Set<Polyline> _polylines = {};
+  LatLngBounds? _mapBounds;
+
+  @override
+  void initState() {
+    super.initState();
+    _processGeometries();
+  }
+
+  void _processGeometries() {
+    List<LatLng> tracePoints = [];
+
+    for (var log in widget.logs) {
+      final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
+      final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+
+      if (lat != null && lng != null) {
+        final point = LatLng(lat, lng);
+        tracePoints.add(point);
+
+        final bool isCheckIn = log['status'] == 'check_in';
+        _markers.add(
+          Marker(
+            markerId: MarkerId(log['id'].toString()),
+            position: point,
+            icon: BitmapDescriptor.defaultMarkerWithHue(isCheckIn ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange),
+            infoWindow: InfoWindow(
+              title: isCheckIn ? "Check-In Point" : "Check-Out Point",
+              snippet: DateFormat('hh:mm a').format(DateTime.parse(log['recorded_at']).toLocal()),
+            ),
+          ),
+        );
+      }
+    }
+    if (tracePoints.length > 1) {
+      _polylines.add(
+        Polyline(
+          polylineId: const PolylineId('route_trace'),
+          points: tracePoints,
+          color: Colors.indigo.withValues(alpha: 0.7),
+          width: 4,
+        ),
+      );
+    }
+    if (tracePoints.isNotEmpty) {
+      double minLat = tracePoints.first.latitude;
+      double maxLat = tracePoints.first.latitude;
+      double minLng = tracePoints.first.longitude;
+      double maxLng = tracePoints.first.longitude;
+      for (var p in tracePoints) {
+        if (p.latitude < minLat) minLat = p.latitude;
+        if (p.latitude > maxLat) maxLat = p.latitude;
+        if (p.longitude < minLng) minLng = p.longitude;
+        if (p.longitude > maxLng) maxLng = p.longitude;
+      }
+      _mapBounds = LatLngBounds(
+        southwest: LatLng(minLat - 0.001, minLng - 0.001),
+        northeast: LatLng(maxLat + 0.001, maxLng + 0.001),
+      );
+    }
+  }
 
   Widget _buildMapTypeButton({required IconData icon, required String label, required MapType type, VoidCallback? onRefresh}) {
     final bool isSelected = _mapType == type;
@@ -246,7 +336,6 @@ class _AttendanceMapViewState extends State<AttendanceMapView> {
             const SizedBox(width: 4),
             IconButton(
               icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
-              tooltip: expanded ? "Exit Fullscreen" : "Fullscreen View",
               onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
             ),
           ],
@@ -255,25 +344,23 @@ class _AttendanceMapViewState extends State<AttendanceMapView> {
     );
   }
 
-  Widget _buildBaseMapWidget({bool isExpanded = false}) {
+  Widget _buildBaseMapWidget() {
+    if (_markers.isEmpty) return const SizedBox();
+
     return GoogleMap(
-      key: ValueKey('attendance_map_${isExpanded ? "exp" : "base"}_${_mapRefreshKey}_${_mapType.name}'),
+      key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
-      initialCameraPosition: CameraPosition(target: widget.location, zoom: 16.0),
-      markers: {
-        Marker(
-          markerId: const MarkerId('checkInPoint'),
-          position: widget.location,
-          infoWindow: InfoWindow(title: widget.employeeName, snippet: "Checked-in here"),
-        ),
-      },
+      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 15.0),
+      markers: _markers,
+      polylines: _polylines,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
       gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
       onMapCreated: (controller) {
         _mapController = controller;
-        // USING IT HERE: Automatically centers camera position contextually on compile initialization
-        _mapController?.animateCamera(CameraUpdate.newLatLngZoom(widget.location, 16.0));
+        if (_mapBounds != null) {
+          _mapController?.animateCamera(CameraUpdate.newLatLngBounds(_mapBounds!, 50));
+        }
       },
     );
   }
@@ -284,30 +371,26 @@ class _AttendanceMapViewState extends State<AttendanceMapView> {
         opaque: false,
         barrierDismissible: true,
         pageBuilder: (_, _, _) {
-          return StatefulBuilder(
-            builder: (context, dialogSetState) {
-              return Scaffold(
-                backgroundColor: Colors.black.withValues(alpha: 0.3),
-                body: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Material(
-                      elevation: 12,
-                      child: Column(
-                        children: [
-                          Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            child: _buildMapHeader(expanded: true, onRefresh: () => dialogSetState(() {})),
-                          ),
-                          Expanded(child: _buildBaseMapWidget(isExpanded: true)),
-                        ],
+          return Scaffold(
+            backgroundColor: Colors.black38,
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Material(
+                  elevation: 12,
+                  child: Column(
+                    children: [
+                      Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: _buildMapHeader(expanded: true, onRefresh: () => setState(() {})),
                       ),
-                    ),
+                      Expanded(child: _buildBaseMapWidget()),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           );
         },
       ),
@@ -317,20 +400,21 @@ class _AttendanceMapViewState extends State<AttendanceMapView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_markers.isEmpty) return const SizedBox();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildMapHeader(),
         const SizedBox(height: 8),
         Container(
-          height: 220,
+          height: 250,
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey.shade300),
           ),
           clipBehavior: Clip.antiAlias,
-          child: _buildBaseMapWidget(isExpanded: false),
+          child: _buildBaseMapWidget(),
         ),
       ],
     );
