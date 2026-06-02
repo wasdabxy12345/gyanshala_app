@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:gyanshala_app/features/admin/presentation/widgets/boundary_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LocationManagementScreen extends StatefulWidget {
@@ -25,7 +24,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
-
   @override
   void initState() {
     super.initState();
@@ -246,12 +244,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    BoundaryPicker(
-                      onBoundaryChanged: (points) {
-                        schoolBoundary = points;
-                      },
-                    ),
-                    const SizedBox(height: 16),
                   ],
                   if (type == 'Village' || type == 'School')
                     DropdownButtonFormField<String>(
@@ -501,49 +493,36 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   List<String> _getUniqueValues(int columnIndex) {
     final Set<String> values = {};
-
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-
-      // Respect selected cluster filter
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
         continue;
       }
-
       if (columnIndex == 0) {
         values.add(clusterName);
       }
-
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-
-        // Respect selected village filter
         if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) {
           continue;
         }
-
         if (columnIndex == 1) {
           values.add(villageName);
         }
-
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
-
           if (columnIndex == 2) {
             values.add(schoolName);
           }
         }
       }
     }
-
     return values.toList()..sort();
   }
 
   Future<void> _showFilterMenu({required BuildContext context, required int columnIndex}) async {
     final allValues = _getUniqueValues(columnIndex);
-
     Set<String> currentSelection;
-
     if (columnIndex == 0) {
       currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
     } else if (columnIndex == 1) {
@@ -551,10 +530,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     } else {
       currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
     }
-
     final searchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
-
     await showDialog(
       context: context,
       builder: (ctx) {
@@ -576,9 +553,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         });
                       },
                     ),
-
                     const SizedBox(height: 12),
-
                     CheckboxListTile(
                       dense: true,
                       value:
@@ -597,9 +572,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         });
                       },
                     ),
-
                     const Divider(),
-
                     Expanded(
                       child: ListView(
                         children: filteredValues.map((value) {
@@ -635,10 +608,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       } else {
                         _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
                       }
-
                       _applyAllFilters();
                     });
-
                     Navigator.pop(ctx);
                   },
                   child: const Text("Apply"),
@@ -712,7 +683,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             isAscending: _isAscending,
                             hasFilter: _selectedClusterFilters != null,
                           ),
-
                           _SortableHeader(
                             label: "Village",
                             onSort: () => _onSort(1),
@@ -721,7 +691,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             isAscending: _isAscending,
                             hasFilter: _selectedVillageFilters != null,
                           ),
-
                           _SortableHeader(
                             label: "School",
                             onSort: () => _onSort(2),
@@ -785,7 +754,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
-              // Added this wrap
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -810,7 +778,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         return (cluster['villages'] as List).map((village) {
                           return DropdownMenuItem<String>(
                             value: village['id'].toString(),
-                            child: Text("${village['name']} (${cluster['name']})"), // cluster is now in scope!
+                            child: Text("${village['name']} (${cluster['name']})"),
                           );
                         });
                       }).toList(),
@@ -821,12 +789,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text("Edit School Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
-                    BoundaryPicker(
-                      initialPoints: schoolBoundary,
-                      onBoundaryChanged: (points) {
-                        schoolBoundary = points;
-                      },
-                    ),
                     const SizedBox(height: 20),
                     const Divider(),
                     TextButton.icon(
@@ -884,70 +846,44 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   void _applyAllFilters() {
     final query = _searchController.text.toLowerCase().trim();
-
     final List<dynamic> result = [];
-
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-
-      // CLUSTER FILTER
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
         continue;
       }
-
       final List<dynamic> filteredVillages = [];
-
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-
-        // VILLAGE FILTER
         if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
           continue;
         }
-
         final List<dynamic> filteredSchools = [];
-
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
-
-          // SCHOOL FILTER
           if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
             continue;
           }
-
-          // SEARCH FILTER
           final matchesSearch =
               query.isEmpty ||
               clusterName.toLowerCase().contains(query) ||
               villageName.toLowerCase().contains(query) ||
               schoolName.toLowerCase().contains(query);
-
           if (matchesSearch) {
             filteredSchools.add(school);
           }
         }
-
-        // Keep village if:
-        // - it has schools
-        // - OR search matches village/cluster
         final villageMatchesSearch =
             query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
-
         if (filteredSchools.isNotEmpty || villageMatchesSearch) {
           filteredVillages.add({...village, 'schools': filteredSchools});
         }
       }
-
-      // Keep cluster if:
-      // - it has villages
-      // - OR search matches cluster
       final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
-
       if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
         result.add({...cluster, 'villages': filteredVillages});
       }
     }
-
     setState(() {
       _filteredHierarchy = result;
     });
@@ -961,7 +897,6 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
-
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -970,7 +905,6 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -995,7 +929,6 @@ class _SortableHeader extends StatelessWidget {
               ),
             ),
           ),
-
           InkWell(
             onTap: onFilter,
             borderRadius: BorderRadius.circular(6),

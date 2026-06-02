@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/streetview_screen.dart';
 import 'package:intl/intl.dart';
 
 class AttendanceDetailsPage extends ConsumerWidget {
@@ -12,22 +14,19 @@ class AttendanceDetailsPage extends ConsumerWidget {
     final supabase = ref.read(supabaseClientProvider);
 
     try {
-      // 1. Fetch the core attendance record and join the school name
       final attendanceResponse = await supabase.from('attendance').select('*, schools(name)').eq('id', attendanceId).single();
 
       final attendanceData = Map<String, dynamic>.from(attendanceResponse);
       final userId = attendanceData['user_id'];
 
-      // 2. Fetch the corresponding profile information using the user_id
       if (userId != null) {
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
 
-          // Inject profile data manually into the map to guarantee correct keys
           attendanceData['profiles'] = profileResponse;
         } catch (profileError) {
           debugPrint("Profile Fetch Error: $profileError");
-          attendanceData['profiles'] = null; // Gracefully fallback if profile fails
+          attendanceData['profiles'] = null;
         }
       }
 
@@ -42,7 +41,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Attendance Details')),
+      appBar: AppBar(title: const Text('Attendance Details'), backgroundColor: Colors.indigo, foregroundColor: Colors.white),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchAttendanceRecordDetails(ref),
         builder: (context, snapshot) {
@@ -78,6 +77,12 @@ class AttendanceDetailsPage extends ConsumerWidget {
           final role = profile?['role'] ?? 'N/A';
           final recordedAtRaw = data['recorded_at'];
           final parsedDate = recordedAtRaw != null ? DateTime.parse(recordedAtRaw).toLocal() : DateTime.now();
+          final double? lat = data['latitude'] != null ? double.tryParse(data['latitude'].toString()) : null;
+          final double? lng = data['longitude'] != null ? double.tryParse(data['longitude'].toString()) : null;
+          LatLng? checkInLocation;
+          if (lat != null && lng != null) {
+            checkInLocation = LatLng(lat, lng);
+          }
 
           return Padding(
             padding: const EdgeInsets.all(16.0),
@@ -85,6 +90,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
               children: [
                 Card(
                   elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -97,21 +103,76 @@ class AttendanceDetailsPage extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
                         const Divider(height: 24),
-
                         _buildDetailRow(Icons.calendar_today, "Date", DateFormat('dd MMMM yyyy').format(parsedDate)),
                         _buildDetailRow(Icons.access_time, "Time", DateFormat('hh:mm a').format(parsedDate)),
                         _buildDetailRow(Icons.check_circle, "Status", data['status']?.toString().toUpperCase() ?? 'N/A'),
                         _buildDetailRow(Icons.school, "School/Location", school?['name'] ?? "Off-site"),
-
                         const Divider(height: 24),
-                        const Text("GPS Coordinates", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        const SizedBox(height: 8),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(child: _buildDetailRow(Icons.location_on, "Latitude", "${data['latitude'] ?? 'N/A'}")),
-                            Expanded(child: _buildDetailRow(Icons.location_on, "Longitude", "${data['longitude'] ?? 'N/A'}")),
+                            const Text(
+                              "Verification Map",
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.indigo),
+                            ),
+                            if (checkInLocation != null)
+                              TextButton.icon(
+                                icon: const Icon(Icons.streetview, size: 18),
+                                label: const Text("Street View"),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => StreetViewScreen(position: checkInLocation!)),
+                                  );
+                                },
+                              ),
                           ],
                         ),
+                        const SizedBox(height: 10),
+
+                        if (checkInLocation != null) ...[
+                          Container(
+                            height: 220,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: GoogleMap(
+                              initialCameraPosition: CameraPosition(target: checkInLocation, zoom: 16.0),
+                              markers: {
+                                Marker(
+                                  markerId: const MarkerId('checkInPoint'),
+                                  position: checkInLocation,
+                                  infoWindow: InfoWindow(title: employeeName, snippet: "Checked-in here"),
+                                ),
+                              },
+                              mapType: MapType.normal,
+                              myLocationButtonEnabled: false,
+                              zoomControlsEnabled: true,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(child: _buildDetailRow(Icons.location_on, "Latitude", "$lat")),
+                              Expanded(child: _buildDetailRow(Icons.location_on, "Longitude", "$lng")),
+                            ],
+                          ),
+                        ] else ...[
+                          Container(
+                            height: 120,
+                            width: double.infinity,
+                            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
+                            child: const Center(
+                              child: Text(
+                                "No GPS Coordinates Captured for this Record",
+                                style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
