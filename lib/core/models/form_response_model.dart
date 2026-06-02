@@ -1,11 +1,11 @@
 class FormResponse {
-  final String? id; // Nullable because Supabase generates this on insertion
+  final String? id;
   final String formId;
-  final String userId; // Strictly required based on your database constraint
-  final Map<String, dynamic> answers; // Stores { "question_id": "user_answer" }
+  final String userId;
+  final Map<String, dynamic> answers;
   final double? latitude;
   final double? longitude;
-  final DateTime? submittedAt; // Managed automatically by Supabase, but good to track locally
+  final DateTime? submittedAt;
 
   FormResponse({
     this.id,
@@ -42,15 +42,11 @@ class FormResponse {
       submittedAt: map['submitted_at'] != null ? DateTime.parse(map['submitted_at'] as String) : null,
     );
   }
-
-  /// Converts the form responses into a payload map specifically designed for Supabase ingestion
   Map<String, dynamic> toMap() {
     return {
       'form_id': formId,
       'user_id': userId,
       'answers': answers,
-      // Formatting to standard PostGIS Point string syntax: 'POINT(longitude latitude)'
-      // Note: PostGIS geometry positions items as Longitude first, then Latitude!
       if (latitude != null && longitude != null) 'gps_location': 'POINT($longitude $latitude)',
     };
   }

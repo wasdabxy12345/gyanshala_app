@@ -1,4 +1,4 @@
-import 'dart:developer' as dev; // Imported for logging errors
+import 'dart:developer' as dev;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -25,11 +25,9 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     state = const AsyncLoading<bool>();
 
     try {
-      // Call our unified location utility service layer
       final Position? position = await LocationService.getCurrentPosition();
 
       if (position == null) {
-        // Handle scenario where GPS service or permissions are disabled
         state = AsyncData(currentCheckStatus);
         return;
       }
@@ -55,11 +53,8 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       state = AsyncData(!currentCheckStatus);
       dev.log("Success: ${!currentCheckStatus ? 'Checked In' : 'Checked Out'} at $detectedSchoolId");
     } catch (e, stack) {
-      // FIXED: Actually utilizing 'e' and 'stack' variables to satisfy the analyzer
       dev.log("Attendance Error", error: e, stackTrace: stack);
       state = AsyncError(e, stack);
-
-      // Briefly pause so the user can see the error, then revert back to previous status
       await Future.delayed(const Duration(seconds: 2));
       state = AsyncData(currentCheckStatus);
     }

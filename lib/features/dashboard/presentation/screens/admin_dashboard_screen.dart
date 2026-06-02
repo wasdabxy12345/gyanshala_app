@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
-import 'package:gyanshala_app/features/employees/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {

@@ -5,9 +5,6 @@ import '../models/dynamic_form_model.dart';
 import '../models/form_question_model.dart';
 import '../models/form_response_model.dart';
 
-// =========================================================================
-// ADDED THIS CLASS: This acts as the bridge so your screen can trigger submit
-// =========================================================================
 class DynamicFormController {
   Future<void> Function()? _submitCallback;
 
@@ -19,7 +16,6 @@ class DynamicFormController {
 class DynamicFormRenderer extends StatefulWidget {
   final DynamicForm form;
   final String userId;
-  // ADDED PARAMETER: Exposing the controller to the screen
   final DynamicFormController? controller;
   final Future<Map<String, String>> Function(DataSourceRule) onFetchDynamicOptions;
   final Future<Map<String, double>?> Function() onGetGPSLocation;
@@ -29,7 +25,7 @@ class DynamicFormRenderer extends StatefulWidget {
     super.key,
     required this.form,
     required this.userId,
-    this.controller, // Added parameter
+    this.controller,
     required this.onFetchDynamicOptions,
     required this.onGetGPSLocation,
     required this.onSubmit,
@@ -41,16 +37,8 @@ class DynamicFormRenderer extends StatefulWidget {
 
 class _DynamicFormRendererState extends State<DynamicFormRenderer> {
   final _formKey = GlobalKey<FormState>();
-
-  // Tracks user answers: { "q1": "Yes", "q2": "Tesla", "q3": ["Autopilot", "Electric"] }
   final Map<String, dynamic> _userAnswers = {};
-
-  // Cache for dynamic database options to prevent endless reloading loops
   final Map<String, Map<String, String>> _dynamicOptionsCache = {};
-
-  // =========================================================================
-  // ADDED INITSTATE: Binds the incoming controller to the local submit method
-  // =========================================================================
   @override
   void initState() {
     super.initState();
@@ -69,10 +57,7 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
         itemCount: widget.form.questions.length,
         itemBuilder: (context, index) {
           final question = widget.form.questions[index];
-
-          // Conditional Rule Assessment
           if (!_isConditionMet(question.conditional)) {
-            // If condition fails, remove any previous answer so hidden child questions clear out
             _userAnswers.remove(question.id);
             return const SizedBox.shrink();
           }
@@ -96,7 +81,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     );
   }
 
-  /// Evaluates whether a question should be visible
   bool _isConditionMet(ConditionalRule? rule) {
     if (rule == null) return true;
     final parentAnswer = _userAnswers[rule.dependsOn];
@@ -107,7 +91,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     return parentAnswer?.toString() == rule.equals;
   }
 
-  /// Decides which field widget type to render
   Widget _buildQuestionInput(FormQuestion question) {
     switch (question.type) {
       case 'text':
@@ -132,7 +115,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     }
   }
 
-  /// Builds Radio Button lists wrapped inside modern RadioGroup parents
   Widget _buildRadioGroup(FormQuestion question) {
     if (question.options != null) {
       return RadioGroup<String>(
@@ -163,10 +145,7 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
             },
             child: Column(
               children: options.entries.map((entry) {
-                return RadioListTile<String>(
-                  title: Text(entry.value), // Display label
-                  value: entry.key, // Underlying system key
-                );
+                return RadioListTile<String>(title: Text(entry.value), value: entry.key);
               }).toList(),
             ),
           );
@@ -176,7 +155,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     return const Text('No options defined');
   }
 
-  /// Builds a Searchable Multiselect Checkbox matching version 6 properties
   Widget _buildCheckboxSearch(FormQuestion question) {
     if (question.options != null) {
       final List<String> currentSelections = List<String>.from(_userAnswers[question.id] ?? []);
@@ -221,7 +199,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     return const Text('No data source configuration set');
   }
 
-  /// FutureBuilder helper to fetch external Supabase reference items cleanly
   Widget _buildDynamicLoader({required DataSourceRule rule, required Widget Function(Map<String, String>) builder}) {
     final cacheKey = '${rule.table}_${rule.valueColumn}_${rule.labelColumn}';
     if (_dynamicOptionsCache.containsKey(cacheKey)) {
@@ -244,13 +221,9 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
     );
   }
 
-  /// Call this method from an external button widget via a GlobalKey/callback layer
   Future<void> submitCurrentForm() async {
     if (!_formKey.currentState!.validate()) return;
-
-    // Trigger automated GPS fetch
     final gpsData = await widget.onGetGPSLocation();
-
     final finalResponse = FormResponse(
       formId: widget.form.id,
       userId: widget.userId,
@@ -258,7 +231,6 @@ class _DynamicFormRendererState extends State<DynamicFormRenderer> {
       latitude: gpsData?['latitude'],
       longitude: gpsData?['longitude'],
     );
-
     widget.onSubmit(finalResponse);
   }
 }

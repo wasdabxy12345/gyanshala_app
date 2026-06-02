@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/employees/presentation/tabs/employee_attendance_records_tab.dart';
-import 'package:gyanshala_app/features/employees/presentation/tabs/employees_list_tab.dart';
+import 'package:gyanshala_app/features/admin/presentation/tabs/employee_attendance_records_tab.dart';
+import 'package:gyanshala_app/features/admin/presentation/tabs/employees_list_tab.dart';
 
 class EmployeeHubPage extends ConsumerStatefulWidget {
   const EmployeeHubPage({super.key});

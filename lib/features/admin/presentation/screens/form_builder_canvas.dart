@@ -255,7 +255,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                 "Configure New ${type == 'checkbox_search' ? 'Check box' : type} Field",
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xff00afef)),
               ),
-              // Crucial fix: Directs the built-in action layout to align horizontally to the right
               actionsAlignment: MainAxisAlignment.end,
               content: SizedBox(
                 width: 640,
@@ -265,7 +264,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Row 1: Question + Section + Mandatory Checkbox
                       Row(
                         children: [
                           Expanded(
@@ -299,78 +297,43 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
                       if (type == 'radio' || type == 'checkbox_search') ...[
                         const Divider(height: 24),
+                        RadioGroup<String>(
+                          groupValue: sourceOptionType,
+                          onChanged: (String? value) async {
+                            if (value == null) return;
 
-                        // Row 2: Radio Selectors + Far Right Re-import Button
-                        Row(
-                          children: [
-                            Radio<String>(
-                              value: 'static',
-                              groupValue: sourceOptionType,
-                              onChanged: (val) {
-                                if (val != null) setModalState(() => sourceOptionType = val);
-                              },
-                            ),
-                            const Text("Manual"),
-                            const SizedBox(width: 8),
-                            Radio<String>(
-                              value: 'database',
-                              groupValue: sourceOptionType,
-                              onChanged: (val) {
-                                if (val != null) setModalState(() => sourceOptionType = val);
-                              },
-                            ),
-                            const Text("Database"),
-                            const SizedBox(width: 8),
-                            Radio<String>(
-                              value: 'excel',
-                              groupValue: sourceOptionType,
-                              onChanged: (val) async {
-                                if (val != null) {
-                                  setModalState(() => sourceOptionType = val);
-                                  final imported = await _pickOptionsFromExcel();
-                                  if (imported.isNotEmpty) {
-                                    setModalState(() {
-                                      staticOptionControllers.clear();
-                                      for (var opt in imported) {
-                                        staticOptionControllers.add(TextEditingController(text: opt));
-                                      }
-                                    });
+                            setModalState(() {
+                              sourceOptionType = value;
+                            });
+
+                            if (value == 'excel') {
+                              final imported = await _pickOptionsFromExcel();
+
+                              if (imported.isNotEmpty) {
+                                setModalState(() {
+                                  staticOptionControllers.clear();
+
+                                  for (final opt in imported) {
+                                    staticOptionControllers.add(TextEditingController(text: opt));
                                   }
-                                }
-                              },
-                            ),
-                            const Text("Excel"),
+                                });
+                              }
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              Radio<String>(value: 'static'),
+                              const Text("Manual"),
 
-                            const Spacer(),
+                              Radio<String>(value: 'database'),
+                              const Text("Database"),
 
-                            if (sourceOptionType == 'excel')
-                              SizedBox(
-                                height: 36,
-                                child: TextButton.icon(
-                                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
-                                  icon: const Icon(Icons.refresh, size: 16, color: Colors.green),
-                                  label: const Text(
-                                    "Re-import Excel",
-                                    style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold),
-                                  ),
-                                  onPressed: () async {
-                                    final imported = await _pickOptionsFromExcel();
-                                    if (imported.isNotEmpty) {
-                                      setModalState(() {
-                                        staticOptionControllers.clear();
-                                        for (var opt in imported) {
-                                          staticOptionControllers.add(TextEditingController(text: opt));
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                          ],
+                              Radio<String>(value: 'excel'),
+                              const Text("Excel"),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 8),
-
-                        // Options Display List (Manual Input / Excel Data Grid View)
                         if (sourceOptionType == 'static' || sourceOptionType == 'excel') ...[
                           Expanded(
                             child: ListView.builder(
@@ -410,8 +373,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
                           ),
                         ],
-
-                        // Database Option Block
                         if (sourceOptionType == 'database') ...[
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
@@ -538,7 +499,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                   ),
                 ),
               ),
-              // Safely isolated inside the native actions container to ensure single line rendering without layout errors
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
@@ -578,7 +538,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     required String roleFilter,
   }) {
     final Map<String, dynamic> configBlock = {'type': type};
-
     if (type == 'radio' || type == 'checkbox_search') {
       if (sourceType == 'static' || sourceType == 'excel') {
         final options = staticControllers.map((c) => c.text.trim()).where((text) => text.isNotEmpty).toList();

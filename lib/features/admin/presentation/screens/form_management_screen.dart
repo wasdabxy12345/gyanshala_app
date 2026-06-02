@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/form_responses_viewer_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'form_builder_canvas.dart';
@@ -111,24 +112,46 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
               itemCount: _formsList.length,
               itemBuilder: (context, index) {
                 final form = _formsList[index];
+                final String currentFormId = form['id'].toString();
+                final String currentFormTitle = form['title'] ?? 'Evaluation Framework';
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: const Icon(Icons.assignment_turned_in, color: Color(0xFF00AFEF)),
-                    title: Text(form['title'] ?? 'Missing Title Reference', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text("UUID: ${form['id']}", style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => FormBuilderCanvas(
-                            formId: form['id'].toString(),
-                            formTitle: form['title'] ?? 'Evaluation Framework',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: ListTile(
+                      leading: const Icon(Icons.assignment_turned_in, color: Color(0xFF00AFEF), size: 28),
+                      title: Text(currentFormTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text("UUID: $currentFormId", style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.grey, size: 22),
+                            tooltip: "Edit Form Template",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FormBuilderCanvas(formId: currentFormId, formTitle: currentFormTitle),
+                                ),
+                              ).then((_) => _fetchFormsFromSupabase());
+                            },
                           ),
-                        ),
-                      ).then((_) => _fetchFormsFromSupabase());
-                    },
+                          const SizedBox(width: 4),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                        ],
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FormResponsesOverviewScreen(formId: currentFormId, formTitle: currentFormTitle),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 );
               },

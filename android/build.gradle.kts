@@ -1,3 +1,11 @@
+// Force AndroidX resolution globally for all subprojects and plugins
+gradle.settingsEvaluated {
+    settings.plugins.withId("com.android.settings") {
+        extra.set("android.useAndroidX", true)
+        extra.set("android.enableJetifier", true)
+    }
+}
+
 buildscript {
     repositories {
         google()
@@ -18,7 +26,7 @@ allprojects {
 }
 
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
-rootProject.layout.buildDirectory.value(newBuildDir)
+rootProject.layout.buildDirectory.value (newBuildDir)
 
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)

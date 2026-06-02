@@ -47,3 +47,4 @@ app.*.map.json
 node_modules/
 .eslintcache
 .vercel
+.env*.local

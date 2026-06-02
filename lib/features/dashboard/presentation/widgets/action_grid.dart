@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/available_forms_screen.dart';
 import 'package:gyanshala_app/features/students/presentation/student_hub_page.dart';
 
 class ActionGrid extends StatelessWidget {
@@ -14,54 +15,30 @@ class ActionGrid extends StatelessWidget {
       mainAxisSpacing: 16,
       childAspectRatio: 1.1,
       children: [
-        _buildMenuCard(context, "Students", Icons.group, Colors.orange),
-        _buildMenuCard(
-          context,
-          "Observation",
-          Icons.assignment_turned_in,
-          Colors.purple,
-        ),
-        _buildMenuCard(context, "Test Data", Icons.bar_chart, Colors.teal),
-        _buildMenuCard(
-          context,
-          "Monthly Reports",
-          Icons.description,
-          Colors.indigo,
-        ),
+        _buildMenuCard(context, "Students", Icons.group, Colors.red),
+        _buildMenuCard(context, "Fill Forms", Icons.assignment_turned_in, Colors.yellow),
+        _buildMenuCard(context, "Test Data", Icons.bar_chart, Colors.green),
+        _buildMenuCard(context, "Monthly Reports", Icons.description, Colors.blue),
       ],
     );
   }
 
-  Widget _buildMenuCard(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
     return InkWell(
       onTap: () {
         if (title == "Students") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const StudentHubPage()),
-          );
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const StudentHubPage()));
+        } else if (title == "Fill Forms") {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const AvailableFormsScreen()));
         } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("working on it: $title")));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("working on it: $title")));
         }
       },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
