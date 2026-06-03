@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 @JS()
@@ -1210,7 +1211,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Locations Management"),
-        backgroundColor: Colors.indigo,
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -1333,7 +1334,7 @@ class _SortableHeader extends StatelessWidget {
                   Icon(
                     isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
                     size: 16,
-                    color: isSorted ? Colors.indigo : Colors.grey,
+                    color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
                 ],
               ),
@@ -1345,10 +1346,10 @@ class _SortableHeader extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: hasFilter ? Colors.indigo.withAlpha(30) : Colors.transparent,
+                color: hasFilter ? AppTheme.primaryBlue.withAlpha(30) : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.filter_alt, size: 18, color: hasFilter ? Colors.indigo : Colors.grey.shade700),
+              child: Icon(Icons.filter_alt, size: 18, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),
         ],
@@ -1367,9 +1368,9 @@ class _ActionCell extends StatelessWidget {
   Widget build(BuildContext context) {
     BorderSide? topSide;
     if (borderType == 1) {
-      topSide = BorderSide(color: Colors.grey.shade900, width: 2.5);
+      topSide = BorderSide(color: Colors.grey.shade900, width: 1.5);
     } else if (borderType == 2) {
-      topSide = BorderSide(color: Colors.grey.shade500, width: 1.0);
+      topSide = BorderSide(color: Colors.grey.shade600, width: 1.0);
     } else if (borderType == 3) {
       topSide = BorderSide(color: Colors.grey.shade300, width: 0.5);
     }
@@ -1386,13 +1387,13 @@ class _ActionCell extends StatelessWidget {
                   text,
                   style: TextStyle(
                     fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                    color: (text.isEmpty || text == "-") ? Colors.grey : Colors.indigo.shade900,
+                    color: (text.isEmpty || text == "-") ? Colors.grey : AppTheme.textPrimary,
                     decoration: (text.isEmpty || text == "-") ? null : TextDecoration.underline,
                     decorationStyle: TextDecorationStyle.dotted,
                   ),
                 ),
               ),
-              if (text.isNotEmpty && text != "-") const Icon(Icons.edit_note, size: 14, color: Colors.indigo),
+              if (text.isNotEmpty && text != "-") const Icon(Icons.edit_note, size: 14, color: AppTheme.textPrimary),
             ],
           ),
         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
@@ -16,7 +17,7 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("GS + UNM Admin"),
         centerTitle: true,
-        backgroundColor: Color(0xFF00AFEF),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -56,7 +57,7 @@ class AdminHomeContent extends StatelessWidget {
                 _AdminActionTile(
                   title: "Approve Signups",
                   icon: Icons.how_to_reg,
-                  color: Colors.blue,
+                  color: Colors.red,
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupRequestsScreen()));
                   },
@@ -64,7 +65,7 @@ class AdminHomeContent extends StatelessWidget {
                 _AdminActionTile(
                   title: "Employee List and Attendance",
                   icon: Icons.groups,
-                  color: Colors.purple,
+                  color: Colors.yellow,
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeHubPage()));
                   },
@@ -72,7 +73,7 @@ class AdminHomeContent extends StatelessWidget {
                 _AdminActionTile(
                   title: "Manage Locations",
                   icon: Icons.map_outlined,
-                  color: Colors.yellow,
+                  color: Colors.green,
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationManagementScreen()));
                   },
@@ -80,7 +81,7 @@ class AdminHomeContent extends StatelessWidget {
                 _AdminActionTile(
                   title: "Manage Forms",
                   icon: Icons.description_outlined,
-                  color: Colors.teal,
+                  color: Colors.blue,
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const FormManagementScreen()));
                   },

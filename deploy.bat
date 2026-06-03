@@ -32,21 +32,21 @@ echo ========================================================
 echo 📥 Fetching dependencies...
 call flutter pub get
 
-if exist web_done.tmp del web_done.tmp >nul 2>&1
-if exist web_failed.tmp del web_failed.tmp >nul 2>&1
+if exist web_done.tmp del web_done.tmp
+if exist web_failed.tmp del web_failed.tmp
 
 echo 🛠️ Launching Parallel Builds (Web and Android)...
 
 :: --- WEB PROCESS (Background) ---
 echo 🌐 [Web] Starting Web compilation and Vercel deployment...
-start /b "" cmd /c "echo 🌐 [Web] Compiling... && flutter build web --release >nul 2>&1 && echo ☁️ [Web] Deploying to Vercel... && cd build\web && vercel link --yes >nul 2>&1 && vercel --prod --yes --archive=tgz >nul 2>&1 && cd ..\.. && echo ✅ [Web] Web Deployment Complete! && echo done > web_done.tmp || (echo done > web_failed.tmp && exit /b 1)"
+start /b "" cmd /c "echo 🌐 [Web] Compiling... && flutter build web --release && echo ☁️ [Web] Deploying to Vercel... && cd build\web && vercel link --yes cd ..\.. && echo ✅ [Web] Web Deployment Complete! && echo done > web_done.tmp || (echo done > web_failed.tmp && exit /b 1)"
 
 :: --- ANDROID PROCESS (Foreground) ---
 echo 📱 [Android] Compiling Android APK...
 call flutter build apk --release --no-pub
 if %ERRORLEVEL% NEQ 0 (
   echo ❌ Android compilation failed. Exiting...
-  del web_done.tmp >nul 2>&1
+  del web_done.tmp
   pause
   exit /b %ERRORLEVEL%
 )

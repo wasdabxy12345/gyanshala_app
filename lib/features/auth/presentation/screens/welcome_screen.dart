@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/core/constants/app_strings.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
@@ -333,7 +333,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               Text(
                 'Student Management System',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: 2.0, color: Color(0xFF0D47A1)),
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                  color: AppTheme.textPrimary,
+                ),
               ),
 
               const SizedBox(height: 6),
@@ -357,7 +362,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                         context,
                       ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
                     },
-                    child: const Text(AppStrings.signUp),
+                    child: const Text('Sign Up'),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -365,12 +370,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
               SizedBox(
                 width: double.infinity,
-                child: OutlinedButton(
+                child: ElevatedButton(
                   onPressed: () {
                     _dismissSnackBar();
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
                   },
-                  child: const Text(AppStrings.logIn),
+                  child: const Text('Log In'),
                 ),
               ),
             ],
@@ -425,7 +430,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                             fontSize: width * 0.02,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 2.0,
-                            color: const Color(0xFF0D47A1),
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                         SizedBox(height: width * 0.01),
@@ -441,18 +446,18 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                                 context,
                               ).push(MaterialPageRoute(builder: (_) => const SignupScreen())).then((_) => _checkStatus());
                             },
-                            child: const Text(AppStrings.signUp),
+                            child: const Text('Sign Up'),
                           ),
                         ),
                         SizedBox(height: width * 0.015),
                         SizedBox(
                           width: buttonWidth,
-                          child: OutlinedButton(
+                          child: ElevatedButton(
                             onPressed: () {
                               _dismissSnackBar();
                               Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
                             },
-                            child: const Text(AppStrings.logIn),
+                            child: const Text('Log In'),
                           ),
                         ),
                       ],

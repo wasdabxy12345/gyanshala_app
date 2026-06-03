@@ -20,8 +20,7 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   final String successMessage;
 
   @override
-  ConsumerState<ResetPasswordScreen> createState() =>
-      _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
@@ -41,25 +40,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       return;
     }
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .updatePassword(
-            identifier: widget.identifier,
-            password: _passwordController.text,
-          );
+      await ref.read(authRepositoryProvider).updatePassword(identifier: widget.identifier, password: _passwordController.text);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(widget.successMessage)));
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.successMessage)));
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute<void>(builder: (_) => const LoginScreen()), (_) => false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
     }
   }
 
@@ -75,10 +62,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
+              decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Password is required';
@@ -93,10 +77,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirm Password',
-                prefixIcon: Icon(Icons.lock_person_outlined),
-              ),
+              decoration: const InputDecoration(labelText: 'Confirm Password', prefixIcon: Icon(Icons.lock_person_outlined)),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please confirm your password';
@@ -110,10 +91,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _onResetPressed,
-                child: const Text('Reset Password'),
-              ),
+              child: ElevatedButton(onPressed: _onResetPressed, child: const Text('Reset Password')),
             ),
           ],
         ),

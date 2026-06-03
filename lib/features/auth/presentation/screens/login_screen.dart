@@ -6,7 +6,6 @@ import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dash
 import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_mentor_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/shiksha_mitra_dashboard_screen.dart';
 
-import '../../../../core/constants/app_strings.dart';
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import 'forgot_password_screen.dart';
@@ -71,8 +70,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthShell(
-      title: AppStrings.loginTitle,
-      subtitle: AppStrings.loginSubtitle,
+      title: 'Login',
+      subtitle: 'Enter your phone number and password',
       formChild: Form(
         key: _formKey,
         child: Column(
@@ -93,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: AppStrings.passwordLabel, prefixIcon: Icon(Icons.lock_outline)),
+              decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'Password is required';
                 return null;
@@ -113,7 +112,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 onPressed: _isLoading ? null : _onLoginPressed,
                 child: _isLoading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text(AppStrings.logIn),
+                    : const Text('Log In'),
               ),
             ),
           ],
@@ -125,7 +124,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const Text('New user? '),
           TextButton(
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen())),
-            child: const Text(AppStrings.signUp),
+            child: const Text('Sign Up'),
           ),
         ],
       ),
