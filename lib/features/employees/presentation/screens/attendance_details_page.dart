@@ -14,7 +14,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
   final String dateString;
   const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
 
-  // Combined fetch logic: gets logs + all available schools for verification
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
@@ -81,7 +80,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
     return "Incomplete Cycle";
   }
 
-  // Helper method to check if a point sits within a specific school's geofence
   Map<String, dynamic>? _checkSchoolGeofence(double? lat, double? lng, List<Map<String, dynamic>> schools) {
     if (lat == null || lng == null) return null;
 
@@ -93,14 +91,13 @@ class AttendanceDetailsPage extends ConsumerWidget {
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
         if (distance <= radius) {
-          return school; // Returns matching school details if within boundaries
+          return school;
         }
       }
     }
     return null;
   }
 
-  // Haversine formula calculation returning distance in meters
   double _coordinateDistance(double lat1, double lon1, double lat2, double lon2) {
     var p = 0.017453292519943295;
     var c = math.cos;
@@ -179,20 +176,15 @@ class AttendanceDetailsPage extends ConsumerWidget {
                           final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
                           final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
 
-                          // Evaluate if user was physically at any school
                           final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
                           final bool isAtSchool = matchingSchool != null;
-                          final String presenceSubtitle = isAtSchool
-                              ? "At: ${matchingSchool['name']}"
-                              : "Off-site / Unknown Location";
+                          final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "Off-site";
 
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
                               isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
-                              color: isCheckIn
-                                  ? (isAtSchool ? Colors.green : Colors.orange)
-                                  : (isAtSchool ? Colors.blue : Colors.redAccent),
+                              color: isAtSchool ? Colors.green : Colors.red,
                             ),
                             title: Row(
                               children: [
@@ -202,15 +194,14 @@ class AttendanceDetailsPage extends ConsumerWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: isAtSchool ? Colors.green.shade50 : Colors.red.shade50,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: isAtSchool ? Colors.green : Colors.red.shade300, width: 0.5),
+                                    border: Border.all(color: isAtSchool ? Colors.green : Colors.red, width: 0.5),
                                   ),
                                   child: Text(
-                                    isAtSchool ? "VERIFIED" : "OUTSIDE GEOFENCE",
+                                    isAtSchool ? "At a school" : "Not at a school",
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.bold,
-                                      color: isAtSchool ? Colors.green.shade700 : Colors.red.shade700,
+                                      color: isAtSchool ? Colors.green : Colors.red,
                                     ),
                                   ),
                                 ),
@@ -307,10 +298,9 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
 
   Future<void> _initializeMapData() async {
     List<LatLng> tracePoints = [];
-    final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.green.shade600);
-    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue.shade600);
+    final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.blue);
+    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue);
 
-    // 1. Plot all school nodes and draw visual fences
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
@@ -319,7 +309,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       if (sLat != null && sLng != null) {
         final schoolPoint = LatLng(sLat, sLng);
 
-        // Add School Marker
         _markers.add(
           Marker(
             markerId: MarkerId('school_${school['id']}'),
@@ -329,7 +318,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
           ),
         );
 
-        // Add Geofence Circle Overlay
         _circles.add(
           Circle(
             circleId: CircleId('circle_${school['id']}'),
@@ -343,7 +331,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       }
     }
 
-    // 2. Plot log markers and connection lines
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
       final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
@@ -372,7 +359,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       _polylines.add(Polyline(polylineId: const PolylineId('route_trace'), points: tracePoints, color: Colors.black54, width: 3));
     }
 
-    // Expand bounds to include trace points (fallback to schools if trace is empty)
     final pointsToBound = tracePoints.isNotEmpty ? tracePoints : _markers.map((m) => m.position).toList();
 
     if (pointsToBound.isNotEmpty) {
@@ -440,29 +426,25 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
 
   Widget _buildMapHeader({bool expanded = false, VoidCallback? onRefresh}) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween, // Separates Left layout block from Right layout block
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.all(2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildMapTypeButton(icon: Icons.map, label: "Map", type: MapType.normal, onRefresh: onRefresh),
-                  _buildMapTypeButton(icon: Icons.satellite_alt, label: "Sat", type: MapType.satellite, onRefresh: onRefresh),
-                  _buildMapTypeButton(icon: Icons.layers, label: "Hybrid", type: MapType.hybrid, onRefresh: onRefresh),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
-              onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
-            ),
-          ],
+        // Map types container on the left
+        Container(
+          decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.all(2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildMapTypeButton(icon: Icons.map, label: "Map", type: MapType.normal, onRefresh: onRefresh),
+              _buildMapTypeButton(icon: Icons.satellite_alt, label: "Sat", type: MapType.satellite, onRefresh: onRefresh),
+              _buildMapTypeButton(icon: Icons.layers, label: "Hybrid", type: MapType.hybrid, onRefresh: onRefresh),
+            ],
+          ),
+        ),
+        // Fullscreen action button isolated completely on the right side
+        IconButton(
+          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
+          onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
         ),
       ],
     );
