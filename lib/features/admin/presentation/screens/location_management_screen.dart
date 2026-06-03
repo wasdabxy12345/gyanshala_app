@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:isolate';
+import 'dart:js_interop';
 
 import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +8,35 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+@JS()
+external JSObject get globalThis;
+@JS('Reflect.get')
+external JSAny? _jsGet(JSObject target, JSString key);
+@JS('Reflect.set')
+external bool _jsSet(JSObject target, JSString key, JSAny? value);
+
+extension JSObjectLookupExtension on JSObject {
+  JSAny? operator [](String key) => _jsGet(this, key.toJS);
+  void operator []=(String key, JSAny? value) => _jsSet(this, key.toJS, value);
+}
+
+@JS('Uint8Array')
+extension type JSUint8Array._(JSObject _) implements JSObject {
+  @JS('from')
+  external static JSObject from(JSArray array);
+}
+@JS('Object')
+extension type JSObjectFactory._(JSObject _) implements JSObject {
+  @JS('create')
+  external static JSObject create(JSObject? prototype);
+}
+
+@JS('XLSX.read')
+external JSObject _xlsxRead(JSObject data, JSObject options);
+
+@JS('XLSX.utils.sheet_to_json')
+external JSArray _sheetToJson(JSObject sheet, JSObject options);
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -74,11 +103,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
     if (result == null) return;
     setState(() => _isLoading = true);
-    
+    int importedCount = 0;
     try {
       final platformFile = result.files.first;
       List<int> bytes;
-      
       if (platformFile.bytes != null) {
         bytes = platformFile.bytes!;
       } else if (!kIsWeb && platformFile.path != null) {
@@ -86,20 +114,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       } else {
         throw Exception("Could not read file data");
       }
-
-      // Parse Excel in background on native platforms
-      List<Map<String, dynamic>> parsedRows;
-      if (kIsWeb) {
-        parsedRows = _parseExcelBytes(bytes);
-      } else {
-        parsedRows = await Isolate.run(() => _parseExcelBytes(bytes));
-      }
-
-      if (!mounted) return;
-      
-      // Process parsed data
-      int importedCount = 0;
-      for (var rowData in parsedRows) {
+      debugPrint("Parsing Excel file...");
+      final excelData = kIsWeb ? _parseExcelDataWeb(bytes) : _parseExcelDataNative(bytes);
+      debugPrint("Excel parsed: ${excelData.length} rows");
+      for (final rowData in excelData) {
         try {
           final clusterResp = await _supabase
               .from('clusters')
@@ -107,94 +125,137 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               .select()
               .single();
           final String clusterId = clusterResp['id'].toString();
+          String? villageId;
+          if (rowData['village'] != null && rowData['village'].isNotEmpty) {
+            final villageResp = await _supabase
+                .from('villages')
+                .upsert({'name': rowData['village'], 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
+                .select()
+                .single();
+            villageId = villageResp['id'].toString();
+          }
 
-          final villageResp = await _supabase
-              .from('villages')
-              .upsert({'name': rowData['village'], 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
-              .select()
-              .single();
-          final String villageId = villageResp['id'].toString();
-
-          await _supabase.from('schools').upsert({
-            'name': rowData['school'],
-            'village_id': villageId,
-            'latitude': rowData['latitude'],
-            'longitude': rowData['longitude'],
-            'radius_meters': 200.0,
-          }, onConflict: 'name, village_id');
-
+          if (villageId != null) {
+            double? lat = rowData['lat'] != null ? double.tryParse(rowData['lat']) : null;
+            double? lng = rowData['lng'] != null ? double.tryParse(rowData['lng']) : null;
+            await _supabase.from('schools').upsert({
+              'name': rowData['school'],
+              'village_id': villageId,
+              'latitude': lat,
+              'longitude': lng,
+              'radius_meters': 50.0,
+            }, onConflict: 'name, village_id');
+          }
           importedCount++;
         } catch (e) {
-          debugPrint("Row insert error: $e");
+          debugPrint("Row processing error: $e");
         }
       }
 
       await _fetchHierarchy();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Successfully processed $importedCount rows")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully processed $importedCount rows")));
       }
     } catch (e) {
       debugPrint("Import Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Import Error: ${e.toString()}")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Import Error: ${e.toString()}")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  static List<Map<String, dynamic>> _parseExcelBytes(List<int> bytes) {
-    final List<Map<String, dynamic>> result = [];
+  List<Map<String, dynamic>> _parseExcelDataNative(List<int> bytes) {
+    var excel = Excel.decodeBytes(bytes);
+    List<Map<String, dynamic>> rows = [];
+    String? lastClusterName;
+    String? lastVillageName;
+
+    for (var table in excel.tables.keys) {
+      var sheet = excel.tables[table];
+      if (sheet == null) continue;
+      for (int i = 0; i < sheet.maxRows; i++) {
+        var row = sheet.rows[i];
+        if (row.length < 3) continue;
+        final rawCluster = row[0]?.value?.toString().trim();
+        final rawVillage = row[1]?.value?.toString().trim();
+        final schoolName = row[2]?.value?.toString().trim();
+        final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
+        final rawLng = row.length > 4 ? row[4]?.value?.toString().trim() : null;
+
+        if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
+          continue;
+        }
+        if (rawCluster != null && rawCluster.isNotEmpty) {
+          lastClusterName = rawCluster;
+        }
+        if (rawVillage != null && rawVillage.isNotEmpty) {
+          lastVillageName = rawVillage;
+        }
+        if (lastClusterName == null || lastClusterName.isEmpty) continue;
+        if (schoolName == null || schoolName.isEmpty) continue;
+
+        rows.add({'cluster': lastClusterName, 'village': lastVillageName, 'school': schoolName, 'lat': rawLat, 'lng': rawLng});
+      }
+    }
+    return rows;
+  }
+
+  List<Map<String, dynamic>> _parseExcelDataWeb(List<int> bytes) {
     try {
-      var excel = Excel.decodeBytes(bytes);
+      final List<JSAny> jsAnyList = bytes.map((e) => e.toJS).toList();
+      final jsArray = jsAnyList.toJS;
+      final uint8Array = JSUint8Array.from(jsArray);
+      final readOptions = JSObjectFactory.create(null);
+      readOptions['type'] = 'array'.toJS;
+      final workbook = _xlsxRead(uint8Array, readOptions);
+      final sheetNames = workbook['SheetNames'] as JSArray;
+      if (sheetNames.length == 0) return [];
+
+      final firstSheetName = sheetNames.toDart[0] as JSString;
+      final sheets = workbook['Sheets'] as JSObject;
+      final firstSheet = sheets[firstSheetName.toDart] as JSObject;
+      final jsonOptions = JSObjectFactory.create(null);
+      jsonOptions['header'] = 1.toJS;
+      jsonOptions['defval'] = ''.toJS;
+      final rawRows = _sheetToJson(firstSheet, jsonOptions);
+
+      List<Map<String, dynamic>> rows = [];
       String? lastClusterName;
       String? lastVillageName;
 
-      for (var table in excel.tables.keys) {
-        var sheet = excel.tables[table];
-        if (sheet == null) continue;
-        
-        for (int i = 0; i < sheet.maxRows; i++) {
-          var row = sheet.rows[i];
-          if (row.length < 3) continue;
+      final dartRows = rawRows.toDart;
+      for (var rawRow in dartRows) {
+        if (rawRow is! JSArray) continue;
+        final row = rawRow.toDart as List<dynamic>;
+        if (row.length < 3) continue;
 
-          final rawCluster = row[0]?.value?.toString().trim();
-          final rawVillage = row[1]?.value?.toString().trim();
-          final schoolName = row[2]?.value?.toString().trim();
-          final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
-          final rawLng = row.length > 4 ? row[4]?.value?.toString().trim() : null;
+        final rawCluster = row[0]?.toString().trim();
+        final rawVillage = row[1]?.toString().trim();
+        final schoolName = row[2]?.toString().trim();
+        final rawLat = row.length > 3 ? row[3]?.toString().trim() : null;
+        final rawLng = row.length > 4 ? row[4]?.toString().trim() : null;
 
-          if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
-            continue;
-          }
-
-          if (rawCluster != null && rawCluster.isNotEmpty) {
-            lastClusterName = rawCluster;
-          }
-          if (rawVillage != null && rawVillage.isNotEmpty) {
-            lastVillageName = rawVillage;
-          }
-
-          if (lastClusterName == null || lastClusterName.isEmpty) continue;
-          if (schoolName == null || schoolName.isEmpty) continue;
-
-          result.add({
-            'cluster': lastClusterName,
-            'village': lastVillageName ?? '',
-            'school': schoolName,
-            'latitude': rawLat != null ? double.tryParse(rawLat) : null,
-            'longitude': rawLng != null ? double.tryParse(rawLng) : null,
-          });
+        if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
+          continue;
         }
+        if (rawCluster != null && rawCluster.isNotEmpty) {
+          lastClusterName = rawCluster;
+        }
+        if (rawVillage != null && rawVillage.isNotEmpty) {
+          lastVillageName = rawVillage;
+        }
+        if (lastClusterName == null || lastClusterName.isEmpty) continue;
+        if (schoolName == null || schoolName.isEmpty) continue;
+
+        rows.add({'cluster': lastClusterName, 'village': lastVillageName, 'school': schoolName, 'lat': rawLat, 'lng': rawLng});
       }
+      return rows;
     } catch (e) {
-      debugPrint("Excel parsing error: $e");
+      debugPrint("Web Excel Parser Error: $e");
+      return [];
     }
-    return result;
   }
 
   Future<void> _fetchHierarchy() async {
@@ -268,7 +329,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Container(
-          decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.all(2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -291,7 +352,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final nameController = TextEditingController();
     final latController = TextEditingController();
     final lngController = TextEditingController();
-    final radiusController = TextEditingController(text: "200");
+    final radiusController = TextEditingController(text: "50");
     String? selectedClusterId;
     String? selectedVillageId;
     GoogleMapController? mapController;
@@ -374,8 +435,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Circle(
                         circleId: const CircleId('geofence_circle'),
                         center: selectedLatLng!,
-                        radius: double.tryParse(radiusController.text.trim()) ?? 200.0,
-                        fillColor: Colors.teal.withOpacity(0.15),
+                        radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
+                        fillColor: Colors.teal.withValues(alpha: 0.15),
                         strokeColor: Colors.teal,
                         strokeWidth: 2,
                       ),
@@ -602,7 +663,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       insertData['village_id'] = selectedVillageId;
                       insertData['latitude'] = double.tryParse(latController.text.trim());
                       insertData['longitude'] = double.tryParse(lngController.text.trim());
-                      insertData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
+                      insertData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
                     }
                     await _supabase.from(table).insert(insertData);
                     if (ctx.mounted) Navigator.pop(ctx);
@@ -857,7 +918,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final nameController = TextEditingController(text: entity['name']);
     final latController = TextEditingController(text: entity['latitude']?.toString() ?? '');
     final lngController = TextEditingController(text: entity['longitude']?.toString() ?? '');
-    final radiusController = TextEditingController(text: entity['radius_meters']?.toString() ?? '200');
+    final radiusController = TextEditingController(text: entity['radius_meters']?.toString() ?? '50');
     String? selectedParentId = (type == 'Village') ? entity['cluster_id']?.toString() : entity['village_id']?.toString();
     GoogleMapController? mapController;
     MapType dialogMapType = MapType.normal;
@@ -903,8 +964,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       Circle(
                         circleId: const CircleId('edit_geofence_circle'),
                         center: selectedLatLng!,
-                        radius: double.tryParse(radiusController.text.trim()) ?? 200.0,
-                        fillColor: Colors.indigo.withOpacity(0.15),
+                        radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
+                        fillColor: Colors.indigo.withValues(alpha: 0.15),
                         strokeColor: Colors.indigo,
                         strokeWidth: 2,
                       ),
@@ -1085,7 +1146,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       updateData['village_id'] = selectedParentId;
                       updateData['latitude'] = double.tryParse(latController.text.trim());
                       updateData['longitude'] = double.tryParse(lngController.text.trim());
-                      updateData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
+                      updateData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
                     }
                     await _supabase.from(table).update(updateData).eq('id', entity['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
