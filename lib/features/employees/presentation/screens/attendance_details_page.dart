@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -13,17 +14,24 @@ class AttendanceDetailsPage extends ConsumerWidget {
   final String dateString;
   const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
 
-  Future<List<Map<String, dynamic>>> _fetchDailyAttendanceLogs(WidgetRef ref) async {
+  // Combined fetch logic: gets logs + all available schools for verification
+  Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
-      final response = await supabase
-          .from('attendance')
-          .select('*, schools(name)')
-          .eq('user_id', userId)
-          .gte('recorded_at', '$dateString 00:00:00+00')
-          .lte('recorded_at', '$dateString 23:59:59+00')
-          .order('recorded_at', ascending: true);
-      final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(response);
+      final futures = await Future.wait([
+        supabase
+            .from('attendance')
+            .select('*, schools(name)')
+            .eq('user_id', userId)
+            .gte('recorded_at', '$dateString 00:00:00+00')
+            .lte('recorded_at', '$dateString 23:59:59+00')
+            .order('recorded_at', ascending: true),
+        supabase.from('schools').select('id, name, latitude, longitude, radius_meters'),
+      ]);
+
+      final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
+      final List<Map<String, dynamic>> schools = List<Map<String, dynamic>>.from(futures[1]);
+
       if (logs.isNotEmpty) {
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
@@ -34,7 +42,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
           debugPrint("Profile Fetch Error: $profileError");
         }
       }
-      return logs;
+      return {'logs': logs, 'schools': schools};
     } catch (e, stackTrace) {
       debugPrint("Database Exception in AttendanceDetailsPage: $e");
       debugPrint("Stacktrace: $stackTrace");
@@ -73,16 +81,43 @@ class AttendanceDetailsPage extends ConsumerWidget {
     return "Incomplete Cycle";
   }
 
+  // Helper method to check if a point sits within a specific school's geofence
+  Map<String, dynamic>? _checkSchoolGeofence(double? lat, double? lng, List<Map<String, dynamic>> schools) {
+    if (lat == null || lng == null) return null;
+
+    for (var school in schools) {
+      final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
+      final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
+      final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
+
+      if (sLat != null && sLng != null) {
+        final distance = _coordinateDistance(lat, lng, sLat, sLng);
+        if (distance <= radius) {
+          return school; // Returns matching school details if within boundaries
+        }
+      }
+    }
+    return null;
+  }
+
+  // Haversine formula calculation returning distance in meters
+  double _coordinateDistance(double lat1, double lon1, double lat2, double lon2) {
+    var p = 0.017453292519943295;
+    var c = math.cos;
+    var a = 0.5 - c((lat2 - lat1) * p) / 2 + c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
+    return 12742 * math.asin(math.sqrt(a)) * 1000;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Daily Attendance Summary'),
-        backgroundColor: Color(0xff00afef),
+        backgroundColor: const Color(0xff00afef),
         foregroundColor: Colors.white,
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchDailyAttendanceLogs(ref),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _fetchPageData(ref),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -101,7 +136,10 @@ class AttendanceDetailsPage extends ConsumerWidget {
             );
           }
 
-          final logs = snapshot.data ?? [];
+          final data = snapshot.data;
+          final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
+          final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
+
           if (logs.isEmpty) {
             return const Center(child: Text('No details available for this day.'));
           }
@@ -137,23 +175,53 @@ class AttendanceDetailsPage extends ConsumerWidget {
                         ...logs.map((log) {
                           final isCheckIn = log['status'] == 'check_in';
                           final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
-                          final schoolName = log['schools']?['name'] ?? "Off-site Location";
+
+                          final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
+                          final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+
+                          // Evaluate if user was physically at any school
+                          final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
+                          final bool isAtSchool = matchingSchool != null;
+                          final String presenceSubtitle = isAtSchool
+                              ? "At: ${matchingSchool['name']}"
+                              : "Off-site / Unknown Location";
+
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
                               isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
-                              color: isCheckIn ? Colors.green : Colors.yellow,
+                              color: isCheckIn
+                                  ? (isAtSchool ? Colors.green : Colors.orange)
+                                  : (isAtSchool ? Colors.blue : Colors.redAccent),
                             ),
-                            title: Text(
-                              isCheckIn ? "Check In" : "Check Out",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            title: Row(
+                              children: [
+                                Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isAtSchool ? Colors.green.shade50 : Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: isAtSchool ? Colors.green : Colors.red.shade300, width: 0.5),
+                                  ),
+                                  child: Text(
+                                    isAtSchool ? "VERIFIED" : "OUTSIDE GEOFENCE",
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: isAtSchool ? Colors.green.shade700 : Colors.red.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            subtitle: Text(schoolName),
+                            subtitle: Text(presenceSubtitle),
                             trailing: Text(timeStr, style: const TextStyle(fontSize: 13)),
                           );
                         }),
                         const Divider(height: 24),
-                        AttendanceMultiMapView(logs: logs, employeeName: employeeName),
+                        AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
                       ],
                     ),
                   ),
@@ -169,9 +237,10 @@ class AttendanceDetailsPage extends ConsumerWidget {
 
 class AttendanceMultiMapView extends StatefulWidget {
   final List<Map<String, dynamic>> logs;
+  final List<Map<String, dynamic>> schools;
   final String employeeName;
 
-  const AttendanceMultiMapView({super.key, required this.logs, required this.employeeName});
+  const AttendanceMultiMapView({super.key, required this.logs, required this.schools, required this.employeeName});
 
   @override
   State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
@@ -183,6 +252,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   GoogleMapController? _mapController;
 
   final Set<Marker> _markers = {};
+  final Set<Circle> _circles = {};
   final Set<Polyline> _polylines = {};
   LatLngBounds? _mapBounds;
   bool _isLoadingIcons = true;
@@ -194,8 +264,8 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   }
 
   Future<BitmapDescriptor> _createCustomMarkerBitmap({required String text, required Color badgeColor}) async {
-    final int width = 60;
-    final int height = 50;
+    const int width = 60;
+    const int height = 50;
 
     final pictureRecorder = ui.PictureRecorder();
     final canvas = Canvas(pictureRecorder);
@@ -216,7 +286,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     path.close();
     canvas.drawPath(path, paint);
 
-    // Fixed: Bypasses BuildContext lookup entirely by using the aliased engine enum structure
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center);
 
     textPainter.text = TextSpan(
@@ -239,8 +308,42 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   Future<void> _initializeMapData() async {
     List<LatLng> tracePoints = [];
     final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.green.shade600);
-    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.yellow.shade800);
+    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue.shade600);
 
+    // 1. Plot all school nodes and draw visual fences
+    for (var school in widget.schools) {
+      final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
+      final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
+      final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
+
+      if (sLat != null && sLng != null) {
+        final schoolPoint = LatLng(sLat, sLng);
+
+        // Add School Marker
+        _markers.add(
+          Marker(
+            markerId: MarkerId('school_${school['id']}'),
+            position: schoolPoint,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+            infoWindow: InfoWindow(title: school['name'] ?? 'School', snippet: 'Radius: ${radius.toStringAsFixed(0)}m'),
+          ),
+        );
+
+        // Add Geofence Circle Overlay
+        _circles.add(
+          Circle(
+            circleId: CircleId('circle_${school['id']}'),
+            center: schoolPoint,
+            radius: radius,
+            fillColor: Colors.indigo.withValues(alpha: 0.15),
+            strokeColor: Colors.indigo.withValues(alpha: 0.5),
+            strokeWidth: 2,
+          ),
+        );
+      }
+    }
+
+    // 2. Plot log markers and connection lines
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
       final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
@@ -264,31 +367,29 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         );
       }
     }
-    if (tracePoints.length > 1) {
-      _polylines.add(
-        Polyline(
-          polylineId: const PolylineId('route_trace'),
-          points: tracePoints,
-          color: Colors.indigo.withValues(alpha: 0.7),
-          width: 4,
-        ),
-      );
-    }
-    if (tracePoints.isNotEmpty) {
-      double minLat = tracePoints.first.latitude;
-      double maxLat = tracePoints.first.latitude;
-      double minLng = tracePoints.first.longitude;
-      double maxLng = tracePoints.first.longitude;
 
-      for (var p in tracePoints) {
+    if (tracePoints.length > 1) {
+      _polylines.add(Polyline(polylineId: const PolylineId('route_trace'), points: tracePoints, color: Colors.black54, width: 3));
+    }
+
+    // Expand bounds to include trace points (fallback to schools if trace is empty)
+    final pointsToBound = tracePoints.isNotEmpty ? tracePoints : _markers.map((m) => m.position).toList();
+
+    if (pointsToBound.isNotEmpty) {
+      double minLat = pointsToBound.first.latitude;
+      double maxLat = pointsToBound.first.latitude;
+      double minLng = pointsToBound.first.longitude;
+      double maxLng = pointsToBound.first.longitude;
+
+      for (var p in pointsToBound) {
         if (p.latitude < minLat) minLat = p.latitude;
         if (p.latitude > maxLat) maxLat = p.latitude;
         if (p.longitude < minLng) minLng = p.longitude;
         if (p.longitude > maxLng) maxLng = p.longitude;
       }
       _mapBounds = LatLngBounds(
-        southwest: LatLng(minLat - 0.001, minLng - 0.001),
-        northeast: LatLng(maxLat + 0.001, maxLng + 0.001),
+        southwest: LatLng(minLat - 0.002, minLng - 0.002),
+        northeast: LatLng(maxLat + 0.002, maxLng + 0.002),
       );
     }
 
@@ -375,8 +476,9 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
-      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 15.0),
+      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 14.0),
       markers: _markers,
+      circles: _circles,
       polylines: _polylines,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
@@ -384,7 +486,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       onMapCreated: (controller) {
         _mapController = controller;
         if (_mapBounds != null) {
-          _mapController?.animateCamera(CameraUpdate.newLatLngBounds(_mapBounds!, 50));
+          _mapController?.animateCamera(CameraUpdate.newLatLngBounds(_mapBounds!, 60));
         }
       },
     );
@@ -432,7 +534,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         _buildMapHeader(),
         const SizedBox(height: 8),
         Container(
-          height: 250,
+          height: 280,
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
