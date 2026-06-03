@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:file_picker/file_picker.dart';
@@ -25,7 +26,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
-
   @override
   void initState() {
     super.initState();
@@ -67,18 +67,89 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Future<void> _importFromExcel() async {
-    if (kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel import is not supported on web.")));
-      }
-      return;
-    }
-    FilePickerResult? result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls', 'csv']);
+    FilePickerResult? result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx', 'xls', 'csv'],
+      withData: true,
+    );
     if (result == null) return;
     setState(() => _isLoading = true);
-    int importedCount = 0;
+    
     try {
-      var bytes = File(result.files.first.path!).readAsBytesSync();
+      final platformFile = result.files.first;
+      List<int> bytes;
+      
+      if (platformFile.bytes != null) {
+        bytes = platformFile.bytes!;
+      } else if (!kIsWeb && platformFile.path != null) {
+        bytes = File(platformFile.path!).readAsBytesSync();
+      } else {
+        throw Exception("Could not read file data");
+      }
+
+      // Parse Excel in background on native platforms
+      List<Map<String, dynamic>> parsedRows;
+      if (kIsWeb) {
+        parsedRows = _parseExcelBytes(bytes);
+      } else {
+        parsedRows = await Isolate.run(() => _parseExcelBytes(bytes));
+      }
+
+      if (!mounted) return;
+      
+      // Process parsed data
+      int importedCount = 0;
+      for (var rowData in parsedRows) {
+        try {
+          final clusterResp = await _supabase
+              .from('clusters')
+              .upsert({'name': rowData['cluster']}, onConflict: 'name')
+              .select()
+              .single();
+          final String clusterId = clusterResp['id'].toString();
+
+          final villageResp = await _supabase
+              .from('villages')
+              .upsert({'name': rowData['village'], 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
+              .select()
+              .single();
+          final String villageId = villageResp['id'].toString();
+
+          await _supabase.from('schools').upsert({
+            'name': rowData['school'],
+            'village_id': villageId,
+            'latitude': rowData['latitude'],
+            'longitude': rowData['longitude'],
+            'radius_meters': 200.0,
+          }, onConflict: 'name, village_id');
+
+          importedCount++;
+        } catch (e) {
+          debugPrint("Row insert error: $e");
+        }
+      }
+
+      await _fetchHierarchy();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Successfully processed $importedCount rows")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Import Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Import Error: ${e.toString()}")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  static List<Map<String, dynamic>> _parseExcelBytes(List<int> bytes) {
+    final List<Map<String, dynamic>> result = [];
+    try {
       var excel = Excel.decodeBytes(bytes);
       String? lastClusterName;
       String? lastVillageName;
@@ -86,6 +157,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       for (var table in excel.tables.keys) {
         var sheet = excel.tables[table];
         if (sheet == null) continue;
+        
         for (int i = 0; i < sheet.maxRows; i++) {
           var row = sheet.rows[i];
           if (row.length < 3) continue;
@@ -93,66 +165,36 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           final rawCluster = row[0]?.value?.toString().trim();
           final rawVillage = row[1]?.value?.toString().trim();
           final schoolName = row[2]?.value?.toString().trim();
-
           final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
           final rawLng = row.length > 4 ? row[4]?.value?.toString().trim() : null;
 
           if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
             continue;
           }
+
           if (rawCluster != null && rawCluster.isNotEmpty) {
             lastClusterName = rawCluster;
           }
           if (rawVillage != null && rawVillage.isNotEmpty) {
             lastVillageName = rawVillage;
           }
+
           if (lastClusterName == null || lastClusterName.isEmpty) continue;
           if (schoolName == null || schoolName.isEmpty) continue;
 
-          final clusterResp = await _supabase
-              .from('clusters')
-              .upsert({'name': lastClusterName}, onConflict: 'name')
-              .select()
-              .single();
-          final String clusterId = clusterResp['id'].toString();
-
-          String? villageId;
-          if (lastVillageName != null && lastVillageName.isNotEmpty) {
-            final villageResp = await _supabase
-                .from('villages')
-                .upsert({'name': lastVillageName, 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
-                .select()
-                .single();
-            villageId = villageResp['id'].toString();
-          }
-
-          if (villageId != null) {
-            double? lat = rawLat != null ? double.tryParse(rawLat) : null;
-            double? lng = rawLng != null ? double.tryParse(rawLng) : null;
-
-            await _supabase.from('schools').upsert({
-              'name': schoolName,
-              'village_id': villageId,
-              'latitude': lat,
-              'longitude': lng,
-              'radius_meters': 200.0,
-            }, onConflict: 'name, village_id');
-          }
-          importedCount++;
+          result.add({
+            'cluster': lastClusterName,
+            'village': lastVillageName ?? '',
+            'school': schoolName,
+            'latitude': rawLat != null ? double.tryParse(rawLat) : null,
+            'longitude': rawLng != null ? double.tryParse(rawLng) : null,
+          });
         }
       }
-      await _fetchHierarchy();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully processed $importedCount rows")));
-      }
     } catch (e) {
-      debugPrint("Import Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Import Error: ${e.toString()}")));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint("Excel parsing error: $e");
     }
+    return result;
   }
 
   Future<void> _fetchHierarchy() async {
@@ -250,14 +292,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final latController = TextEditingController();
     final lngController = TextEditingController();
     final radiusController = TextEditingController(text: "200");
-
     String? selectedClusterId;
     String? selectedVillageId;
     GoogleMapController? mapController;
     LatLng? selectedLatLng;
     MapType dialogMapType = MapType.normal;
     int mapRefreshKey = 0;
-
     void updateMapLocation() {
       final double? lat = double.tryParse(latController.text.trim());
       final double? lng = double.tryParse(lngController.text.trim());
@@ -268,7 +308,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     latController.addListener(updateMapLocation);
     lngController.addListener(updateMapLocation);
-
     Future<String?> showQuickAdd(String parentType) async {
       final quickController = TextEditingController();
       return showDialog<String>(
@@ -565,7 +604,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       insertData['longitude'] = double.tryParse(lngController.text.trim());
                       insertData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
                     }
-
                     await _supabase.from(table).insert(insertData);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _fetchHierarchy();
@@ -689,15 +727,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     int clusterColBorder = clusterBorder ? 1 : 0;
     int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
     int schoolColBorder = clusterBorder ? 1 : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
-
     String schoolCellText = "-";
     if (school != null) {
-      final lat = school['latitude'];
-      final lon = school['longitude'];
-      final rad = school['radius_meters'];
-      schoolCellText = school['name'] + ((lat != null && lon != null) ? " (${rad}m Geofence)" : " (No GPS)");
+      schoolCellText = school['name'];
     }
-
     return TableRow(
       children: [
         _ActionCell(
@@ -726,12 +759,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       final clusterName = cluster['name'].toString();
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
       if (columnIndex == 0) values.add(clusterName);
-
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
         if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) continue;
         if (columnIndex == 1) values.add(villageName);
-
         for (final school in (village['schools'] ?? [])) {
           if (columnIndex == 2) values.add(school['name'].toString());
         }
@@ -747,10 +778,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         : (columnIndex == 1)
         ? (_selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues))
         : (_selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues));
-
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
-
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -829,16 +858,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final latController = TextEditingController(text: entity['latitude']?.toString() ?? '');
     final lngController = TextEditingController(text: entity['longitude']?.toString() ?? '');
     final radiusController = TextEditingController(text: entity['radius_meters']?.toString() ?? '200');
-
     String? selectedParentId = (type == 'Village') ? entity['cluster_id']?.toString() : entity['village_id']?.toString();
     GoogleMapController? mapController;
     MapType dialogMapType = MapType.normal;
     int mapRefreshKey = 0;
-
     double initialLat = entity['latitude'] != null ? double.tryParse(entity['latitude'].toString()) ?? 23.0225 : 23.0225;
     double initialLng = entity['longitude'] != null ? double.tryParse(entity['longitude'].toString()) ?? 72.5714 : 72.5714;
     LatLng? selectedLatLng = entity['latitude'] != null && entity['longitude'] != null ? LatLng(initialLat, initialLng) : null;
-
     void updateMapLocation() {
       final double? lat = double.tryParse(latController.text.trim());
       final double? lng = double.tryParse(lngController.text.trim());
@@ -849,7 +875,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     latController.addListener(updateMapLocation);
     lngController.addListener(updateMapLocation);
-
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1055,7 +1080,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   try {
                     final Map<String, dynamic> updateData = {'name': name};
                     String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
-
                     if (type == 'Village') updateData['cluster_id'] = selectedParentId;
                     if (type == 'School') {
                       updateData['village_id'] = selectedParentId;
@@ -1063,7 +1087,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       updateData['longitude'] = double.tryParse(lngController.text.trim());
                       updateData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
                     }
-
                     await _supabase.from(table).update(updateData).eq('id', entity['id']);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _fetchHierarchy();
@@ -1090,17 +1113,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
-
       final List<dynamic> filteredVillages = [];
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
         if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) continue;
-
         final List<dynamic> filteredSchools = [];
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
           if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) continue;
-
           final matchesSearch =
               query.isEmpty ||
               clusterName.toLowerCase().contains(query) ||
@@ -1108,14 +1128,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               schoolName.toLowerCase().contains(query);
           if (matchesSearch) filteredSchools.add(school);
         }
-
         final villageMatchesSearch =
             query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
         if (filteredSchools.isNotEmpty || villageMatchesSearch) {
           filteredVillages.add({...village, 'schools': filteredSchools});
         }
       }
-
       final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
       if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
         result.add({...cluster, 'villages': filteredVillages});
@@ -1228,7 +1246,6 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
-
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -1237,7 +1254,6 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1285,9 +1301,7 @@ class _ActionCell extends StatelessWidget {
   final bool isBold;
   final int borderType;
   final VoidCallback? onTap;
-
   const _ActionCell({required this.text, this.isBold = false, this.borderType = 0, this.onTap});
-
   @override
   Widget build(BuildContext context) {
     BorderSide? topSide;
@@ -1298,7 +1312,6 @@ class _ActionCell extends StatelessWidget {
     } else if (borderType == 3) {
       topSide = BorderSide(color: Colors.grey.shade300, width: 0.5);
     }
-
     return Container(
       decoration: BoxDecoration(border: topSide != null ? Border(top: topSide) : null),
       child: InkWell(
