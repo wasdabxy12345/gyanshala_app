@@ -39,7 +39,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
     for (final employee in employees) {
       employeeData[employee['id']] = {
-        'user_id': employee['id'], // ✅ SAVED USER ID FOR NAV ROUTING
+        'user_id': employee['id'],
         'full_name': "${employee['first_name']} ${employee['last_name']}",
         'attendance_map': <String, dynamic>{},
       };
@@ -55,9 +55,6 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
       if (employeeData.containsKey(userId)) {
         final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
-
-        // If a check_in exists, mark present. If a checkout comes later, it maintains status
-        // but lets us map activity tracking back cleanly.
         if (status == 'check_in' || !currentMap.containsKey(dateKey)) {
           currentMap[dateKey] = {'status': 'present', 'location': schoolName};
         }
@@ -221,7 +218,6 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                   child: InkWell(
                                     onTap: isPresent && targetUserId.isNotEmpty
                                         ? () {
-                                            // ✅ FIXED NAVIGATION ROUTING
                                             Navigator.push(
                                               context,
                                               MaterialPageRoute(
@@ -234,7 +230,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                     child: Container(
                                       width: 35,
                                       height: double.infinity,
-                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.orange[100] : null),
+                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.yellow[100] : null),
                                       alignment: Alignment.center,
                                       child: holiday
                                           ? const Text("-")
@@ -242,7 +238,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                               isPresent ? 'P' : '-',
                                               style: TextStyle(
                                                 color: isPresent
-                                                    ? (location == "off-site" ? Colors.orange : Colors.green)
+                                                    ? (location == "off-site" ? Colors.yellow : Colors.green)
                                                     : Colors.red,
                                                 fontWeight: FontWeight.bold,
                                               ),

@@ -135,7 +135,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         if (mounted) {
           setState(() => _isLoading = false);
           _showHardwareGpsRequiredDialog();
-          _showSnackbar("Please turn on your phone's GPS/Location service switcher.", Colors.orange);
+          _showSnackbar("Please turn on your phone's GPS/Location service switcher.", Colors.yellow);
         }
         return;
       }
@@ -509,7 +509,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: const [
-            Icon(Icons.gps_off, color: Colors.orange, size: 28),
+            Icon(Icons.gps_off, color: Colors.yellow, size: 28),
             SizedBox(width: 8),
             Text("GPS Switched Off", style: TextStyle(fontWeight: FontWeight.bold)),
           ],

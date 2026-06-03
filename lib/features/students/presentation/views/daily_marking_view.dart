@@ -104,7 +104,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.event_busy, size: 80, color: Colors.orange.shade200),
+          Icon(Icons.event_busy, size: 80, color: Colors.yellow.shade200),
           const SizedBox(height: 16),
           const Text(
             "Holiday / Sunday",

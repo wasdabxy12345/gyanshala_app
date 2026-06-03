@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
   final String userId;
   final String dateString;
   const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
+
   Future<List<Map<String, dynamic>>> _fetchDailyAttendanceLogs(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
@@ -75,7 +78,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Daily Attendance Summary'),
-        backgroundColor: Colors.indigo,
+        backgroundColor: Color(0xff00afef),
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
@@ -125,17 +128,12 @@ class AttendanceDetailsPage extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(employeeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 13),
                         Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
-                        const Divider(height: 24),
-                        _buildDetailRow(Icons.calendar_today, "Date Summary", formattedDate),
-                        _buildDetailRow(Icons.timelapse, "Total Time Active", totalHours, valueColor: Colors.teal.shade700),
-                        const Divider(height: 24),
-                        const Text(
-                          "Activity Timeline",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
+                        const Divider(height: 13),
+                        Text("Date: $formattedDate"),
+                        Text("Total Time Active: $totalHours"),
+                        const Divider(height: 13),
                         ...logs.map((log) {
                           final isCheckIn = log['status'] == 'check_in';
                           final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
@@ -144,17 +142,14 @@ class AttendanceDetailsPage extends ConsumerWidget {
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
                               isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
-                              color: isCheckIn ? Colors.green : Colors.orange,
+                              color: isCheckIn ? Colors.green : Colors.yellow,
                             ),
                             title: Text(
-                              isCheckIn ? "Checked In" : "Checked Out",
+                              isCheckIn ? "Check In" : "Check Out",
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(schoolName),
-                            trailing: Text(
-                              timeStr,
-                              style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w500),
-                            ),
+                            trailing: Text(timeStr, style: const TextStyle(fontSize: 13)),
                           );
                         }),
                         const Divider(height: 24),
@@ -167,28 +162,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(IconData icon, String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.blueGrey, size: 20),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(
-                value,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: valueColor),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -212,15 +185,61 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
   LatLngBounds? _mapBounds;
+  bool _isLoadingIcons = true;
 
   @override
   void initState() {
     super.initState();
-    _processGeometries();
+    _initializeMapData();
   }
 
-  void _processGeometries() {
+  Future<BitmapDescriptor> _createCustomMarkerBitmap({required String text, required Color badgeColor}) async {
+    final int width = 60;
+    final int height = 50;
+
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    final paint = Paint()
+      ..color = badgeColor
+      ..style = PaintingStyle.fill;
+
+    final RRect rRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble() - 10),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rRect, paint);
+
+    final path = Path();
+    path.moveTo(width / 2 - 10, height - 10);
+    path.lineTo(width / 2 + 10, height - 10);
+    path.lineTo(width / 2, height.toDouble());
+    path.close();
+    canvas.drawPath(path, paint);
+
+    // Fixed: Bypasses BuildContext lookup entirely by using the aliased engine enum structure
+    final textPainter = TextPainter(textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center);
+
+    textPainter.text = TextSpan(
+      text: text,
+      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+    );
+
+    textPainter.layout(minWidth: 0, maxWidth: width.toDouble());
+    final offset = Offset((width - textPainter.width) / 2, ((height - 10) - textPainter.height) / 2);
+    textPainter.paint(canvas, offset);
+
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(width, height);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final Uint8List uint8list = byteData!.buffer.asUint8List();
+
+    return BitmapDescriptor.bytes(uint8list);
+  }
+
+  Future<void> _initializeMapData() async {
     List<LatLng> tracePoints = [];
+    final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.green.shade600);
+    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.yellow.shade800);
 
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
@@ -235,7 +254,8 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
           Marker(
             markerId: MarkerId(log['id'].toString()),
             position: point,
-            icon: BitmapDescriptor.defaultMarkerWithHue(isCheckIn ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueOrange),
+            icon: isCheckIn ? checkInIcon : checkOutIcon,
+            anchor: const Offset(0.5, 1.0),
             infoWindow: InfoWindow(
               title: isCheckIn ? "Check-In Point" : "Check-Out Point",
               snippet: DateFormat('hh:mm a').format(DateTime.parse(log['recorded_at']).toLocal()),
@@ -259,6 +279,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       double maxLat = tracePoints.first.latitude;
       double minLng = tracePoints.first.longitude;
       double maxLng = tracePoints.first.longitude;
+
       for (var p in tracePoints) {
         if (p.latitude < minLat) minLat = p.latitude;
         if (p.latitude > maxLat) maxLat = p.latitude;
@@ -269,6 +290,12 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         southwest: LatLng(minLat - 0.001, minLng - 0.001),
         northeast: LatLng(maxLat + 0.001, maxLng + 0.001),
       );
+    }
+
+    if (mounted) {
+      setState(() {
+        _isLoadingIcons = false;
+      });
     }
   }
 
@@ -314,10 +341,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          "Verification Map",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.indigo),
-        ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -345,7 +368,9 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   }
 
   Widget _buildBaseMapWidget() {
-    if (_markers.isEmpty) return const SizedBox();
+    if (_isLoadingIcons || _markers.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
@@ -400,7 +425,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_markers.isEmpty) return const SizedBox();
+    if (_markers.isEmpty && !_isLoadingIcons) return const SizedBox();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

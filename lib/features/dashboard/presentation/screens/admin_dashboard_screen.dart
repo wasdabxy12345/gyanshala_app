@@ -72,7 +72,7 @@ class AdminHomeContent extends StatelessWidget {
                 _AdminActionTile(
                   title: "Manage Locations",
                   icon: Icons.map_outlined,
-                  color: Colors.deepOrange,
+                  color: Colors.yellow,
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationManagementScreen()));
                   },

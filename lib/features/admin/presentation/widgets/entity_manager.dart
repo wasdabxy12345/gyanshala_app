@@ -7,13 +7,7 @@ class EntityManager extends StatefulWidget {
   final String? parentTable;
   final String? parentField;
 
-  const EntityManager({
-    super.key,
-    required this.tableName,
-    required this.entityName,
-    this.parentTable,
-    this.parentField,
-  });
+  const EntityManager({super.key, required this.tableName, required this.entityName, this.parentTable, this.parentField});
 
   @override
   State<EntityManager> createState() => _EntityManagerState();
@@ -35,9 +29,7 @@ class _EntityManagerState extends State<EntityManager> {
     setState(() => _isLoading = true);
     try {
       final query = widget.parentTable != null
-          ? _supabase
-                .from(widget.tableName)
-                .select('*, ${widget.parentTable}(name)')
+          ? _supabase.from(widget.tableName).select('*, ${widget.parentTable}(name)')
           : _supabase.from(widget.tableName).select();
 
       final data = await query.order('name');
@@ -55,10 +47,7 @@ class _EntityManagerState extends State<EntityManager> {
     List<Map<String, dynamic>> parents = [];
 
     if (widget.parentTable != null) {
-      final parentData = await _supabase
-          .from(widget.parentTable!)
-          .select()
-          .order('name');
+      final parentData = await _supabase.from(widget.parentTable!).select().order('name');
       parents = List<Map<String, dynamic>>.from(parentData);
     }
 
@@ -68,44 +57,29 @@ class _EntityManagerState extends State<EntityManager> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            "${entity == null ? 'Add' : 'Edit'} ${widget.entityName}",
-          ),
+          title: Text("${entity == null ? 'Add' : 'Edit'} ${widget.entityName}"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (widget.parentTable != null) ...[
                 DropdownButtonFormField<String>(
                   initialValue: selectedParentId,
-                  hint: Text(
-                    "Select ${widget.entityName == 'Village' ? 'Cluster' : 'Village'}",
-                  ),
+                  hint: Text("Select ${widget.entityName == 'Village' ? 'Cluster' : 'Village'}"),
                   items: parents
-                      .map(
-                        (p) => DropdownMenuItem(
-                          value: p['id'].toString(),
-                          child: Text(p['name'] ?? 'Unknown'),
-                        ),
-                      )
+                      .map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['name'] ?? 'Unknown')))
                       .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => selectedParentId = val),
+                  onChanged: (val) => setDialogState(() => selectedParentId = val),
                 ),
                 const SizedBox(height: 16),
               ],
               TextField(
                 controller: nameController,
-                decoration: InputDecoration(
-                  labelText: "${widget.entityName} Name",
-                ),
+                decoration: InputDecoration(labelText: "${widget.entityName} Name"),
               ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
@@ -120,10 +94,7 @@ class _EntityManagerState extends State<EntityManager> {
                   if (entity == null) {
                     await _supabase.from(widget.tableName).insert(data);
                   } else {
-                    await _supabase
-                        .from(widget.tableName)
-                        .update(data)
-                        .eq('id', entity['id']);
+                    await _supabase.from(widget.tableName).update(data).eq('id', entity['id']);
                   }
 
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -152,18 +123,11 @@ class _EntityManagerState extends State<EntityManager> {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (ctx, i) {
                 final item = _entities[i];
-                final parentData = widget.parentTable != null
-                    ? item[widget.parentTable]
-                    : null;
-                final parentName = parentData != null
-                    ? parentData['name']
-                    : null;
+                final parentData = widget.parentTable != null ? item[widget.parentTable] : null;
+                final parentName = parentData != null ? parentData['name'] : null;
 
                 return ListTile(
-                  title: Text(
-                    item['name'] ?? 'Unnamed',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  title: Text(item['name'] ?? 'Unnamed', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: parentName != null ? Text("In $parentName") : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -175,14 +139,9 @@ class _EntityManagerState extends State<EntityManager> {
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
                         onPressed: () async {
-                          final confirm = await _showDeleteConfirm(
-                            item['name'],
-                          );
+                          final confirm = await _showDeleteConfirm(item['name']);
                           if (confirm == true) {
-                            await _supabase
-                                .from(widget.tableName)
-                                .delete()
-                                .eq('id', item['id']);
+                            await _supabase.from(widget.tableName).delete().eq('id', item['id']);
                             _fetchData();
                           }
                         },
@@ -194,7 +153,7 @@ class _EntityManagerState extends State<EntityManager> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showForm(),
-        backgroundColor: Colors.deepOrange,
+        backgroundColor: Colors.yellow,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -205,14 +164,9 @@ class _EntityManagerState extends State<EntityManager> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Confirm Delete"),
-        content: Text(
-          "Are you sure you want to delete '$name'? This may delete related items.",
-        ),
+        content: Text("Are you sure you want to delete '$name'? This may delete related items."),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
