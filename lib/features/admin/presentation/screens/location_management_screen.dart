@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,6 +25,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
+
   @override
   void initState() {
     super.initState();
@@ -67,9 +69,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Future<void> _importFromExcel() async {
     if (kIsWeb) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Excel import is not supported on web. Please use the manual boundary picker instead.")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel import is not supported on web.")));
       }
       return;
     }
@@ -82,15 +82,21 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       var excel = Excel.decodeBytes(bytes);
       String? lastClusterName;
       String? lastVillageName;
+
       for (var table in excel.tables.keys) {
         var sheet = excel.tables[table];
         if (sheet == null) continue;
         for (int i = 0; i < sheet.maxRows; i++) {
           var row = sheet.rows[i];
           if (row.length < 3) continue;
+
           final rawCluster = row[0]?.value?.toString().trim();
           final rawVillage = row[1]?.value?.toString().trim();
           final schoolName = row[2]?.value?.toString().trim();
+
+          final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
+          final rawLng = row.length > 4 ? row[4]?.value?.toString().trim() : null;
+
           if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
             continue;
           }
@@ -102,12 +108,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           }
           if (lastClusterName == null || lastClusterName.isEmpty) continue;
           if (schoolName == null || schoolName.isEmpty) continue;
+
           final clusterResp = await _supabase
               .from('clusters')
               .upsert({'name': lastClusterName}, onConflict: 'name')
               .select()
               .single();
           final String clusterId = clusterResp['id'].toString();
+
           String? villageId;
           if (lastVillageName != null && lastVillageName.isNotEmpty) {
             final villageResp = await _supabase
@@ -117,8 +125,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 .single();
             villageId = villageResp['id'].toString();
           }
+
           if (villageId != null) {
-            await _supabase.from('schools').upsert({'name': schoolName, 'village_id': villageId}, onConflict: 'name, village_id');
+            double? lat = rawLat != null ? double.tryParse(rawLat) : null;
+            double? lng = rawLng != null ? double.tryParse(rawLng) : null;
+
+            await _supabase.from('schools').upsert({
+              'name': schoolName,
+              'village_id': villageId,
+              'latitude': lat,
+              'longitude': lng,
+              'radius_meters': 200.0,
+            }, onConflict: 'name, village_id');
           }
           importedCount++;
         }
@@ -143,7 +161,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     try {
       final data = await _supabase
           .from('clusters')
-          .select('id, name, villages(id, name, cluster_id, schools(id, name, village_id, boundary))')
+          .select('id, name, villages(id, name, cluster_id, schools(id, name, village_id, latitude, longitude, radius_meters)))')
           .order('name', ascending: true);
       if (mounted) {
         setState(() {
@@ -167,11 +185,90 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     }
   }
 
+  Widget _buildMapHeaderControl({
+    required BuildContext context,
+    required MapType currentType,
+    required bool expanded,
+    required Function(MapType) onTypeChanged,
+    required VoidCallback onToggleFullscreen,
+  }) {
+    Widget buildTypeButton(String label, IconData icon, MapType type) {
+      final bool isSelected = currentType == type;
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => onTypeChanged(type),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.indigo : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.black87),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black87),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.all(2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildTypeButton("Map", Icons.map, MapType.normal),
+              buildTypeButton("Sat", Icons.satellite_alt, MapType.satellite),
+              buildTypeButton("Hybrid", Icons.layers, MapType.hybrid),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
+          onPressed: onToggleFullscreen,
+        ),
+      ],
+    );
+  }
+
   Future<void> _showAddDialog(String type) async {
     final nameController = TextEditingController();
+    final latController = TextEditingController();
+    final lngController = TextEditingController();
+    final radiusController = TextEditingController(text: "200");
+
     String? selectedClusterId;
     String? selectedVillageId;
-    List<LatLng> schoolBoundary = [];
+    GoogleMapController? mapController;
+    LatLng? selectedLatLng;
+    MapType dialogMapType = MapType.normal;
+    int mapRefreshKey = 0;
+
+    void updateMapLocation() {
+      final double? lat = double.tryParse(latController.text.trim());
+      final double? lng = double.tryParse(lngController.text.trim());
+      if (lat != null && lng != null && mapController != null) {
+        mapController!.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+      }
+    }
+
+    latController.addListener(updateMapLocation);
+    lngController.addListener(updateMapLocation);
+
     Future<String?> showQuickAdd(String parentType) async {
       final quickController = TextEditingController();
       return showDialog<String>(
@@ -208,143 +305,267 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text("Add New $type"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (type == 'School') ...[
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _importFromExcel();
-                      },
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text("Import Schools via Excel"),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(child: Divider()),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text("OR MANUALLY", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          ),
-                          Expanded(child: Divider()),
-                        ],
+        builder: (context, setDialogState) {
+          Widget buildBaseMap({VoidCallback? onMapTapTrigger}) {
+            return GoogleMap(
+              key: ValueKey('add_map_${mapRefreshKey}_${dialogMapType.name}'),
+              initialCameraPosition: CameraPosition(
+                target: selectedLatLng ?? const LatLng(23.0225, 72.5714),
+                zoom: selectedLatLng != null ? 14 : 12,
+              ),
+              mapType: dialogMapType,
+              zoomControlsEnabled: true,
+              myLocationButtonEnabled: false,
+              gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+              onMapCreated: (ctrl) => mapController = ctrl,
+              onTap: (latLng) {
+                setDialogState(() {
+                  selectedLatLng = latLng;
+                  latController.text = latLng.latitude.toStringAsFixed(6);
+                  lngController.text = latLng.longitude.toStringAsFixed(6);
+                });
+                if (onMapTapTrigger != null) onMapTapTrigger();
+              },
+              markers: selectedLatLng == null
+                  ? {}
+                  : {Marker(markerId: const MarkerId('selected_pin'), position: selectedLatLng!)},
+              circles: selectedLatLng == null
+                  ? {}
+                  : {
+                      Circle(
+                        circleId: const CircleId('geofence_circle'),
+                        center: selectedLatLng!,
+                        radius: double.tryParse(radiusController.text.trim()) ?? 200.0,
+                        fillColor: Colors.teal.withOpacity(0.15),
+                        strokeColor: Colors.teal,
+                        strokeWidth: 2,
                       ),
-                    ),
-                    const Text(
-                      "Draw School Boundary (Tap 3+ points)",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (type == 'Village' || type == 'School')
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedClusterId,
-                      hint: const Text("Select Cluster"),
-                      items: [
-                        const DropdownMenuItem(
-                          value: "ADD_NEW",
-                          child: Text(
-                            "+ Add New Cluster...",
-                            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
-                      ],
-                      onChanged: (val) async {
-                        if (val == "ADD_NEW") {
-                          final newId = await showQuickAdd("Cluster");
-                          if (newId != null) setDialogState(() => selectedClusterId = newId);
-                        } else {
-                          setDialogState(() {
-                            selectedClusterId = val;
-                            selectedVillageId = null;
-                          });
-                        }
-                      },
-                    ),
-                  if (type == 'School') ...[
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedVillageId,
-                      hint: const Text("Select Village"),
-                      disabledHint: const Text("Select a Cluster first"),
-                      items: selectedClusterId == null
-                          ? []
-                          : [
-                              const DropdownMenuItem(
-                                value: "ADD_NEW",
-                                child: Text(
-                                  "+ Add New Village...",
-                                  style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                    },
+            );
+          }
+
+          void openFullscreenMap() async {
+            await Navigator.of(context).push(
+              PageRouteBuilder(
+                opaque: false,
+                barrierDismissible: true,
+                pageBuilder: (_, __, ___) => StatefulBuilder(
+                  builder: (fsContext, setFsState) => Scaffold(
+                    backgroundColor: Colors.black38,
+                    body: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Material(
+                          elevation: 12,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                child: _buildMapHeaderControl(
+                                  context: context,
+                                  currentType: dialogMapType,
+                                  expanded: true,
+                                  onTypeChanged: (type) {
+                                    setDialogState(() {
+                                      dialogMapType = type;
+                                      mapRefreshKey++;
+                                    });
+                                    setFsState(() {});
+                                  },
+                                  onToggleFullscreen: () => Navigator.of(context).pop(),
                                 ),
                               ),
-                              ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List).map(
-                                (v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name'])),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                                  child: buildBaseMap(onMapTapTrigger: () => setFsState(() {})),
+                                ),
                               ),
                             ],
-                      onChanged: selectedClusterId == null
-                          ? null
-                          : (val) async {
-                              if (val == "ADD_NEW") {
-                                final newId = await showQuickAdd("Village");
-                                if (newId != null) setDialogState(() => selectedVillageId = newId);
-                              } else {
-                                setDialogState(() => selectedVillageId = val);
-                              }
-                            },
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(labelText: "$type Name"),
                   ),
-                ],
+                ),
+              ),
+            );
+            setDialogState(() {});
+          }
+
+          return AlertDialog(
+            title: Text("Add New $type"),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (type == 'School') ...[
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _importFromExcel();
+                        },
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text("Import Schools via Excel"),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0),
+                              child: Text("OR MANUALLY", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            ),
+                            Expanded(child: Divider()),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (type == 'Village' || type == 'School')
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedClusterId,
+                        hint: const Text("Select Cluster"),
+                        items: [
+                          const DropdownMenuItem(
+                            value: "ADD_NEW",
+                            child: Text(
+                              "+ Add New Cluster...",
+                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
+                        ],
+                        onChanged: (val) async {
+                          if (val == "ADD_NEW") {
+                            final newId = await showQuickAdd("Cluster");
+                            if (newId != null) setDialogState(() => selectedClusterId = newId);
+                          } else {
+                            setDialogState(() {
+                              selectedClusterId = val;
+                              selectedVillageId = null;
+                            });
+                          }
+                        },
+                      ),
+                    if (type == 'School') ...[
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedVillageId,
+                        hint: const Text("Select Village"),
+                        disabledHint: const Text("Select a Cluster first"),
+                        items: selectedClusterId == null
+                            ? []
+                            : [
+                                const DropdownMenuItem(
+                                  value: "ADD_NEW",
+                                  child: Text(
+                                    "+ Add New Village...",
+                                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List)
+                                    .map((v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name']))),
+                              ],
+                        onChanged: selectedClusterId == null
+                            ? null
+                            : (val) async {
+                                if (val == "ADD_NEW") {
+                                  final newId = await showQuickAdd("Village");
+                                  if (newId != null) setDialogState(() => selectedVillageId = newId);
+                                } else {
+                                  setDialogState(() => selectedVillageId = val);
+                                }
+                              },
+                      ),
+                    ],
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(labelText: "$type Name"),
+                    ),
+                    if (type == 'School') ...[
+                      const SizedBox(height: 16),
+                      _buildMapHeaderControl(
+                        context: context,
+                        currentType: dialogMapType,
+                        expanded: false,
+                        onTypeChanged: (type) {
+                          setDialogState(() {
+                            dialogMapType = type;
+                            mapRefreshKey++;
+                          });
+                        },
+                        onToggleFullscreen: openFullscreenMap,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: buildBaseMap(),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: latController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Latitude"),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: lngController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Longitude"),
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextField(
+                        controller: radiusController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Geofence Radius (Meters)"),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-                final Map<String, dynamic> insertData = {'name': name};
-                String table = '';
-                try {
-                  if (type == 'Cluster') {
-                    table = 'clusters';
-                  } else if (type == 'Village') {
-                    if (selectedClusterId == null) return;
-                    table = 'villages';
-                    insertData['cluster_id'] = selectedClusterId;
-                  } else if (type == 'School') {
-                    if (selectedVillageId == null) return;
-                    table = 'schools';
-                    insertData['village_id'] = selectedVillageId;
-                    if (schoolBoundary.length >= 3) {
-                      var coords = schoolBoundary.map((p) => [p.longitude, p.latitude]).toList();
-                      coords.add(coords.first);
-                      insertData['boundary'] = {
-                        'type': 'Polygon',
-                        'coordinates': [coords],
-                      };
-                    } else {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text("Please draw a valid boundary with at least 3 points.")));
-                      return;
-                    }
-                  }
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+                  final Map<String, dynamic> insertData = {'name': name};
+                  String table = '';
                   try {
+                    if (type == 'Cluster') {
+                      table = 'clusters';
+                    } else if (type == 'Village') {
+                      if (selectedClusterId == null) return;
+                      table = 'villages';
+                      insertData['cluster_id'] = selectedClusterId;
+                    } else if (type == 'School') {
+                      if (selectedVillageId == null) return;
+                      table = 'schools';
+                      insertData['village_id'] = selectedVillageId;
+                      insertData['latitude'] = double.tryParse(latController.text.trim());
+                      insertData['longitude'] = double.tryParse(lngController.text.trim());
+                      insertData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
+                    }
+
                     await _supabase.from(table).insert(insertData);
                     if (ctx.mounted) Navigator.pop(ctx);
                     _fetchHierarchy();
@@ -354,16 +575,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error saving $type: ${e.toString()}")));
                     }
                   }
-                } catch (e) {
-                  debugPrint("Save Error: $e");
-                }
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        ),
+                },
+                child: const Text("Save"),
+              ),
+            ],
+          );
+        },
       ),
-    );
+    ).then((_) {
+      latController.removeListener(updateMapLocation);
+      lngController.removeListener(updateMapLocation);
+    });
   }
 
   Future<void> _confirmDelete(String type, dynamic entity) async {
@@ -404,9 +626,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     if (confirmed == true) {
       String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
       await _supabase.from(table).delete().eq('id', entity['id']);
-      if (mounted) {
-        _fetchHierarchy();
-      }
+      if (mounted) _fetchHierarchy();
     }
   }
 
@@ -469,6 +689,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     int clusterColBorder = clusterBorder ? 1 : 0;
     int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
     int schoolColBorder = clusterBorder ? 1 : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
+
+    String schoolCellText = "-";
+    if (school != null) {
+      final lat = school['latitude'];
+      final lon = school['longitude'];
+      final rad = school['radius_meters'];
+      schoolCellText = school['name'] + ((lat != null && lon != null) ? " (${rad}m Geofence)" : " (No GPS)");
+    }
+
     return TableRow(
       children: [
         _ActionCell(
@@ -483,7 +712,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           onTap: () => _showManageDialog('Village', village),
         ),
         _ActionCell(
-          text: school != null ? school['name'] : "-",
+          text: schoolCellText,
           borderType: schoolColBorder,
           onTap: school != null ? () => _showManageDialog('School', school) : null,
         ),
@@ -495,25 +724,16 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     final Set<String> values = {};
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
-        continue;
-      }
-      if (columnIndex == 0) {
-        values.add(clusterName);
-      }
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
+      if (columnIndex == 0) values.add(clusterName);
+
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) {
-          continue;
-        }
-        if (columnIndex == 1) {
-          values.add(villageName);
-        }
+        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) continue;
+        if (columnIndex == 1) values.add(villageName);
+
         for (final school in (village['schools'] ?? [])) {
-          final schoolName = school['name'].toString();
-          if (columnIndex == 2) {
-            values.add(schoolName);
-          }
+          if (columnIndex == 2) values.add(school['name'].toString());
         }
       }
     }
@@ -522,104 +742,388 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   Future<void> _showFilterMenu({required BuildContext context, required int columnIndex}) async {
     final allValues = _getUniqueValues(columnIndex);
-    Set<String> currentSelection;
-    if (columnIndex == 0) {
-      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
-    } else if (columnIndex == 1) {
-      currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
-    } else {
-      currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
-    }
-    final searchController = TextEditingController();
+    Set<String> currentSelection = (columnIndex == 0)
+        ? (_selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues))
+        : (columnIndex == 1)
+        ? (_selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues))
+        : (_selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues));
+
+    final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
+
     await showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text("Filter"),
-              content: SizedBox(
-                width: 320,
-                height: 450,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text("Filter"),
+          content: SizedBox(
+            width: 320,
+            height: 450,
+            child: Column(
+              children: [
+                TextField(
+                  controller: dialogSearchController,
+                  decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
+                  onChanged: (value) {
+                    setStateDialog(() {
+                      filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  dense: true,
+                  value: currentSelection.length == allValues.length,
+                  title: const Text("Select All"),
+                  onChanged: (checked) {
+                    setStateDialog(() {
+                      currentSelection = checked == true ? Set.from(allValues) : {};
+                    });
+                  },
+                ),
+                const Divider(),
+                Expanded(
+                  child: ListView(
+                    children: filteredValues.map((value) {
+                      return CheckboxListTile(
+                        dense: true,
+                        value: currentSelection.contains(value),
+                        title: Text(value),
+                        onChanged: (checked) {
+                          setStateDialog(() {
+                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  if (columnIndex == 0)
+                    _selectedClusterFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                  if (columnIndex == 1)
+                    _selectedVillageFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                  if (columnIndex == 2)
+                    _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                  _applyAllFilters();
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showManageDialog(String type, dynamic entity) async {
+    final nameController = TextEditingController(text: entity['name']);
+    final latController = TextEditingController(text: entity['latitude']?.toString() ?? '');
+    final lngController = TextEditingController(text: entity['longitude']?.toString() ?? '');
+    final radiusController = TextEditingController(text: entity['radius_meters']?.toString() ?? '200');
+
+    String? selectedParentId = (type == 'Village') ? entity['cluster_id']?.toString() : entity['village_id']?.toString();
+    GoogleMapController? mapController;
+    MapType dialogMapType = MapType.normal;
+    int mapRefreshKey = 0;
+
+    double initialLat = entity['latitude'] != null ? double.tryParse(entity['latitude'].toString()) ?? 23.0225 : 23.0225;
+    double initialLng = entity['longitude'] != null ? double.tryParse(entity['longitude'].toString()) ?? 72.5714 : 72.5714;
+    LatLng? selectedLatLng = entity['latitude'] != null && entity['longitude'] != null ? LatLng(initialLat, initialLng) : null;
+
+    void updateMapLocation() {
+      final double? lat = double.tryParse(latController.text.trim());
+      final double? lng = double.tryParse(lngController.text.trim());
+      if (lat != null && lng != null && mapController != null) {
+        mapController!.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+      }
+    }
+
+    latController.addListener(updateMapLocation);
+    lngController.addListener(updateMapLocation);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Widget buildBaseMap({VoidCallback? onMapTapTrigger}) {
+            return GoogleMap(
+              key: ValueKey('manage_map_${mapRefreshKey}_${dialogMapType.name}'),
+              initialCameraPosition: CameraPosition(target: LatLng(initialLat, initialLng), zoom: 14),
+              mapType: dialogMapType,
+              zoomControlsEnabled: true,
+              myLocationButtonEnabled: false,
+              gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+              onMapCreated: (ctrl) => mapController = ctrl,
+              onTap: (latLng) {
+                setDialogState(() {
+                  selectedLatLng = latLng;
+                  latController.text = latLng.latitude.toStringAsFixed(6);
+                  lngController.text = latLng.longitude.toStringAsFixed(6);
+                });
+                if (onMapTapTrigger != null) onMapTapTrigger();
+              },
+              markers: selectedLatLng == null ? {} : {Marker(markerId: const MarkerId('edit_pin'), position: selectedLatLng!)},
+              circles: selectedLatLng == null
+                  ? {}
+                  : {
+                      Circle(
+                        circleId: const CircleId('edit_geofence_circle'),
+                        center: selectedLatLng!,
+                        radius: double.tryParse(radiusController.text.trim()) ?? 200.0,
+                        fillColor: Colors.indigo.withOpacity(0.15),
+                        strokeColor: Colors.indigo,
+                        strokeWidth: 2,
+                      ),
+                    },
+            );
+          }
+
+          void openFullscreenMap() async {
+            await Navigator.of(context).push(
+              PageRouteBuilder(
+                opaque: false,
+                barrierDismissible: true,
+                pageBuilder: (_, __, ___) => StatefulBuilder(
+                  builder: (fsContext, setFsState) => Scaffold(
+                    backgroundColor: Colors.black38,
+                    body: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Material(
+                          elevation: 12,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                child: _buildMapHeaderControl(
+                                  context: context,
+                                  currentType: dialogMapType,
+                                  expanded: true,
+                                  onTypeChanged: (type) {
+                                    setDialogState(() {
+                                      dialogMapType = type;
+                                      mapRefreshKey++;
+                                    });
+                                    setFsState(() {});
+                                  },
+                                  onToggleFullscreen: () => Navigator.of(context).pop(),
+                                ),
+                              ),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                                  child: buildBaseMap(onMapTapTrigger: () => setFsState(() {})),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+            setDialogState(() {});
+          }
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.settings, color: Colors.indigo),
+                const SizedBox(width: 10),
+                Text("Manage $type"),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
-                      onChanged: (value) {
-                        setStateDialog(() {
-                          filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    CheckboxListTile(
-                      dense: true,
-                      value:
-                          currentSelection.length == allValues.length ||
-                          (columnIndex == 0 && _selectedClusterFilters == null) ||
-                          (columnIndex == 1 && _selectedVillageFilters == null) ||
-                          (columnIndex == 2 && _selectedSchoolFilters == null),
-                      title: const Text("Select All"),
-                      onChanged: (checked) {
-                        setStateDialog(() {
-                          if (checked == true) {
-                            currentSelection = Set.from(allValues);
-                          } else {
-                            currentSelection.clear();
-                          }
-                        });
-                      },
-                    ),
-                    const Divider(),
-                    Expanded(
-                      child: ListView(
-                        children: filteredValues.map((value) {
-                          return CheckboxListTile(
-                            dense: true,
-                            value: currentSelection.contains(value),
-                            title: Text(value),
-                            onChanged: (checked) {
-                              setStateDialog(() {
-                                if (checked == true) {
-                                  currentSelection.add(value);
-                                } else {
-                                  currentSelection.remove(value);
-                                }
-                              });
-                            },
-                          );
+                    if (type == 'Village')
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedParentId,
+                        decoration: const InputDecoration(labelText: "Move to Cluster"),
+                        items: _hierarchy
+                            .map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name'])))
+                            .toList(),
+                        onChanged: (val) => setDialogState(() => selectedParentId = val),
+                      ),
+                    if (type == 'School') ...[
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedParentId,
+                        decoration: const InputDecoration(labelText: "Move to Village"),
+                        onChanged: (val) => setDialogState(() => selectedParentId = val),
+                        items: _hierarchy.expand((cluster) {
+                          return (cluster['villages'] as List).map((village) {
+                            return DropdownMenuItem<String>(
+                              value: village['id'].toString(),
+                              child: Text("${village['name']} (${cluster['name']})"),
+                            );
+                          });
                         }).toList(),
                       ),
+                    ],
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(labelText: "$type Name"),
+                    ),
+                    if (type == 'School') ...[
+                      const SizedBox(height: 16),
+                      _buildMapHeaderControl(
+                        context: context,
+                        currentType: dialogMapType,
+                        expanded: false,
+                        onTypeChanged: (type) {
+                          setDialogState(() {
+                            dialogMapType = type;
+                            mapRefreshKey++;
+                          });
+                        },
+                        onToggleFullscreen: openFullscreenMap,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: buildBaseMap(),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: latController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Latitude"),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: lngController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Longitude"),
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextField(
+                        controller: radiusController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Geofence Radius (Meters)"),
+                        onChanged: (_) => setDialogState(() {}),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmDelete(type, entity);
+                      },
+                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      label: Text("Delete this $type", style: const TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      if (columnIndex == 0) {
-                        _selectedClusterFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
-                      } else if (columnIndex == 1) {
-                        _selectedVillageFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
-                      } else {
-                        _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
-                      }
-                      _applyAllFilters();
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text("Apply"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final Map<String, dynamic> updateData = {'name': name};
+                    String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
+
+                    if (type == 'Village') updateData['cluster_id'] = selectedParentId;
+                    if (type == 'School') {
+                      updateData['village_id'] = selectedParentId;
+                      updateData['latitude'] = double.tryParse(latController.text.trim());
+                      updateData['longitude'] = double.tryParse(lngController.text.trim());
+                      updateData['radius_meters'] = double.tryParse(radiusController.text.trim()) ?? 200.0;
+                    }
+
+                    await _supabase.from(table).update(updateData).eq('id', entity['id']);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchHierarchy();
+                    messenger.showSnackBar(SnackBar(content: Text("$type updated!")));
+                  } catch (e) {
+                    messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
+                  }
+                },
+                child: const Text("Save Changes"),
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((_) {
+      latController.removeListener(updateMapLocation);
+      lngController.removeListener(updateMapLocation);
+    });
+  }
+
+  void _applyAllFilters() {
+    final query = _searchController.text.toLowerCase().trim();
+    final List<dynamic> result = [];
+    for (final cluster in _hierarchy) {
+      final clusterName = cluster['name'].toString();
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
+
+      final List<dynamic> filteredVillages = [];
+      for (final village in (cluster['villages'] ?? [])) {
+        final villageName = village['name'].toString();
+        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) continue;
+
+        final List<dynamic> filteredSchools = [];
+        for (final school in (village['schools'] ?? [])) {
+          final schoolName = school['name'].toString();
+          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) continue;
+
+          final matchesSearch =
+              query.isEmpty ||
+              clusterName.toLowerCase().contains(query) ||
+              villageName.toLowerCase().contains(query) ||
+              schoolName.toLowerCase().contains(query);
+          if (matchesSearch) filteredSchools.add(school);
+        }
+
+        final villageMatchesSearch =
+            query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
+        if (filteredSchools.isNotEmpty || villageMatchesSearch) {
+          filteredVillages.add({...village, 'schools': filteredSchools});
+        }
+      }
+
+      final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
+      if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
+        result.add({...cluster, 'villages': filteredVillages});
+      }
+    }
+    setState(() {
+      _filteredHierarchy = result;
+    });
   }
 
   @override
@@ -707,186 +1211,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 ],
               ),
             ),
-      floatingActionButton: _buildSpeedDial(),
-    );
-  }
-
-  Widget _buildSpeedDial() {
-    return FloatingActionButton(
-      heroTag: "add_location_btn",
-      onPressed: () => _showAddDialog('School'),
-      backgroundColor: Colors.teal,
-      child: const Icon(Icons.add_location_alt, color: Colors.white),
-    );
-  }
-
-  Future<void> _showManageDialog(String type, dynamic entity) async {
-    final nameController = TextEditingController(text: entity['name']);
-    String? selectedParentId;
-    List<LatLng> schoolBoundary = [];
-    if (type == 'School' && entity['boundary'] != null) {
-      try {
-        var coords = entity['boundary']['coordinates'][0] as List;
-        schoolBoundary = coords
-            .take(coords.length > 3 ? coords.length - 1 : coords.length)
-            .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
-            .toList();
-      } catch (e) {
-        debugPrint("Error parsing boundary: $e");
-      }
-    }
-    if (type == 'Village') {
-      selectedParentId = entity['cluster_id']?.toString();
-    } else if (type == 'School') {
-      selectedParentId = entity['village_id']?.toString();
-    }
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.settings, color: Colors.indigo),
-              const SizedBox(width: 10),
-              Text("Manage $type"),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (type == 'Village')
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedParentId,
-                      decoration: const InputDecoration(labelText: "Move to Cluster"),
-                      items: _hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
-                      onChanged: (val) => setDialogState(() => selectedParentId = val),
-                    ),
-                  if (type == 'School') ...[
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedParentId,
-                      decoration: const InputDecoration(labelText: "Move to Village"),
-                      onChanged: (val) {
-                        setDialogState(() {
-                          selectedParentId = val;
-                        });
-                      },
-                      items: _hierarchy.expand((cluster) {
-                        return (cluster['villages'] as List).map((village) {
-                          return DropdownMenuItem<String>(
-                            value: village['id'].toString(),
-                            child: Text("${village['name']} (${cluster['name']})"),
-                          );
-                        });
-                      }).toList(),
-                    ),
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(labelText: "$type Name"),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text("Edit School Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 20),
-                    const Divider(),
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _confirmDelete(type, entity);
-                      },
-                      icon: const Icon(Icons.delete_forever, color: Colors.red),
-                      label: Text("Delete this $type", style: const TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-                final messenger = ScaffoldMessenger.of(context);
-                try {
-                  final Map<String, dynamic> updateData = {'name': name};
-                  String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
-                  if (type == 'Village') updateData['cluster_id'] = selectedParentId;
-                  if (type == 'School') {
-                    updateData['village_id'] = selectedParentId;
-                    if (schoolBoundary.length >= 3) {
-                      var coords = schoolBoundary.map((p) => [p.longitude, p.latitude]).toList();
-                      coords.add(coords.first);
-                      updateData['boundary'] = {
-                        'type': 'Polygon',
-                        'coordinates': [coords],
-                      };
-                    }
-                  }
-                  await _supabase.from(table).update(updateData).eq('id', entity['id']);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (!mounted) return;
-                  _fetchHierarchy();
-                  messenger.showSnackBar(SnackBar(content: Text("$type updated!")));
-                } catch (e) {
-                  if (!mounted) return;
-                  messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
-                }
-              },
-              child: const Text("Save Changes"),
-            ),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: "add_location_btn",
+        onPressed: () => _showAddDialog('School'),
+        backgroundColor: Colors.teal,
+        child: const Icon(Icons.add_location_alt, color: Colors.white),
       ),
     );
-  }
-
-  void _applyAllFilters() {
-    final query = _searchController.text.toLowerCase().trim();
-    final List<dynamic> result = [];
-    for (final cluster in _hierarchy) {
-      final clusterName = cluster['name'].toString();
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
-        continue;
-      }
-      final List<dynamic> filteredVillages = [];
-      for (final village in (cluster['villages'] ?? [])) {
-        final villageName = village['name'].toString();
-        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
-          continue;
-        }
-        final List<dynamic> filteredSchools = [];
-        for (final school in (village['schools'] ?? [])) {
-          final schoolName = school['name'].toString();
-          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
-            continue;
-          }
-          final matchesSearch =
-              query.isEmpty ||
-              clusterName.toLowerCase().contains(query) ||
-              villageName.toLowerCase().contains(query) ||
-              schoolName.toLowerCase().contains(query);
-          if (matchesSearch) {
-            filteredSchools.add(school);
-          }
-        }
-        final villageMatchesSearch =
-            query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
-        if (filteredSchools.isNotEmpty || villageMatchesSearch) {
-          filteredVillages.add({...village, 'schools': filteredSchools});
-        }
-      }
-      final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
-      if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
-        result.add({...cluster, 'villages': filteredVillages});
-      }
-    }
-    setState(() {
-      _filteredHierarchy = result;
-    });
   }
 }
 
@@ -897,6 +1228,7 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
+
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -905,6 +1237,7 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -935,7 +1268,7 @@ class _SortableHeader extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: hasFilter ? Colors.indigo.withValues(alpha: 0.12) : Colors.transparent,
+                color: hasFilter ? Colors.indigo.withAlpha(30) : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(Icons.filter_alt, size: 18, color: hasFilter ? Colors.indigo : Colors.grey.shade700),
@@ -952,7 +1285,9 @@ class _ActionCell extends StatelessWidget {
   final bool isBold;
   final int borderType;
   final VoidCallback? onTap;
+
   const _ActionCell({required this.text, this.isBold = false, this.borderType = 0, this.onTap});
+
   @override
   Widget build(BuildContext context) {
     BorderSide? topSide;
@@ -963,6 +1298,7 @@ class _ActionCell extends StatelessWidget {
     } else if (borderType == 3) {
       topSide = BorderSide(color: Colors.grey.shade300, width: 0.5);
     }
+
     return Container(
       decoration: BoxDecoration(border: topSide != null ? Border(top: topSide) : null),
       child: InkWell(
@@ -976,7 +1312,7 @@ class _ActionCell extends StatelessWidget {
                   text,
                   style: TextStyle(
                     fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                    color: text == "-" ? Colors.grey : Colors.indigo.shade900,
+                    color: (text.isEmpty || text == "-") ? Colors.grey : Colors.indigo.shade900,
                     decoration: (text.isEmpty || text == "-") ? null : TextDecoration.underline,
                     decorationStyle: TextDecorationStyle.dotted,
                   ),
