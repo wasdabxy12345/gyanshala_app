@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_responses_viewer_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,6 +7,7 @@ import 'form_builder_canvas.dart';
 
 class FormManagementScreen extends StatefulWidget {
   const FormManagementScreen({super.key});
+
   @override
   State<FormManagementScreen> createState() => _FormManagementScreenState();
 }
@@ -13,6 +15,7 @@ class FormManagementScreen extends StatefulWidget {
 class _FormManagementScreenState extends State<FormManagementScreen> {
   List<Map<String, dynamic>> _formsList = [];
   bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,19 +31,75 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
         _formsList = List<Map<String, dynamic>>.from(data);
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error syncing forms collection: $e"), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error syncing forms collection: $e"), backgroundColor: Colors.red));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      // FIXED: Corrected from 'final' to 'finally'
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteFormDocument(String formId, String formTitle) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final bool confirmDelete =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+                SizedBox(width: 8),
+                Text("Delete Form Blueprint?", style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(
+              "Are you sure you want to delete \"$formTitle\"?\n\nThis operation will permanently purge all related canvas questions and matching user submission entries.",
+              style: const TextStyle(height: 1.4),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text("Cancel")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text("Permanently Delete", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmDelete) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('forms').delete().eq('id', formId);
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text("\"$formTitle\" successfully removed from database."), backgroundColor: Colors.green),
+      );
+
+      await _fetchFormsFromSupabase();
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text("Failed to destroy form entity row: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _createNewForm() {
     final titleController = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text(
           "Create New Form Document",
           style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00AFEF)),
@@ -54,18 +113,21 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00AFEF)),
             onPressed: () async {
               final text = titleController.text.trim();
               if (text.isEmpty) return;
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
+
               setState(() => _isLoading = true);
               try {
                 final supabase = Supabase.instance.client;
                 final newFormRow = await supabase.from('forms').insert({'title': text}).select('id, title').single();
+
                 await _fetchFormsFromSupabase();
+
                 if (mounted) {
                   Navigator.push(
                     context,
@@ -73,14 +135,14 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                       builder: (context) =>
                           FormBuilderCanvas(formId: newFormRow['id'].toString(), formTitle: newFormRow['title']),
                     ),
-                  ).then((_) => _fetchFormsFromSupabase());
+                  ).then((_) {
+                    if (mounted) _fetchFormsFromSupabase();
+                  });
                 }
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Failed to instantiate form database entry: $e"), backgroundColor: Colors.red),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(content: Text("Failed to instantiate form database entry: $e"), backgroundColor: Colors.red),
+                );
               } finally {
                 if (mounted) setState(() => _isLoading = false);
               }
@@ -139,6 +201,11 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                               ).then((_) => _fetchFormsFromSupabase());
                             },
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                            tooltip: "Remove Form Blueprint",
+                            onPressed: () => _deleteFormDocument(currentFormId, currentFormTitle),
+                          ),
                           const SizedBox(width: 4),
                           const Icon(Icons.chevron_right, color: Colors.grey),
                         ],
@@ -158,7 +225,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createNewForm,
-        backgroundColor: const Color(0xFF00AFEF),
+        backgroundColor: AppTheme.primaryBlue,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("Create Form", style: TextStyle(color: Colors.white)),
       ),

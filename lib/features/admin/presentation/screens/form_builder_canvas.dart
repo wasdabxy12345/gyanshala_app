@@ -5,6 +5,8 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/excel_parser/excel_parser.dart'
     if (dart.library.js_interop) 'package:gyanshala_app/core/utils/excel_parser/excel_web_parser.dart'
     if (dart.library.io) 'package:gyanshala_app/core/utils/excel_parser/excel_mobile_parser.dart';
@@ -23,6 +25,8 @@ class FormBuilderCanvas extends StatefulWidget {
 class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   late TextEditingController _titleController;
   List<Map<String, dynamic>> _currentQuestions = [];
+
+  List<String> _deletedQuestionIds = <String>[];
   bool _isLoading = false;
 
   @override
@@ -54,6 +58,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
       setState(() {
         _currentQuestions = List<Map<String, dynamic>>.from(data);
+        _deletedQuestionIds = <String>[];
       });
     } catch (e) {
       if (mounted) {
@@ -77,22 +82,108 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     setState(() => _isLoading = true);
     try {
       final supabase = Supabase.instance.client;
-      final List<Map<String, dynamic>> rowsToUpsert = [];
+
+      if (_deletedQuestionIds.isNotEmpty) {
+        await supabase.from('form_questions').delete().inFilter('id', _deletedQuestionIds);
+      }
+
+      final List<Map<String, dynamic>> newRowsToInsert = [];
+      final List<Map<String, dynamic>> existingRowsToUpsert = [];
+      final Map<String, String> tempToRealIdMap = {};
 
       for (int i = 0; i < _currentQuestions.length; i++) {
         final q = _currentQuestions[i];
-        rowsToUpsert.add({
-          if (q['id'] != null && !q['id'].toString().startsWith('new_')) 'id': q['id'],
+        final String currentId = q['id'].toString();
+
+        final Map<String, dynamic> rowData = {
           'form_id': widget.formId,
           'section': q['section'] ?? 'General',
-          'question': q['question'],
+          'question': q['question'] ?? '',
           'required': q['required'] ?? false,
           'sort_order': i,
-          'field_config': q['field_config'],
-        });
+          'field_config': Map<String, dynamic>.from(q['field_config'] ?? {}),
+        };
+
+        if (currentId.startsWith('new_')) {
+          newRowsToInsert.add({'temp_canvas_id': currentId, ...rowData});
+        } else {
+          rowData['id'] = q['id'];
+          existingRowsToUpsert.add(rowData);
+          tempToRealIdMap[currentId] = currentId;
+        }
       }
 
-      await supabase.from('form_questions').upsert(rowsToUpsert, onConflict: 'id');
+      if (newRowsToInsert.isNotEmpty) {
+        final pureInserts = newRowsToInsert.map((r) {
+          final clone = Map<String, dynamic>.from(r);
+          clone.remove('temp_canvas_id');
+          return clone;
+        }).toList();
+
+        final rawResponse = await supabase.from('form_questions').insert(pureInserts).select('id, question, sort_order');
+
+        final List<Map<String, dynamic>> insertedRecords = List<Map<String, dynamic>>.from(rawResponse);
+
+        for (final Map<String, dynamic> record in insertedRecords) {
+          final String dbQuestion = (record['question'] ?? '').toString();
+          final String dbSortOrder = (record['sort_order'] ?? '').toString();
+
+          int matchingInputIndex = -1;
+          for (int k = 0; k < newRowsToInsert.length; k++) {
+            final String canvasQuestion = (newRowsToInsert[k]['question'] ?? '').toString();
+            final String canvasSortOrder = (newRowsToInsert[k]['sort_order'] ?? '').toString();
+
+            if (canvasQuestion == dbQuestion && canvasSortOrder == dbSortOrder) {
+              matchingInputIndex = k;
+              break;
+            }
+          }
+
+          if (matchingInputIndex != -1) {
+            final String tempId = (newRowsToInsert[matchingInputIndex]['temp_canvas_id'] ?? '').toString();
+            final String realId = (record['id'] ?? '').toString();
+            if (tempId.isNotEmpty && realId.isNotEmpty) {
+              tempToRealIdMap[tempId] = realId;
+            }
+          }
+        }
+      }
+
+      final rawFormQuestions = await supabase.from('form_questions').select('*').eq('form_id', widget.formId!);
+
+      final List<Map<String, dynamic>> completeFormQuestions = List<Map<String, dynamic>>.from(rawFormQuestions);
+      final List<Map<String, dynamic>> finalRemappedRows = [];
+
+      for (var question in completeFormQuestions) {
+        final config = Map<String, dynamic>.from(question['field_config'] ?? {});
+        final skipLogic = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
+
+        if (skipLogic != null && skipLogic['enabled'] == true) {
+          final currentDepId = skipLogic['dependent_question_id']?.toString();
+
+          if (currentDepId != null && tempToRealIdMap.containsKey(currentDepId)) {
+            skipLogic['dependent_question_id'] = tempToRealIdMap[currentDepId];
+            config['skip_logic'] = skipLogic;
+
+            finalRemappedRows.add({
+              'id': question['id'],
+              'form_id': question['form_id'],
+              'section': question['section'],
+              'question': question['question'],
+              'required': question['required'],
+              'sort_order': question['sort_order'],
+              'field_config': config,
+            });
+          }
+        }
+      }
+
+      if (finalRemappedRows.isNotEmpty) {
+        await supabase.from('form_questions').upsert(finalRemappedRows, onConflict: 'id');
+      }
+      if (existingRowsToUpsert.isNotEmpty) {
+        await supabase.from('form_questions').upsert(existingRowsToUpsert, onConflict: 'id');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(
@@ -137,11 +228,10 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       );
 
       await Future.delayed(const Duration(milliseconds: 100));
-
       List<String> parsedOptions = [];
 
       if (kIsWeb) {
-        parsedOptions = await ExcelWebParser.parseFirstColumnFast(bytes);
+        parsedOptions = await ExcelParser.parseFirstColumnFast(bytes);
       } else {
         parsedOptions = await Isolate.run(() {
           final excel = Excel.decodeBytes(bytes);
@@ -204,45 +294,39 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     }
   }
 
-  Future<List<String>> _fetchAllTablePreviewData({required String tableName, String? roleFilter}) async {
-    try {
-      final supabase = Supabase.instance.client;
-      if (tableName == 'clusters') {
-        final res = await supabase.from('clusters').select('name').order('name');
-        return res.map((row) => row['name'] as String).toList();
-      }
-      if (tableName == 'profiles') {
-        var query = supabase.from('profiles').select('first_name, last_name');
-        if (roleFilter != null && roleFilter != 'all') {
-          query = query.eq('role', roleFilter as Object);
-        }
-        final res = await query;
-        return res.map((row) => "${row['first_name'] ?? ''} ${row['last_name'] ?? ''}".trim()).toList();
-      }
-      if (tableName == 'villages') {
-        final res = await supabase.from('villages').select('name').order('name');
-        return res.map((row) => row['name'] as String).toList();
-      }
-      if (tableName == 'schools') {
-        final res = await supabase.from('schools').select('name').order('name');
-        return res.map((row) => row['name'] as String).toList();
-      }
-      return [];
-    } catch (e) {
-      return ['Error fetching table data: $e'];
+  void _showConfigureQuestionDialog({required String type, Map<String, dynamic>? existingQuestion, int? editIndex}) {
+    final isEditing = existingQuestion != null && editIndex != null;
+
+    final questionController = TextEditingController(text: isEditing ? existingQuestion['question'] : '');
+    final sectionController = TextEditingController(text: isEditing ? existingQuestion['section'] : 'General');
+    bool isRequired = isEditing ? (existingQuestion['required'] ?? false) : false;
+    final config = isEditing ? Map<String, dynamic>.from(existingQuestion['field_config'] ?? {}) : {};
+
+    String sourceOptionType = config['source_meta']?.toString() ?? 'static';
+    if (config['datasource'] != null) {
+      sourceOptionType = 'database';
     }
-  }
 
-  void _showCreateQuestionDialog(String type) {
-    final questionController = TextEditingController();
-    final sectionController = TextEditingController(text: 'General');
-    bool isRequired = false;
+    // MODIFIED: Read the allow_other option flag from existing configuration
+    bool allowOtherOption = config['allow_other'] ?? false;
 
-    String sourceOptionType = 'static';
-    final List<TextEditingController> staticOptionControllers = [TextEditingController()];
+    final List<TextEditingController> staticOptionControllers = [];
+    if (isEditing && (sourceOptionType == 'static' || sourceOptionType == 'excel')) {
+      final existingOptions = List<dynamic>.from(config['options'] ?? []);
+      for (var opt in existingOptions) {
+        staticOptionControllers.add(TextEditingController(text: opt.toString()));
+      }
+    }
+    if (staticOptionControllers.isEmpty) {
+      staticOptionControllers.add(TextEditingController());
+    }
 
-    String selectedTable = 'clusters';
-    String selectedRoleFilter = 'all';
+    String selectedTable = config['datasource']?['table']?.toString() ?? 'clusters';
+    final skipBlock = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
+    bool enableSkipLogic = skipBlock != null ? (skipBlock['enabled'] ?? false) : false;
+    String? selectedDependentQuestionId = skipBlock?['dependent_question_id']?.toString();
+    String skipOperator = skipBlock?['operator']?.toString() ?? 'equals';
+    final skipValueController = TextEditingController(text: skipBlock?['value']?.toString() ?? '');
 
     showDialog(
       context: context,
@@ -250,16 +334,49 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final filtratedPriorQuestions = _currentQuestions.where((q) {
+              if (!isEditing) return true;
+              final currentIdx = _currentQuestions.indexOf(q);
+              return currentIdx < editIndex;
+            }).toList();
+
+            Future<void> handleSmartSpreadsheetPaste(int index) async {
+              final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+              if (data == null || data.text == null || data.text!.isEmpty) return;
+
+              final String pasteRaw = data.text!;
+
+              if (pasteRaw.contains('\n')) {
+                final List<String> parsedLines = pasteRaw
+                    .split(RegExp(r'\r?\n'))
+                    .map((line) => line.trim())
+                    .where((line) => line.isNotEmpty)
+                    .toList();
+
+                if (parsedLines.length > 1) {
+                  setModalState(() {
+                    staticOptionControllers[index].text = parsedLines.first;
+                    for (int i = 1; i < parsedLines.length; i++) {
+                      staticOptionControllers.insert(index + i, TextEditingController(text: parsedLines[i]));
+                    }
+                  });
+                  return;
+                }
+              }
+              staticOptionControllers[index].text = pasteRaw;
+            }
+
             return AlertDialog(
               title: Text(
-                "Configure New ${type == 'checkbox_search' ? 'Check box' : type} Field",
+                isEditing
+                    ? "Modify ${type} Question Parameters"
+                    : "Configure New ${type == 'checkbox_search' ? 'Check box' : type} Field",
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xff00afef)),
               ),
               actionsAlignment: MainAxisAlignment.end,
               content: SizedBox(
-                width: 640,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 500),
+                width: 680,
+                child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,9 +400,9 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           ),
                           const SizedBox(width: 12),
                           SizedBox(
-                            width: 140,
+                            width: 130,
                             child: CheckboxListTile(
-                              title: const Text("Mandatory", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                              title: const Text("Required", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                               contentPadding: EdgeInsets.zero,
                               value: isRequired,
                               controlAffinity: ListTileControlAffinity.leading,
@@ -294,67 +411,90 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           ),
                         ],
                       ),
-
                       if (type == 'radio' || type == 'checkbox_search') ...[
                         const Divider(height: 24),
-                        RadioGroup<String>(
-                          groupValue: sourceOptionType,
-                          onChanged: (String? value) async {
-                            if (value == null) return;
-
-                            setModalState(() {
-                              sourceOptionType = value;
-                            });
-
-                            if (value == 'excel') {
-                              final imported = await _pickOptionsFromExcel();
-
-                              if (imported.isNotEmpty) {
-                                setModalState(() {
-                                  staticOptionControllers.clear();
-
-                                  for (final opt in imported) {
-                                    staticOptionControllers.add(TextEditingController(text: opt));
-                                  }
-                                });
-                              }
-                            }
-                          },
-                          child: Row(
-                            children: [
-                              Radio<String>(value: 'static'),
-                              const Text("Manual"),
-
-                              Radio<String>(value: 'database'),
-                              const Text("Database"),
-
-                              Radio<String>(value: 'excel'),
-                              const Text("Excel"),
+                        const Text("Option Data Mapping Strategy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<String>(
+                            segments: const <ButtonSegment<String>>[
+                              ButtonSegment<String>(
+                                value: 'static',
+                                label: Text('Manual'),
+                                icon: Icon(Icons.edit_note, size: 16),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'database',
+                                label: Text('Database'),
+                                icon: Icon(Icons.storage, size: 16),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'excel',
+                                label: Text('Excel'),
+                                icon: Icon(Icons.table_chart, size: 16),
+                              ),
                             ],
+                            selected: <String>{sourceOptionType},
+                            onSelectionChanged: (Set<String> newSelection) async {
+                              final val = newSelection.first;
+                              setModalState(() => sourceOptionType = val);
+                              if (val == 'excel') {
+                                final imported = await _pickOptionsFromExcel();
+                                if (imported.isNotEmpty) {
+                                  setModalState(() {
+                                    staticOptionControllers.clear();
+                                    for (final opt in imported) {
+                                      staticOptionControllers.add(TextEditingController(text: opt));
+                                    }
+                                  });
+                                }
+                              }
+                            },
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         if (sourceOptionType == 'static' || sourceOptionType == 'excel') ...[
-                          Expanded(
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6.0),
+                            child: Text(
+                              "💡 Tip: You can copy cells directly from Excel and hit Ctrl+V / Cmd+V into any option row below to paste them into individual options.",
+                              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey.shade700),
+                            ),
+                          ),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 220),
                             child: ListView.builder(
-                              physics: const AlwaysScrollableScrollPhysics(),
+                              shrinkWrap: true,
                               itemCount: staticOptionControllers.length,
                               itemBuilder: (context, index) {
                                 return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
+                                  padding: const EdgeInsets.only(bottom: 6.0),
                                   child: Row(
                                     children: [
                                       Expanded(
-                                        child: TextField(
-                                          controller: staticOptionControllers[index],
-                                          decoration: InputDecoration(
-                                            labelText: 'Option ${index + 1}',
-                                            border: const OutlineInputBorder(),
+                                        child: SizedBox(
+                                          height: 40,
+                                          child: CallbackShortcuts(
+                                            bindings: <ShortcutActivator, VoidCallback>{
+                                              const SingleActivator(LogicalKeyboardKey.keyV, control: true): () =>
+                                                  handleSmartSpreadsheetPaste(index),
+                                              const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () =>
+                                                  handleSmartSpreadsheetPaste(index),
+                                            },
+                                            child: TextField(
+                                              controller: staticOptionControllers[index],
+                                              decoration: InputDecoration(
+                                                labelText: 'Option ${index + 1}',
+                                                border: const OutlineInputBorder(),
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.remove_circle, color: Colors.red),
+                                        icon: const Icon(Icons.remove_circle, color: Colors.red, size: 22),
                                         onPressed: () {
                                           if (staticOptionControllers.length > 1) {
                                             setModalState(() => staticOptionControllers.removeAt(index));
@@ -367,134 +507,165 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                               },
                             ),
                           ),
-                          TextButton.icon(
-                            icon: const Icon(Icons.add),
-                            label: const Text("Add Option Line"),
-                            onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              TextButton.icon(
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text("Add Option Line"),
+                                onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
+                              ),
+                              // ADDED: Toggle Switch to support dynamic write-in textbox answers
+                              Flexible(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      "Include 'Other' input field",
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Switch(
+                                      value: allowOtherOption,
+                                      activeThumbColor: const Color(0xff00afef),
+                                      onChanged: (value) => setModalState(() => allowOtherOption = value),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                         if (sourceOptionType == 'database') ...[
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
                             initialValue: selectedTable,
-                            decoration: const InputDecoration(labelText: 'Target Lookup Table', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(
+                              labelText: 'Target Lookup Table',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                            ),
                             items: const [
                               DropdownMenuItem(value: 'clusters', child: Text("Clusters (name)")),
                               DropdownMenuItem(value: 'villages', child: Text("Villages (name)")),
                               DropdownMenuItem(value: 'schools', child: Text("Schools (name)")),
-                              DropdownMenuItem(value: 'profiles', child: Text("Profiles (first_name + last_name)")),
+                              DropdownMenuItem(value: 'profiles', child: Text("Profiles (Name Structure)")),
                             ],
                             onChanged: (val) => setModalState(() {
-                              selectedTable = val!;
-                              if (selectedTable != 'profiles') selectedRoleFilter = 'all';
+                              if (val != null) selectedTable = val;
                             }),
-                          ),
-                          if (selectedTable == 'profiles') ...[
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                              initialValue: selectedRoleFilter,
-                              decoration: const InputDecoration(
-                                labelText: 'Filter Access Scope By Role',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: 'all', child: Text("All Profiles")),
-                                DropdownMenuItem(value: 'shikshaMitra', child: Text("Only Shiksha Mitras")),
-                                DropdownMenuItem(value: 'seniorMentor', child: Text("Only Senior Mentors")),
-                                DropdownMenuItem(value: 'admin', child: Text("Only Administrators")),
-                              ],
-                              onChanged: (val) => setModalState(() => selectedRoleFilter = val!),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xff00afef).withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xff00afef).withValues(alpha: 0.2)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: const [
-                                      Expanded(
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.storage, size: 16, color: Color(0xff00afef)),
-                                            SizedBox(width: 6),
-                                            Text(
-                                              "Live Table Entire Dataset",
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xff00afef),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(Icons.unfold_more, size: 16, color: Color(0xff00afef)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    child: FutureBuilder<List<String>>(
-                                      future: _fetchAllTablePreviewData(tableName: selectedTable, roleFilter: selectedRoleFilter),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState == ConnectionState.waiting) {
-                                          return const Center(
-                                            child: SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff00afef)),
-                                            ),
-                                          );
-                                        }
-                                        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                                          return const Text(
-                                            "No matching records found in this table configuration.",
-                                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                                          );
-                                        }
-                                        return SingleChildScrollView(
-                                          physics: const BouncingScrollPhysics(),
-                                          child: SizedBox(
-                                            width: double.infinity,
-                                            child: Wrap(
-                                              spacing: 6,
-                                              runSpacing: 4,
-                                              children: snapshot.data!
-                                                  .map(
-                                                    (entry) => Chip(
-                                                      label: Text(
-                                                        entry,
-                                                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-                                                      ),
-                                                      backgroundColor: Colors.white,
-                                                      elevation: 0,
-                                                      side: const BorderSide(color: Color(0xff00afef)),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                         ],
                       ],
+                      const Divider(height: 28),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.alt_route, color: Colors.blueGrey, size: 20),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  "Conditional Visibility (Skip Logic)",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
+                                ),
+                                const Spacer(),
+                                Switch(
+                                  value: enableSkipLogic,
+                                  onChanged: (val) => setModalState(() => enableSkipLogic = val),
+                                  activeThumbColor: const Color(0xff00afef),
+                                ),
+                              ],
+                            ),
+                            if (enableSkipLogic) ...[
+                              const SizedBox(height: 10),
+                              const Text(
+                                "Show this question only if...",
+                                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black54),
+                              ),
+                              const SizedBox(height: 8),
+                              filtratedPriorQuestions.isEmpty
+                                  ? const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                                      child: Text(
+                                        "No prior questions available to depend on.",
+                                        style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w500),
+                                      ),
+                                    )
+                                  : Column(
+                                      children: [
+                                        DropdownButtonFormField<String>(
+                                          initialValue:
+                                              filtratedPriorQuestions.any(
+                                                (element) => element['id'].toString() == selectedDependentQuestionId,
+                                              )
+                                              ? selectedDependentQuestionId
+                                              : null,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Select Prior Question',
+                                            border: OutlineInputBorder(),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                          ),
+                                          items: filtratedPriorQuestions.map((q) {
+                                            return DropdownMenuItem<String>(
+                                              value: q['id'].toString(),
+                                              child: Text(
+                                                q['question'] ?? '',
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontSize: 13),
+                                              ),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) => setModalState(() => selectedDependentQuestionId = val),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: DropdownButtonFormField<String>(
+                                                initialValue: skipOperator,
+                                                decoration: const InputDecoration(
+                                                  labelText: 'Condition',
+                                                  border: OutlineInputBorder(),
+                                                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                ),
+                                                items: const [
+                                                  DropdownMenuItem(value: 'equals', child: Text("Matches (=)")),
+                                                  DropdownMenuItem(value: 'not_equals', child: Text("Does Not Match (≠)")),
+                                                  DropdownMenuItem(value: 'filled', child: Text("Is Answered")),
+                                                ],
+                                                onChanged: (val) => setModalState(() => skipOperator = val ?? 'equals'),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (skipOperator != 'filled')
+                                              Expanded(
+                                                flex: 4,
+                                                child: TextField(
+                                                  controller: skipValueController,
+                                                  decoration: const InputDecoration(
+                                                    labelText: 'Value to match',
+                                                    border: OutlineInputBorder(),
+                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -513,11 +684,17 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                       sourceType: sourceOptionType,
                       staticControllers: staticOptionControllers,
                       tableName: selectedTable,
-                      roleFilter: selectedRoleFilter,
+                      enableSkipLogic: enableSkipLogic,
+                      dependentQuestionId: selectedDependentQuestionId,
+                      skipOperator: skipOperator,
+                      skipValue: skipValueController.text.trim(),
+                      editIndex: editIndex,
+                      existingId: isEditing ? existingQuestion['id']?.toString() : null,
+                      allowOther: allowOtherOption, // PASSED DOWN
                     );
                     Navigator.pop(context);
                   },
-                  child: const Text("Add Field", style: TextStyle(color: Colors.white)),
+                  child: Text(isEditing ? "Save Changes" : "Add Field", style: const TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -535,48 +712,66 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     required String sourceType,
     required List<TextEditingController> staticControllers,
     required String tableName,
-    required String roleFilter,
+    required bool enableSkipLogic,
+    required String? dependentQuestionId,
+    required String skipOperator,
+    required String skipValue,
+    int? editIndex,
+    String? existingId,
+    bool allowOther = false, // ADDED
   }) {
     final Map<String, dynamic> configBlock = {'type': type};
+
     if (type == 'radio' || type == 'checkbox_search') {
+      configBlock['allow_other'] = allowOther; // PERSISTED INTO FIELD_CONFIG
       if (sourceType == 'static' || sourceType == 'excel') {
         final options = staticControllers.map((c) => c.text.trim()).where((text) => text.isNotEmpty).toList();
         configBlock['options'] = options.isNotEmpty ? options : ['Default Option'];
         configBlock['source_meta'] = sourceType;
       } else {
         final Map<String, dynamic> datasourcePayload = {'table': tableName, 'value_column': 'id'};
-        switch (tableName) {
-          case 'clusters':
-            datasourcePayload['label_column'] = 'name';
-            break;
-          case 'villages':
-            datasourcePayload['label_column'] = 'name';
-            datasourcePayload['relational_parent_key'] = 'cluster_id';
-            break;
-          case 'schools':
-            datasourcePayload['label_column'] = 'name';
-            datasourcePayload['relational_parent_key'] = 'village_id';
-            break;
-          case 'profiles':
-            datasourcePayload['label_column'] = 'composite_name';
-            if (roleFilter != 'all') {
-              datasourcePayload['filter_column'] = 'role';
-              datasourcePayload['filter_value'] = roleFilter;
-            }
-            break;
-        }
+        datasourcePayload['label_column'] = 'name';
         configBlock['datasource'] = datasourcePayload;
       }
     }
 
+    if (enableSkipLogic && dependentQuestionId != null) {
+      configBlock['skip_logic'] = {
+        'enabled': true,
+        'dependent_question_id': dependentQuestionId,
+        'operator': skipOperator,
+        'value': skipOperator == 'filled' ? '' : skipValue,
+      };
+    } else {
+      configBlock['skip_logic'] = {'enabled': false};
+    }
+
+    final Map<String, dynamic> targetQuestionRow = {
+      'id': existingId ?? 'new_${DateTime.now().millisecondsSinceEpoch}',
+      'question': labelText,
+      'section': section.isEmpty ? 'General' : section,
+      'required': required,
+      'field_config': configBlock,
+    };
+
     setState(() {
-      _currentQuestions.add({
-        'id': 'new_${DateTime.now().millisecondsSinceEpoch}',
-        'question': labelText,
-        'section': section.isEmpty ? 'General' : section,
-        'required': required,
-        'field_config': configBlock,
-      });
+      if (editIndex != null) {
+        _currentQuestions[editIndex] = targetQuestionRow;
+      } else {
+        _currentQuestions.add(targetQuestionRow);
+      }
+    });
+  }
+
+  void _removeQuestionFromCanvas(int elementIndex) {
+    final targetQuestion = _currentQuestions[elementIndex];
+    final String targetId = (targetQuestion['id'] ?? '').toString();
+
+    setState(() {
+      if (targetId.isNotEmpty && !targetId.startsWith('new_')) {
+        _deletedQuestionIds.add(targetId);
+      }
+      _currentQuestions.removeAt(elementIndex);
     });
   }
 
@@ -585,7 +780,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titleController.text, style: const TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xff00afef),
+        backgroundColor: AppTheme.primaryBlue,
         leading: const BackButton(color: Colors.white),
         actions: [
           IconButton(
@@ -614,18 +809,55 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           },
                           itemBuilder: (context, idx) {
                             final q = _currentQuestions[idx];
+                            final hasSkip = q['field_config']?['skip_logic']?['enabled'] ?? false;
+                            final isOtherEnabled = q['field_config']?['allow_other'] ?? false;
+                            final String fieldType = q['field_config']?['type'] ?? 'text';
+
                             return Card(
                               key: ValueKey(q['id'] ?? 'index_$idx'),
                               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               child: ListTile(
                                 leading: const Icon(Icons.drag_indicator, color: Colors.grey),
                                 title: Text(q['question'] ?? ''),
-                                subtitle: Text(
-                                  "Section: ${q['section']} | Type: ${q['field_config']['type'] == 'checkbox_search' ? 'Check box' : q['field_config']['type']}",
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Section: ${q['section']} | Type: $fieldType ${isOtherEnabled ? '(+ Write-in Other)' : ''}",
+                                    ),
+                                    if (hasSkip)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4.0),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.alt_route, size: 14, color: Colors.purple),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              "Conditional Skip Enabled",
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.purple.shade700,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                  onPressed: () => setState(() => _currentQuestions.removeAt(idx)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_note, color: Color(0xff00afef)),
+                                      onPressed: () =>
+                                          _showConfigureQuestionDialog(type: fieldType, existingQuestion: q, editIndex: idx),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                      onPressed: () => _removeQuestionFromCanvas(idx),
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
@@ -645,10 +877,14 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       child: SafeArea(
         child: Row(
           children: [
-            Expanded(child: _toolButton("Text", Icons.text_fields, () => _showCreateQuestionDialog('text'))),
-            Expanded(child: _toolButton("Radio", Icons.radio_button_checked, () => _showCreateQuestionDialog('radio'))),
+            Expanded(child: _toolButton("Text", Icons.text_fields, () => _showConfigureQuestionDialog(type: 'text'))),
+            Expanded(child: _toolButton("Radio", Icons.radio_button_checked, () => _showConfigureQuestionDialog(type: 'radio'))),
             Expanded(
-              child: _toolButton("Check box", Icons.check_box_outlined, () => _showCreateQuestionDialog('checkbox_search')),
+              child: _toolButton(
+                "Check box",
+                Icons.check_box_outlined,
+                () => _showConfigureQuestionDialog(type: 'checkbox_search'),
+              ),
             ),
           ],
         ),

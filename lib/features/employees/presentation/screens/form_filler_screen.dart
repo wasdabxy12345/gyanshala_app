@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:gyanshala_app/core/services/location_service.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FormFillerScreen extends StatefulWidget {
@@ -92,15 +93,72 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     }
   }
 
+  /// Evaluates whether a question should be displayed or skipped based on previous answers
+  bool _shouldShowQuestion(Map<String, dynamic> question) {
+    final config = question['field_config'] as Map<String, dynamic>? ?? {};
+    final skipLogic = config['skip_logic'] as Map<String, dynamic>?;
+
+    if (skipLogic == null || skipLogic['enabled'] != true) {
+      return true; // No conditional rules applied
+    }
+
+    final depId = skipLogic['dependent_question_id']?.toString();
+    final op = skipLogic['operator'];
+    final targetValue = skipLogic['value']?.toString().toLowerCase().trim();
+
+    if (depId == null) return true;
+
+    final rawAnswer = _formAnswers[depId];
+    final currentAnswerStr = rawAnswer?.toString().toLowerCase().trim() ?? '';
+
+    switch (op) {
+      case 'filled':
+        if (rawAnswer is List) return rawAnswer.isNotEmpty;
+        return currentAnswerStr.isNotEmpty && currentAnswerStr != 'null';
+      case 'not_equals':
+        if (rawAnswer is List) return !rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetValue);
+        return currentAnswerStr != targetValue;
+      case 'equals':
+      default:
+        if (rawAnswer is List) return rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetValue);
+        return currentAnswerStr == targetValue;
+    }
+  }
+
   void _handleNextStep() {
     if (_rootFormKey.currentState != null && _rootFormKey.currentState!.validate()) {
       _rootFormKey.currentState!.save();
 
-      if (_currentPageIndex < _questions.length - 1) {
-        _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      int nextIndex = _currentPageIndex + 1;
+
+      // Look ahead to bypass skipped panels recursively
+      while (nextIndex < _questions.length && !_shouldShowQuestion(_questions[nextIndex])) {
+        // Clear value of skipped fields so historical answers do not pollute data submissions
+        final skippedId = _questions[nextIndex]['id'].toString();
+        _formAnswers.remove(skippedId);
+        nextIndex++;
+      }
+
+      if (nextIndex < _questions.length) {
+        setState(() => _currentPageIndex = nextIndex);
+        _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
       } else {
         _submitFormEntries();
       }
+    }
+  }
+
+  void _handlePreviousStep() {
+    int prevIndex = _currentPageIndex - 1;
+
+    // Look backward to step over questions that aren't matching visibility rules
+    while (prevIndex >= 0 && !_shouldShowQuestion(_questions[prevIndex])) {
+      prevIndex--;
+    }
+
+    if (prevIndex >= 0) {
+      setState(() => _currentPageIndex = prevIndex);
+      _pageController.animateToPage(prevIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     }
   }
 
@@ -158,6 +216,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         }
         return;
       }
+
       await supabase.from('form_responses').insert({
         'form_id': widget.formId,
         'user_id': userId,
@@ -181,7 +240,14 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLastPage = _currentPageIndex == _questions.length - 1;
+    // Dynamically calculate if there are further fields left to answer after this one
+    bool isLastCalculatedPage = true;
+    for (int i = _currentPageIndex + 1; i < _questions.length; i++) {
+      if (_shouldShowQuestion(_questions[i])) {
+        isLastCalculatedPage = false;
+        break;
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FF),
@@ -194,7 +260,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             : PreferredSize(
                 preferredSize: const Size.fromHeight(6),
                 child: LinearProgressIndicator(
-                  value: (_currentPageIndex + 1) / _questions.length,
+                  value: _questions.isEmpty ? 0 : (_currentPageIndex + 1) / _questions.length,
                   backgroundColor: Colors.white24,
                   valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
@@ -248,7 +314,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                       },
                     ),
                   ),
-                  _buildBottomNavigationBar(isLastPage),
+                  _buildBottomNavigationBar(isLastCalculatedPage),
                 ],
               ),
             ),
@@ -268,9 +334,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                    },
+                    onPressed: _handlePreviousStep,
                     icon: const Icon(Icons.arrow_back),
                     label: const Text("Back"),
                     style: OutlinedButton.styleFrom(
@@ -314,6 +378,10 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     final config = q['field_config'] as Map<String, dynamic>? ?? {};
     final String type = config['type'] ?? 'text';
 
+    // Read our custom 'allow_other' metadata flag
+    final bool allowOther = config['allow_other'] ?? false;
+    const String otherChoiceString = "Other (Please specify)";
+
     final fieldLabel = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Wrap(
@@ -348,44 +416,87 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         );
 
       case 'radio':
-        final options = _resolvedOptions[qId] ?? [];
+        // Get a copy of options and inject "Other" if allowed
+        final rawOptions = _resolvedOptions[qId] ?? [];
+        final List<String> options = List<String>.from(rawOptions);
+        if (allowOther && !options.contains(otherChoiceString)) {
+          options.add(otherChoiceString);
+        }
+
+        // Track sub-field raw string text inside answers map safely
+        final String otherTextKey = "${qId}_other_text";
+
         return FormField<String>(
           key: ValueKey('radio_formfield_$qId'),
           initialValue: _formAnswers[qId],
-          validator: (val) => isRequired && val == null ? 'Please select an option to proceed' : null,
-          onSaved: (val) => _formAnswers[qId] = val,
+          validator: (val) {
+            if (isRequired && val == null) return 'Please select an option to proceed';
+            if (val == otherChoiceString) {
+              final textVal = _formAnswers[otherTextKey]?.toString().trim();
+              if (textVal == null || textVal.isEmpty) return 'Please specify your other answer';
+            }
+            return null;
+          },
+          onSaved: (val) {
+            if (val == otherChoiceString) {
+              // Persist write-in value directly to main response key
+              _formAnswers[qId] = _formAnswers[otherTextKey]?.toString().trim() ?? otherChoiceString;
+            } else {
+              _formAnswers[qId] = val;
+            }
+          },
           builder: (FormFieldState<String> state) {
+            final isOtherSelected = state.value == otherChoiceString;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 fieldLabel,
-                RadioGroup<String>(
-                  groupValue: state.value,
-                  onChanged: (String? val) {
-                    state.didChange(val);
-                    _formAnswers[qId] = val;
-                  },
-                  child: Column(
-                    children: options
-                        .map(
-                          (opt) => Card(
-                            key: ValueKey('radio_card_${qId}_$opt'),
-                            color: state.value == opt ? const Color(0xFFE6F7FF) : Colors.white,
-                            margin: const EdgeInsets.only(bottom: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: state.value == opt ? const Color(0xff00afef) : Colors.grey.shade300),
-                            ),
-                            child: RadioListTile<String>(
-                              title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
-                              value: opt,
-                              dense: false,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
+                Column(
+                  children: options.map((opt) {
+                    return Card(
+                      key: ValueKey('radio_card_${qId}_$opt'),
+                      color: state.value == opt ? AppTheme.lightBlue : Colors.white,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
+                      ),
+                      child: RadioListTile<String>(
+                        title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        value: opt,
+                        groupValue: state.value,
+                        onChanged: (String? val) {
+                          state.didChange(val);
+                          if (val == otherChoiceString) {
+                            _formAnswers[qId] = _formAnswers[otherTextKey] ?? '';
+                          } else {
+                            _formAnswers[qId] = val;
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
                 ),
+                // DYNAMIC TOGGLE: Display Text Input Field below options if selected
+                if (isOtherSelected)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                    child: TextFormField(
+                      key: ValueKey('radio_other_input_$qId'),
+                      initialValue: _formAnswers[otherTextKey],
+                      decoration: const InputDecoration(
+                        labelText: "Please specify custom response *",
+                        hintText: "Type details here...",
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (text) {
+                        _formAnswers[otherTextKey] = text;
+                      },
+                    ),
+                  ),
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
@@ -397,16 +508,41 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         );
 
       case 'checkbox_search':
-        final options = _resolvedOptions[qId] ?? [];
+        final rawOptions = _resolvedOptions[qId] ?? [];
+        final List<String> options = List<String>.from(rawOptions);
+        if (allowOther && !options.contains(otherChoiceString)) {
+          options.add(otherChoiceString);
+        }
+
         _formAnswers[qId] ??= <String>[];
+        final String otherTextKey = "${qId}_other_text";
 
         return FormField<List<String>>(
           key: ValueKey('checkbox_formfield_$qId'),
           initialValue: List<String>.from(_formAnswers[qId]),
-          validator: (val) => isRequired && (val == null || val.isEmpty) ? 'Please choose at least one' : null,
-          onSaved: (val) => _formAnswers[qId] = val,
+          validator: (val) {
+            if (isRequired && (val == null || val.isEmpty)) return 'Please choose at least one';
+            if (val != null && val.contains(otherChoiceString)) {
+              final textVal = _formAnswers[otherTextKey]?.toString().trim();
+              if (textVal == null || textVal.isEmpty) return 'Please specify your other choices';
+            }
+            return null;
+          },
+          onSaved: (val) {
+            if (val != null) {
+              final savedList = List<String>.from(val);
+              if (savedList.contains(otherChoiceString)) {
+                savedList.remove(otherChoiceString);
+                final customWriteIn = _formAnswers[otherTextKey]?.toString().trim() ?? '';
+                if (customWriteIn.isNotEmpty) savedList.add("Other: $customWriteIn");
+              }
+              _formAnswers[qId] = savedList;
+            }
+          },
           builder: (FormFieldState<List<String>> state) {
             final selectedItems = state.value ?? [];
+            final isOtherSelected = selectedItems.contains(otherChoiceString);
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -443,6 +579,25 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                     );
                   }).toList(),
                 ),
+                // DYNAMIC TOGGLE: Display Text Input Field below checkbox list
+                if (isOtherSelected)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                    child: TextFormField(
+                      key: ValueKey('checkbox_other_input_$qId'),
+                      initialValue: _formAnswers[otherTextKey],
+                      decoration: const InputDecoration(
+                        labelText: "Please specify custom details *",
+                        hintText: "Type details here...",
+                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (text) {
+                        _formAnswers[otherTextKey] = text;
+                      },
+                    ),
+                  ),
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
@@ -467,7 +622,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         title: Row(
           children: const [
             Icon(Icons.location_off, color: Colors.red, size: 28),
-            SizedBox(width: 8),
+            Spacer(),
             Text("Location Needed", style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
@@ -510,7 +665,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         title: Row(
           children: const [
             Icon(Icons.gps_off, color: Colors.yellow, size: 28),
-            SizedBox(width: 8),
+            Spacer(),
             Text("GPS Switched Off", style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
