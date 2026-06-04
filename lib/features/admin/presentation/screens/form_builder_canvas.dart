@@ -299,7 +299,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
     final questionController = TextEditingController(text: isEditing ? existingQuestion['question'] : '');
     final sectionController = TextEditingController(text: isEditing ? existingQuestion['section'] : 'General');
-    bool isRequired = isEditing ? (existingQuestion['required'] ?? false) : false;
+    bool isRequired = isEditing ? (existingQuestion['required'] ?? false) : true;
+
     final config = isEditing ? Map<String, dynamic>.from(existingQuestion['field_config'] ?? {}) : {};
 
     String sourceOptionType = config['source_meta']?.toString() ?? 'static';
@@ -601,6 +602,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                     )
                                   : Column(
                                       children: [
+                                        // 1. Select Prior Question
                                         DropdownButtonFormField<String>(
                                           initialValue:
                                               filtratedPriorQuestions.any(
@@ -623,11 +625,18 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                               ),
                                             );
                                           }).toList(),
-                                          onChanged: (val) => setModalState(() => selectedDependentQuestionId = val),
+                                          onChanged: (val) {
+                                            setModalState(() {
+                                              selectedDependentQuestionId = val;
+                                              // Reset condition value when dependent question changes
+                                              skipValueController.clear();
+                                            });
+                                          },
                                         ),
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
+                                            // 2. Select Condition Operator
                                             Expanded(
                                               flex: 3,
                                               child: DropdownButtonFormField<String>(
@@ -642,20 +651,78 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                   DropdownMenuItem(value: 'not_equals', child: Text("Does Not Match (≠)")),
                                                   DropdownMenuItem(value: 'filled', child: Text("Is Answered")),
                                                 ],
-                                                onChanged: (val) => setModalState(() => skipOperator = val ?? 'equals'),
+                                                onChanged: (val) {
+                                                  setModalState(() {
+                                                    skipOperator = val ?? 'equals';
+                                                  });
+                                                },
                                               ),
                                             ),
                                             const SizedBox(width: 8),
+
+                                            // 3. Dynamic Value Picker (Dropdown vs Text Field)
                                             if (skipOperator != 'filled')
                                               Expanded(
                                                 flex: 4,
-                                                child: TextField(
-                                                  controller: skipValueController,
-                                                  decoration: const InputDecoration(
-                                                    labelText: 'Value to match',
-                                                    border: OutlineInputBorder(),
-                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                                  ),
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    // Find the configuration of the selected prior question
+                                                    final priorQuestion = filtratedPriorQuestions.firstWhere(
+                                                      (element) => element['id'].toString() == selectedDependentQuestionId,
+                                                      orElse: () => {},
+                                                    );
+
+                                                    final priorConfig =
+                                                        priorQuestion['field_config'] as Map<String, dynamic>? ?? {};
+                                                    final List<dynamic> priorOptions = priorConfig['options'] ?? [];
+                                                    final bool hasStaticOptions =
+                                                        priorOptions.isNotEmpty &&
+                                                        (priorConfig['type'] == 'radio' ||
+                                                            priorConfig['type'] == 'checkbox_search');
+
+                                                    // If it's a radio/checkbox with options, show a Dropdown menu instead
+                                                    if (hasStaticOptions) {
+                                                      final currentText = skipValueController.text.trim();
+                                                      // Handle edge case: ensure value exists in options or default to null
+                                                      final String? initialDropdownValue = priorOptions.contains(currentText)
+                                                          ? currentText
+                                                          : null;
+
+                                                      return DropdownButtonFormField<String>(
+                                                        key: ValueKey(
+                                                          'skip_dropdown_${selectedDependentQuestionId}_$currentText',
+                                                        ),
+                                                        initialValue: initialDropdownValue,
+                                                        decoration: const InputDecoration(
+                                                          labelText: 'Select Option Match',
+                                                          border: OutlineInputBorder(),
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                        ),
+                                                        items: priorOptions.map((opt) {
+                                                          return DropdownMenuItem<String>(
+                                                            value: opt.toString(),
+                                                            child: Text(opt.toString(), overflow: TextOverflow.ellipsis),
+                                                          );
+                                                        }).toList(),
+                                                        onChanged: (val) {
+                                                          if (val != null) {
+                                                            skipValueController.text = val;
+                                                          }
+                                                        },
+                                                      );
+                                                    }
+
+                                                    // Fallback to text box if prior question is basic text input or dynamic DB lookups
+                                                    return TextField(
+                                                      key: ValueKey('skip_text_field_$selectedDependentQuestionId'),
+                                                      controller: skipValueController,
+                                                      decoration: const InputDecoration(
+                                                        labelText: 'Value to match',
+                                                        border: OutlineInputBorder(),
+                                                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                      ),
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                           ],
