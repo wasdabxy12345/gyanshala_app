@@ -296,13 +296,14 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
   void _showConfigureQuestionDialog({required String type, Map<String, dynamic>? existingQuestion, int? editIndex}) {
     final isEditing = existingQuestion != null && editIndex != null;
-
     final questionController = TextEditingController(text: isEditing ? existingQuestion['question'] : '');
-    final sectionController = TextEditingController(text: isEditing ? existingQuestion['section'] : 'General');
+    String defaultSection = 'General';
+    if (!isEditing && _currentQuestions.isNotEmpty) {
+      defaultSection = _currentQuestions.last['section'] ?? 'General';
+    }
+    final sectionController = TextEditingController(text: isEditing ? existingQuestion['section'] : defaultSection);
     bool isRequired = isEditing ? (existingQuestion['required'] ?? false) : true;
-
     final config = isEditing ? Map<String, dynamic>.from(existingQuestion['field_config'] ?? {}) : {};
-
     String sourceOptionType = config['source_meta']?.toString() ?? 'static';
     if (config['datasource'] != null) {
       sourceOptionType = 'database';
