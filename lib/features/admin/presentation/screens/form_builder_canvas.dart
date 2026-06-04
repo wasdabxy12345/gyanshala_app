@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/excel_parser/excel_parser.dart'
     if (dart.library.js_interop) 'package:gyanshala_app/core/utils/excel_parser/excel_web_parser.dart'
     if (dart.library.io) 'package:gyanshala_app/core/utils/excel_parser/excel_mobile_parser.dart';
@@ -15,7 +14,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class FormBuilderCanvas extends StatefulWidget {
   final String? formId;
   final String formTitle;
-
   const FormBuilderCanvas({super.key, this.formId, required this.formTitle});
 
   @override
@@ -23,16 +21,14 @@ class FormBuilderCanvas extends StatefulWidget {
 }
 
 class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
-  late TextEditingController _titleController;
   List<Map<String, dynamic>> _currentQuestions = [];
-
   List<String> _deletedQuestionIds = <String>[];
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.formTitle);
+
     if (widget.formId != null) {
       _loadExistingFormQuestions();
     }
@@ -41,12 +37,10 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   Future<void> _loadExistingFormQuestions() async {
     final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     final currentFormId = widget.formId;
-
     if (currentFormId == null || currentFormId.isEmpty || !uuidRegex.hasMatch(currentFormId)) {
       debugPrint("Skipping database fetch: formId is missing or invalid.");
       return;
     }
-
     setState(() => _isLoading = true);
     try {
       final supabase = Supabase.instance.client;
@@ -55,7 +49,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           .select('*')
           .eq('form_id', currentFormId)
           .order('sort_order', ascending: true);
-
       setState(() {
         _currentQuestions = List<Map<String, dynamic>>.from(data);
         _deletedQuestionIds = <String>[];
@@ -78,15 +71,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       ).showSnackBar(const SnackBar(content: Text("Cannot save: Form definition ID is missing."), backgroundColor: Colors.amber));
       return;
     }
-
     setState(() => _isLoading = true);
     try {
       final supabase = Supabase.instance.client;
-
       if (_deletedQuestionIds.isNotEmpty) {
         await supabase.from('form_questions').delete().inFilter('id', _deletedQuestionIds);
       }
-
       final List<Map<String, dynamic>> newRowsToInsert = [];
       final List<Map<String, dynamic>> existingRowsToUpsert = [];
       final Map<String, String> tempToRealIdMap = {};
@@ -94,7 +84,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       for (int i = 0; i < _currentQuestions.length; i++) {
         final q = _currentQuestions[i];
         final String currentId = q['id'].toString();
-
         final Map<String, dynamic> rowData = {
           'form_id': widget.formId,
           'section': q['section'] ?? 'General',
@@ -103,7 +92,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           'sort_order': i,
           'field_config': Map<String, dynamic>.from(q['field_config'] ?? {}),
         };
-
         if (currentId.startsWith('new_')) {
           newRowsToInsert.add({'temp_canvas_id': currentId, ...rowData});
         } else {
@@ -119,26 +107,20 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           clone.remove('temp_canvas_id');
           return clone;
         }).toList();
-
         final rawResponse = await supabase.from('form_questions').insert(pureInserts).select('id, question, sort_order');
-
         final List<Map<String, dynamic>> insertedRecords = List<Map<String, dynamic>>.from(rawResponse);
-
         for (final Map<String, dynamic> record in insertedRecords) {
           final String dbQuestion = (record['question'] ?? '').toString();
           final String dbSortOrder = (record['sort_order'] ?? '').toString();
-
           int matchingInputIndex = -1;
           for (int k = 0; k < newRowsToInsert.length; k++) {
             final String canvasQuestion = (newRowsToInsert[k]['question'] ?? '').toString();
             final String canvasSortOrder = (newRowsToInsert[k]['sort_order'] ?? '').toString();
-
             if (canvasQuestion == dbQuestion && canvasSortOrder == dbSortOrder) {
               matchingInputIndex = k;
               break;
             }
           }
-
           if (matchingInputIndex != -1) {
             final String tempId = (newRowsToInsert[matchingInputIndex]['temp_canvas_id'] ?? '').toString();
             final String realId = (record['id'] ?? '').toString();
@@ -150,21 +132,16 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       }
 
       final rawFormQuestions = await supabase.from('form_questions').select('*').eq('form_id', widget.formId!);
-
       final List<Map<String, dynamic>> completeFormQuestions = List<Map<String, dynamic>>.from(rawFormQuestions);
       final List<Map<String, dynamic>> finalRemappedRows = [];
-
       for (var question in completeFormQuestions) {
         final config = Map<String, dynamic>.from(question['field_config'] ?? {});
         final skipLogic = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
-
         if (skipLogic != null && skipLogic['enabled'] == true) {
           final currentDepId = skipLogic['dependent_question_id']?.toString();
-
           if (currentDepId != null && tempToRealIdMap.containsKey(currentDepId)) {
             skipLogic['dependent_question_id'] = tempToRealIdMap[currentDepId];
             config['skip_logic'] = skipLogic;
-
             finalRemappedRows.add({
               'id': question['id'],
               'form_id': question['form_id'],
@@ -177,14 +154,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           }
         }
       }
-
       if (finalRemappedRows.isNotEmpty) {
         await supabase.from('form_questions').upsert(finalRemappedRows, onConflict: 'id');
       }
       if (existingRowsToUpsert.isNotEmpty) {
         await supabase.from('form_questions').upsert(existingRowsToUpsert, onConflict: 'id');
       }
-
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -219,17 +194,14 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       } else {
         return [];
       }
-
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) =>
             const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xff00afef)))),
       );
-
       await Future.delayed(const Duration(milliseconds: 100));
       List<String> parsedOptions = [];
-
       if (kIsWeb) {
         parsedOptions = await ExcelParser.parseFirstColumnFast(bytes);
       } else {
@@ -255,9 +227,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           return options;
         });
       }
-
       if (mounted) Navigator.pop(context);
-
       if (parsedOptions.isNotEmpty) {
         final rawHeaderValue = parsedOptions.first;
         if (mounted) {
@@ -277,13 +247,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               ],
             ),
           );
-
           if (skipFirstRow ?? false) {
             parsedOptions.removeAt(0);
           }
         }
       }
-
       return parsedOptions;
     } catch (e) {
       if (mounted) {
@@ -292,6 +260,27 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       debugPrint("Error reading spreadsheet matrix: $e");
       return [];
     }
+  }
+
+  void _moveQuestion(int oldGlobalIndex, int direction) {
+    int newGlobalIndex = oldGlobalIndex + direction;
+    if (newGlobalIndex < 0 || newGlobalIndex >= _currentQuestions.length) return;
+
+    setState(() {
+      final item = _currentQuestions.removeAt(oldGlobalIndex);
+      _currentQuestions.insert(newGlobalIndex, item);
+    });
+  }
+
+  void _deleteQuestion(int globalIndex) {
+    final q = _currentQuestions[globalIndex];
+    final String id = q['id'].toString();
+    setState(() {
+      if (!id.startsWith('new_')) {
+        _deletedQuestionIds.add(id);
+      }
+      _currentQuestions.removeAt(globalIndex);
+    });
   }
 
   void _showConfigureQuestionDialog({required String type, Map<String, dynamic>? existingQuestion, int? editIndex}) {
@@ -308,10 +297,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     if (config['datasource'] != null) {
       sourceOptionType = 'database';
     }
-
-    // MODIFIED: Read the allow_other option flag from existing configuration
     bool allowOtherOption = config['allow_other'] ?? false;
-
     final List<TextEditingController> staticOptionControllers = [];
     if (isEditing && (sourceOptionType == 'static' || sourceOptionType == 'excel')) {
       final existingOptions = List<dynamic>.from(config['options'] ?? []);
@@ -322,7 +308,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     if (staticOptionControllers.isEmpty) {
       staticOptionControllers.add(TextEditingController());
     }
-
     String selectedTable = config['datasource']?['table']?.toString() ?? 'clusters';
     final skipBlock = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
     bool enableSkipLogic = skipBlock != null ? (skipBlock['enabled'] ?? false) : false;
@@ -345,16 +330,13 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             Future<void> handleSmartSpreadsheetPaste(int index) async {
               final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
               if (data == null || data.text == null || data.text!.isEmpty) return;
-
               final String pasteRaw = data.text!;
-
               if (pasteRaw.contains('\n')) {
                 final List<String> parsedLines = pasteRaw
                     .split(RegExp(r'\r?\n'))
                     .map((line) => line.trim())
                     .where((line) => line.isNotEmpty)
                     .toList();
-
                 if (parsedLines.length > 1) {
                   setModalState(() {
                     staticOptionControllers[index].text = parsedLines.first;
@@ -371,11 +353,10 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             return AlertDialog(
               title: Text(
                 isEditing
-                    ? "Modify ${type} Question Parameters"
-                    : "Configure New ${type == 'checkbox_search' ? 'Check box' : type} Field",
+                    ? "Modify ${type.toUpperCase()} Question Parameters"
+                    : "Configure New ${type == 'checkbox_search' ? 'Check box' : type.toUpperCase()} Field",
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xff00afef)),
               ),
-              actionsAlignment: MainAxisAlignment.end,
               content: SizedBox(
                 width: 680,
                 child: SingleChildScrollView(
@@ -457,13 +438,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         ),
                         const SizedBox(height: 12),
                         if (sourceOptionType == 'static' || sourceOptionType == 'excel') ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6.0),
-                            child: Text(
-                              "💡 Tip: You can copy cells directly from Excel and hit Ctrl+V / Cmd+V into any option row below to paste them into individual options.",
-                              style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey.shade700),
-                            ),
-                          ),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxHeight: 220),
                             child: ListView.builder(
@@ -517,15 +491,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                 label: const Text("Add Option Line"),
                                 onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
                               ),
-                              // ADDED: Toggle Switch to support dynamic write-in textbox answers
                               Flexible(
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Text(
-                                      "Include 'Other' input field",
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                    ),
+                                    const Text("Include 'Other'", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                                     const SizedBox(width: 4),
                                     Switch(
                                       value: allowOtherOption,
@@ -588,26 +558,17 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             ),
                             if (enableSkipLogic) ...[
                               const SizedBox(height: 10),
-                              const Text(
-                                "Show this question only if...",
-                                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.black54),
-                              ),
-                              const SizedBox(height: 8),
                               filtratedPriorQuestions.isEmpty
-                                  ? const Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                                      child: Text(
-                                        "No prior questions available to depend on.",
-                                        style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w500),
-                                      ),
+                                  ? const Text(
+                                      "No prior fields to depend on.",
+                                      style: TextStyle(color: Colors.amber, fontSize: 12),
                                     )
                                   : Column(
                                       children: [
-                                        // 1. Select Prior Question
                                         DropdownButtonFormField<String>(
                                           initialValue:
                                               filtratedPriorQuestions.any(
-                                                (element) => element['id'].toString() == selectedDependentQuestionId,
+                                                (e) => e['id'].toString() == selectedDependentQuestionId,
                                               )
                                               ? selectedDependentQuestionId
                                               : null,
@@ -616,28 +577,22 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                             border: OutlineInputBorder(),
                                             contentPadding: EdgeInsets.symmetric(horizontal: 10),
                                           ),
-                                          items: filtratedPriorQuestions.map((q) {
-                                            return DropdownMenuItem<String>(
-                                              value: q['id'].toString(),
-                                              child: Text(
-                                                q['question'] ?? '',
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontSize: 13),
-                                              ),
-                                            );
-                                          }).toList(),
-                                          onChanged: (val) {
-                                            setModalState(() {
-                                              selectedDependentQuestionId = val;
-                                              // Reset condition value when dependent question changes
-                                              skipValueController.clear();
-                                            });
-                                          },
+                                          items: filtratedPriorQuestions
+                                              .map(
+                                                (q) => DropdownMenuItem(
+                                                  value: q['id'].toString(),
+                                                  child: Text(q['question'] ?? '', overflow: TextOverflow.ellipsis),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (val) => setModalState(() {
+                                            selectedDependentQuestionId = val;
+                                            skipValueController.clear();
+                                          }),
                                         ),
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
-                                            // 2. Select Condition Operator
                                             Expanded(
                                               flex: 3,
                                               child: DropdownButtonFormField<String>(
@@ -652,75 +607,51 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                   DropdownMenuItem(value: 'not_equals', child: Text("Does Not Match (≠)")),
                                                   DropdownMenuItem(value: 'filled', child: Text("Is Answered")),
                                                 ],
-                                                onChanged: (val) {
-                                                  setModalState(() {
-                                                    skipOperator = val ?? 'equals';
-                                                  });
-                                                },
+                                                onChanged: (val) => setModalState(() {
+                                                  skipOperator = val ?? 'equals';
+                                                }),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-
-                                            // 3. Dynamic Value Picker (Dropdown vs Text Field)
                                             if (skipOperator != 'filled')
                                               Expanded(
                                                 flex: 4,
                                                 child: Builder(
                                                   builder: (context) {
-                                                    // Find the configuration of the selected prior question
-                                                    final priorQuestion = filtratedPriorQuestions.firstWhere(
-                                                      (element) => element['id'].toString() == selectedDependentQuestionId,
+                                                    final priorQ = filtratedPriorQuestions.firstWhere(
+                                                      (e) => e['id'].toString() == selectedDependentQuestionId,
                                                       orElse: () => {},
                                                     );
-
-                                                    final priorConfig =
-                                                        priorQuestion['field_config'] as Map<String, dynamic>? ?? {};
-                                                    final List<dynamic> priorOptions = priorConfig['options'] ?? [];
-                                                    final bool hasStaticOptions =
-                                                        priorOptions.isNotEmpty &&
-                                                        (priorConfig['type'] == 'radio' ||
-                                                            priorConfig['type'] == 'checkbox_search');
-
-                                                    // If it's a radio/checkbox with options, show a Dropdown menu instead
-                                                    if (hasStaticOptions) {
-                                                      final currentText = skipValueController.text.trim();
-                                                      // Handle edge case: ensure value exists in options or default to null
-                                                      final String? initialDropdownValue = priorOptions.contains(currentText)
-                                                          ? currentText
-                                                          : null;
-
+                                                    final priorOpts = priorQ['field_config']?['options'] as List<dynamic>? ?? [];
+                                                    if (priorOpts.isNotEmpty) {
                                                       return DropdownButtonFormField<String>(
-                                                        key: ValueKey(
-                                                          'skip_dropdown_${selectedDependentQuestionId}_$currentText',
-                                                        ),
-                                                        initialValue: initialDropdownValue,
+                                                        initialValue: priorOpts.contains(skipValueController.text.trim())
+                                                            ? skipValueController.text.trim()
+                                                            : null,
                                                         decoration: const InputDecoration(
-                                                          labelText: 'Select Option Match',
+                                                          labelText: 'Option Match',
                                                           border: OutlineInputBorder(),
                                                           contentPadding: EdgeInsets.symmetric(horizontal: 10),
                                                         ),
-                                                        items: priorOptions.map((opt) {
-                                                          return DropdownMenuItem<String>(
-                                                            value: opt.toString(),
-                                                            child: Text(opt.toString(), overflow: TextOverflow.ellipsis),
-                                                          );
-                                                        }).toList(),
+                                                        items: priorOpts
+                                                            .map(
+                                                              (o) => DropdownMenuItem(
+                                                                value: o.toString(),
+                                                                child: Text(o.toString()),
+                                                              ),
+                                                            )
+                                                            .toList(),
                                                         onChanged: (val) {
-                                                          if (val != null) {
-                                                            skipValueController.text = val;
-                                                          }
+                                                          if (val != null) skipValueController.text = val;
                                                         },
                                                       );
                                                     }
-
-                                                    // Fallback to text box if prior question is basic text input or dynamic DB lookups
                                                     return TextField(
-                                                      key: ValueKey('skip_text_field_$selectedDependentQuestionId'),
                                                       controller: skipValueController,
                                                       decoration: const InputDecoration(
                                                         labelText: 'Value to match',
                                                         border: OutlineInputBorder(),
-                                                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
                                                       ),
                                                     );
                                                   },
@@ -731,6 +662,30 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                       ],
                                     ),
                             ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueGrey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  "Whole Section Visibility Logic",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -758,7 +713,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                       skipValue: skipValueController.text.trim(),
                       editIndex: editIndex,
                       existingId: isEditing ? existingQuestion['id']?.toString() : null,
-                      allowOther: allowOtherOption, // PASSED DOWN
+                      allowOther: allowOtherOption,
                     );
                     Navigator.pop(context);
                   },
@@ -786,34 +741,36 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     required String skipValue,
     int? editIndex,
     String? existingId,
-    bool allowOther = false, // ADDED
+    bool allowOther = false,
   }) {
     final Map<String, dynamic> configBlock = {'type': type};
-
     if (type == 'radio' || type == 'checkbox_search') {
-      configBlock['allow_other'] = allowOther; // PERSISTED INTO FIELD_CONFIG
+      configBlock['allow_other'] = allowOther;
       if (sourceType == 'static' || sourceType == 'excel') {
         final options = staticControllers.map((c) => c.text.trim()).where((text) => text.isNotEmpty).toList();
         configBlock['options'] = options.isNotEmpty ? options : ['Default Option'];
         configBlock['source_meta'] = sourceType;
       } else {
-        final Map<String, dynamic> datasourcePayload = {'table': tableName, 'value_column': 'id'};
-        datasourcePayload['label_column'] = 'name';
-        configBlock['datasource'] = datasourcePayload;
+        configBlock['datasource'] = {'table': tableName, 'value_column': 'id', 'label_column': 'name'};
       }
     }
-
-    if (enableSkipLogic && dependentQuestionId != null) {
-      configBlock['skip_logic'] = {
-        'enabled': true,
-        'dependent_question_id': dependentQuestionId,
-        'operator': skipOperator,
-        'value': skipOperator == 'filled' ? '' : skipValue,
-      };
+    configBlock['skip_logic'] = {
+      'enabled': enableSkipLogic && dependentQuestionId != null,
+      'dependent_question_id': dependentQuestionId,
+      'operator': skipOperator,
+      'value': skipOperator == 'filled' ? '' : skipValue,
+    };
+    if (editIndex != null && _currentQuestions[editIndex]['field_config']?['section_skip_logic'] != null) {
+      configBlock['section_skip_logic'] = _currentQuestions[editIndex]['field_config']['section_skip_logic'];
     } else {
-      configBlock['skip_logic'] = {'enabled': false};
+      final sibling = _currentQuestions.firstWhere(
+        (element) => element['section'] == section && element['field_config']?['section_skip_logic'] != null,
+        orElse: () => {},
+      );
+      if (sibling.isNotEmpty) {
+        configBlock['section_skip_logic'] = sibling['field_config']['section_skip_logic'];
+      }
     }
-
     final Map<String, dynamic> targetQuestionRow = {
       'id': existingId ?? 'new_${DateTime.now().millisecondsSinceEpoch}',
       'question': labelText,
@@ -831,144 +788,506 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     });
   }
 
-  void _removeQuestionFromCanvas(int elementIndex) {
-    final targetQuestion = _currentQuestions[elementIndex];
-    final String targetId = (targetQuestion['id'] ?? '').toString();
-
-    setState(() {
-      if (targetId.isNotEmpty && !targetId.startsWith('new_')) {
-        _deletedQuestionIds.add(targetId);
-      }
-      _currentQuestions.removeAt(elementIndex);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    final Map<String, List<int>> groupedSections = {};
+    for (int i = 0; i < _currentQuestions.length; i++) {
+      final sectionName = _currentQuestions[i]['section'] ?? 'General';
+      groupedSections.putIfAbsent(sectionName, () => []).add(i);
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF4F7FC),
       appBar: AppBar(
-        title: Text(_titleController.text, style: const TextStyle(color: Colors.white)),
-        backgroundColor: AppTheme.primaryBlue,
-        leading: const BackButton(color: Colors.white),
+        title: Text("Building: ${widget.formTitle}"),
+        backgroundColor: const Color(0xff00afef),
+        foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save, size: 28, color: Colors.white),
-            onPressed: _isLoading ? null : _saveFormStructureToSupabase,
-          ),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+            )
+          else
+            TextButton.icon(
+              onPressed: _saveFormStructureToSupabase,
+              icon: const Icon(Icons.cloud_upload, color: Colors.white),
+              label: const Text(
+                "Save Structure",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xff00afef)))
-          : Column(
+      body: Row(
+        children: [
+          Container(
+            width: 180,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(right: BorderSide(color: Colors.grey.shade300)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: _currentQuestions.isEmpty
-                      ? const Center(
-                          child: Text("No Fields Added Yet. Click below to add inputs.", style: TextStyle(color: Colors.grey)),
-                        )
-                      : ReorderableListView.builder(
-                          itemCount: _currentQuestions.length,
-                          onReorder: (oldIndex, newIndex) {
-                            setState(() {
-                              if (newIndex > oldIndex) newIndex -= 1;
-                              final item = _currentQuestions.removeAt(oldIndex);
-                              _currentQuestions.insert(newIndex, item);
-                            });
-                          },
-                          itemBuilder: (context, idx) {
-                            final q = _currentQuestions[idx];
-                            final hasSkip = q['field_config']?['skip_logic']?['enabled'] ?? false;
-                            final isOtherEnabled = q['field_config']?['allow_other'] ?? false;
-                            final String fieldType = q['field_config']?['type'] ?? 'text';
+                const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Text(
+                    "COMPONENTS",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+                _buildToolButton(icon: Icons.text_fields, label: "Text Area", type: "text"),
+                _buildToolButton(icon: Icons.radio_button_checked, label: "Radio Select", type: "radio"),
+                _buildToolButton(icon: Icons.check_box, label: "Check Box List", type: "checkbox_search"),
+                const Divider(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.create_new_folder, size: 16, color: Colors.indigo),
+                    label: const Text("New Section", style: TextStyle(color: Colors.indigo, fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      side: const BorderSide(color: Colors.indigo),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _createNewSectionDialog(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _currentQuestions.isEmpty
+                ? const Center(
+                    child: Text(
+                      "Your canvas is currently blank. Click a component on the left panel to begin.",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: groupedSections.keys.map((sectionName) {
+                      final globalIndexes = groupedSections[sectionName]!;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 16.0),
+                        elevation: 1,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ExpansionTile(
+                          initiallyExpanded: true,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  sectionName.toUpperCase(),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 14),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.expand_less, size: 18, color: Colors.blueGrey),
+                                tooltip: "Move Section Up",
+                                onPressed: () => _moveEntireSection(sectionName, -1),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.expand_more, size: 18, color: Colors.blueGrey),
+                                tooltip: "Move Section Down",
+                                onPressed: () => _moveEntireSection(sectionName, 1),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit_note, size: 18, color: Colors.indigo),
+                                tooltip: "Rename Section",
+                                onPressed: () => _renameSectionDialog(sectionName),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.redAccent),
+                                tooltip: "Delete Section & Contents",
+                                onPressed: () => _deleteEntireSectionDialog(sectionName),
+                              ),
+                            ],
+                          ),
+                          childrenPadding: const EdgeInsets.all(8.0),
+                          children: globalIndexes.map((globalIdx) {
+                            final q = _currentQuestions[globalIdx];
+                            final String type = q['field_config']?['type'] ?? 'text';
+                            final bool isRequired = q['required'] ?? false;
 
                             return Card(
-                              key: ValueKey(q['id'] ?? 'index_$idx'),
-                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              color: Colors.grey.shade50,
+                              margin: const EdgeInsets.symmetric(vertical: 4.0),
                               child: ListTile(
-                                leading: const Icon(Icons.drag_indicator, color: Colors.grey),
-                                title: Text(q['question'] ?? ''),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "Section: ${q['section']} | Type: $fieldType ${isOtherEnabled ? '(+ Write-in Other)' : ''}",
-                                    ),
-                                    if (hasSkip)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.alt_route, size: 14, color: Colors.purple),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              "Conditional Skip Enabled",
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.purple.shade700,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.blue.shade50,
+                                  child: Icon(
+                                    type == 'text'
+                                        ? Icons.text_fields
+                                        : type == 'radio'
+                                        ? Icons.radio_button_checked
+                                        : Icons.check_box,
+                                    color: const Color(0xff00afef),
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  "${q['question']} ${isRequired ? '*' : ''}",
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                subtitle: Text(
+                                  "Type: ${type.toUpperCase()} | Global Order: ${globalIdx + 1}",
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                                 ),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.edit_note, color: Color(0xff00afef)),
-                                      onPressed: () =>
-                                          _showConfigureQuestionDialog(type: fieldType, existingQuestion: q, editIndex: idx),
+                                      icon: const Icon(Icons.arrow_upward, size: 18, color: Colors.blueGrey),
+                                      onPressed: globalIdx == 0 ? null : () => _moveQuestion(globalIdx, -1),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                      onPressed: () => _removeQuestionFromCanvas(idx),
+                                      icon: const Icon(Icons.arrow_downward, size: 18, color: Colors.blueGrey),
+                                      onPressed: globalIdx == _currentQuestions.length - 1
+                                          ? null
+                                          : () => _moveQuestion(globalIdx, 1),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                                      onPressed: () =>
+                                          _showConfigureQuestionDialog(type: type, existingQuestion: q, editIndex: globalIdx),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                      onPressed: () => _deleteQuestion(globalIdx),
                                     ),
                                   ],
                                 ),
                               ),
                             );
-                          },
+                          }).toList(),
                         ),
-                ),
-                _buildToolboxTray(),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildToolboxTray() {
-    return Container(
-      color: Colors.grey[200],
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(child: _toolButton("Text", Icons.text_fields, () => _showConfigureQuestionDialog(type: 'text'))),
-            Expanded(child: _toolButton("Radio", Icons.radio_button_checked, () => _showConfigureQuestionDialog(type: 'radio'))),
-            Expanded(
-              child: _toolButton(
-                "Check box",
-                Icons.check_box_outlined,
-                () => _showConfigureQuestionDialog(type: 'checkbox_search'),
-              ),
-            ),
-          ],
-        ),
+                      );
+                    }).toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _toolButton(String label, IconData icon, VoidCallback onPressed) {
+  Widget _buildToolButton({required IconData icon, required String label, required String type}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black87),
-        onPressed: onPressed,
         icon: Icon(icon, size: 16, color: const Color(0xff00afef)),
-        label: Text(label, style: const TextStyle(fontSize: 11)),
+        label: Text(label, style: const TextStyle(color: Colors.black87, fontSize: 12)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        onPressed: () => _showConfigureQuestionDialog(type: type),
       ),
     );
+  }
+
+  void _createNewSectionDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Create Section"),
+        content: TextField(
+          controller: textController,
+          decoration: const InputDecoration(labelText: "Section Name"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                _commitQuestionToCanvas(
+                  type: 'text',
+                  labelText: 'First placeholder field (edit or replace me)',
+                  section: textController.text.trim(),
+                  required: false,
+                  sourceType: 'static',
+                  staticControllers: [],
+                  tableName: 'clusters',
+                  enableSkipLogic: false,
+                  dependentQuestionId: null,
+                  skipOperator: 'equals',
+                  skipValue: '',
+                );
+              }
+              Navigator.pop(context);
+            },
+            child: const Text("Create"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _renameSectionDialog(String oldName) {
+    final textController = TextEditingController(text: oldName);
+    final existingQuestionWithLogic = _currentQuestions.firstWhere(
+      (q) => q['section'] == oldName && q['field_config']?['section_skip_logic'] != null,
+      orElse: () => {},
+    );
+    final sectionSkipBlock = existingQuestionWithLogic['field_config']?['section_skip_logic'] as Map<String, dynamic>?;
+    bool enableSectionSkip = sectionSkipBlock != null ? (sectionSkipBlock['enabled'] ?? false) : false;
+    String? selectedSectionDepId = sectionSkipBlock?['dependent_question_id']?.toString();
+    String sectionOperator = sectionSkipBlock?['operator']?.toString() ?? 'equals';
+    final sectionValueController = TextEditingController(text: sectionSkipBlock?['value']?.toString() ?? '');
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filtratedPriorQuestions = _currentQuestions.where((q) {
+              return q['section'] != oldName;
+            }).toList();
+
+            return AlertDialog(
+              title: Text(
+                "Modify Section Matrix: $oldName",
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+              ),
+              content: SizedBox(
+                width: 500,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: textController,
+                        decoration: const InputDecoration(labelText: "Section / Group Name", border: OutlineInputBorder()),
+                      ),
+                      const Divider(height: 28),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueGrey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  "Whole Section Visibility Logic",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
+                                ),
+                                const Spacer(),
+                                Switch(
+                                  value: enableSectionSkip,
+                                  onChanged: (val) => setModalState(() => enableSectionSkip = val),
+                                  activeThumbColor: Colors.indigo,
+                                ),
+                              ],
+                            ),
+                            if (enableSectionSkip) ...[
+                              const SizedBox(height: 10),
+                              filtratedPriorQuestions.isEmpty
+                                  ? const Text(
+                                      "No external questions available to depend on.",
+                                      style: TextStyle(color: Colors.amber, fontSize: 12),
+                                    )
+                                  : Column(
+                                      children: [
+                                        DropdownButtonFormField<String>(
+                                          initialValue:
+                                              filtratedPriorQuestions.any((e) => e['id'].toString() == selectedSectionDepId)
+                                              ? selectedSectionDepId
+                                              : null,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Select Prior Question',
+                                            border: OutlineInputBorder(),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                          ),
+                                          items: filtratedPriorQuestions
+                                              .map(
+                                                (q) => DropdownMenuItem(
+                                                  value: q['id'].toString(),
+                                                  child: Text(q['question'] ?? '', overflow: TextOverflow.ellipsis),
+                                                ),
+                                              )
+                                              .toList(),
+                                          onChanged: (val) => setModalState(() {
+                                            selectedSectionDepId = val;
+                                            sectionValueController.clear();
+                                          }),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: DropdownButtonFormField<String>(
+                                                initialValue: sectionOperator,
+                                                decoration: const InputDecoration(
+                                                  labelText: 'Condition',
+                                                  border: OutlineInputBorder(),
+                                                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                ),
+                                                items: const [
+                                                  DropdownMenuItem(value: 'equals', child: Text("Matches (=)")),
+                                                  DropdownMenuItem(value: 'not_equals', child: Text("Does Not Match (≠)")),
+                                                  DropdownMenuItem(value: 'filled', child: Text("Is Answered")),
+                                                ],
+                                                onChanged: (val) => setModalState(() => sectionOperator = val ?? 'equals'),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (sectionOperator != 'filled')
+                                              Expanded(
+                                                flex: 4,
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    final priorQ = filtratedPriorQuestions.firstWhere(
+                                                      (e) => e['id'].toString() == selectedSectionDepId,
+                                                      orElse: () => {},
+                                                    );
+                                                    final priorOpts = priorQ['field_config']?['options'] as List<dynamic>? ?? [];
+                                                    if (priorOpts.isNotEmpty) {
+                                                      return DropdownButtonFormField<String>(
+                                                        initialValue: priorOpts.contains(sectionValueController.text)
+                                                            ? sectionValueController.text
+                                                            : null,
+                                                        decoration: const InputDecoration(
+                                                          labelText: 'Select Option Match',
+                                                          border: OutlineInputBorder(),
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                        ),
+                                                        items: priorOpts
+                                                            .map(
+                                                              (opt) => DropdownMenuItem(
+                                                                value: opt.toString(),
+                                                                child: Text(opt.toString()),
+                                                              ),
+                                                            )
+                                                            .toList(),
+                                                        onChanged: (val) => {if (val != null) sectionValueController.text = val},
+                                                      );
+                                                    }
+                                                    return TextField(
+                                                      controller: sectionValueController,
+                                                      decoration: const InputDecoration(
+                                                        labelText: 'Value to match',
+                                                        border: OutlineInputBorder(),
+                                                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  onPressed: () {
+                    final newName = textController.text.trim().isEmpty ? oldName : textController.text.trim();
+
+                    final updatedSectionSkipBlock = {
+                      'enabled': enableSectionSkip && selectedSectionDepId != null,
+                      'dependent_question_id': selectedSectionDepId,
+                      'operator': sectionOperator,
+                      'value': sectionOperator == 'filled' ? '' : sectionValueController.text.trim(),
+                    };
+
+                    setState(() {
+                      for (var q in _currentQuestions) {
+                        if (q['section'] == oldName) {
+                          q['section'] = newName;
+                          final config = Map<String, dynamic>.from(q['field_config'] ?? {});
+                          config['section_skip_logic'] = updatedSectionSkipBlock;
+                          q['field_config'] = config;
+                        }
+                      }
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Save Changes", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _deleteEntireSectionDialog(String sectionName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete Section: $sectionName?"),
+        content: const Text(
+          "This will remove this section header and completely drop all questions within it from the current draft.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              setState(() {
+                _currentQuestions.removeWhere((q) {
+                  final match = q['section'] == sectionName;
+                  if (match && !q['id'].toString().startsWith('new_')) {
+                    _deletedQuestionIds.add(q['id'].toString());
+                  }
+                  return match;
+                });
+              });
+              Navigator.pop(context);
+            },
+            child: const Text("Delete Everything", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _moveEntireSection(String sectionName, int direction) {
+    final targetItems = _currentQuestions.where((q) => q['section'] == sectionName).toList();
+    if (targetItems.isEmpty) return;
+
+    setState(() {
+      _currentQuestions.removeWhere((q) => q['section'] == sectionName);
+      final List<String> distinctOrder = [];
+      for (var q in _currentQuestions) {
+        final s = q['section'] ?? 'General';
+        if (!distinctOrder.contains(s)) distinctOrder.add(s);
+      }
+      distinctOrder.indexOf(sectionName);
+      _currentQuestions.insertAll(0, targetItems);
+    });
   }
 }

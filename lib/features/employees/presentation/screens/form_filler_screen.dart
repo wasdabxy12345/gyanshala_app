@@ -93,35 +93,63 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     }
   }
 
-  /// Evaluates whether a question should be displayed or skipped based on previous answers
   bool _shouldShowQuestion(Map<String, dynamic> question) {
+    final String currentSection = question['section'] ?? 'General';
+
+    // --- STEP 1: EVALUATE WHOLE SECTION SKIP LOGIC FIRST ---
+    // Find the first question in the form that belongs to this section
+    final firstQuestionOfSection = _questions.firstWhere((q) => (q['section'] ?? 'General') == currentSection, orElse: () => {});
+
+    if (firstQuestionOfSection.isNotEmpty) {
+      final firstConfig = firstQuestionOfSection['field_config'] as Map<String, dynamic>? ?? {};
+      final sectionSkip = firstConfig['section_skip_logic'] as Map<String, dynamic>?;
+
+      if (sectionSkip != null && sectionSkip['enabled'] == true) {
+        final bool sectionIsVisible = _evaluateLogicCondition(
+          dependentQuestionId: sectionSkip['dependent_question_id']?.toString(),
+          operator: sectionSkip['operator'],
+          targetValue: sectionSkip['value']?.toString(),
+        );
+
+        // If the section criteria is not met, hide this question immediately
+        if (!sectionIsVisible) return false;
+      }
+    }
+
+    // --- STEP 2: EVALUATE INDIVIDUAL QUESTION SKIP LOGIC ---
     final config = question['field_config'] as Map<String, dynamic>? ?? {};
     final skipLogic = config['skip_logic'] as Map<String, dynamic>?;
 
     if (skipLogic == null || skipLogic['enabled'] != true) {
-      return true; // No conditional rules applied
+      return true;
     }
 
-    final depId = skipLogic['dependent_question_id']?.toString();
-    final op = skipLogic['operator'];
-    final targetValue = skipLogic['value']?.toString().toLowerCase().trim();
+    return _evaluateLogicCondition(
+      dependentQuestionId: skipLogic['dependent_question_id']?.toString(),
+      operator: skipLogic['operator'],
+      targetValue: skipLogic['value']?.toString(),
+    );
+  }
 
-    if (depId == null) return true;
+  /// Helper method to safely isolate conditional computations
+  bool _evaluateLogicCondition({required String? dependentQuestionId, required dynamic operator, required String? targetValue}) {
+    if (dependentQuestionId == null) return true;
 
-    final rawAnswer = _formAnswers[depId];
+    final targetLower = targetValue?.toLowerCase().trim() ?? '';
+    final rawAnswer = _formAnswers[dependentQuestionId];
     final currentAnswerStr = rawAnswer?.toString().toLowerCase().trim() ?? '';
 
-    switch (op) {
+    switch (operator) {
       case 'filled':
         if (rawAnswer is List) return rawAnswer.isNotEmpty;
         return currentAnswerStr.isNotEmpty && currentAnswerStr != 'null';
       case 'not_equals':
-        if (rawAnswer is List) return !rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetValue);
-        return currentAnswerStr != targetValue;
+        if (rawAnswer is List) return !rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetLower);
+        return currentAnswerStr != targetLower;
       case 'equals':
       default:
-        if (rawAnswer is List) return rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetValue);
-        return currentAnswerStr == targetValue;
+        if (rawAnswer is List) return rawAnswer.map((e) => e.toString().toLowerCase().trim()).contains(targetLower);
+        return currentAnswerStr == targetLower;
     }
   }
 
