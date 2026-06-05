@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'form_filler_screen.dart'; // Import the FormFillerScreen built previously
@@ -46,7 +47,7 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
       backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: const Text("Assigned Evaluations"),
-        backgroundColor: const Color(0xff00afef),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
       ),
       body: _isLoading

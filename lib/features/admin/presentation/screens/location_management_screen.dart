@@ -108,7 +108,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 .single();
             villageId = villageResp['id'].toString();
           }
-
           if (villageId != null) {
             double? lat = rowData['lat'] != null ? double.tryParse(rowData['lat']) : null;
             double? lng = rowData['lng'] != null ? double.tryParse(rowData['lng']) : null;
@@ -125,7 +124,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           debugPrint("Row processing error: $e");
         }
       }
-
       await _fetchHierarchy();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully processed $importedCount rows")));
@@ -145,7 +143,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     List<Map<String, dynamic>> rows = [];
     String? lastClusterName;
     String? lastVillageName;
-
     for (var table in excel.tables.keys) {
       var sheet = excel.tables[table];
       if (sheet == null) continue;
@@ -157,7 +154,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         final schoolName = row[2]?.value?.toString().trim();
         final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
         final rawLng = row.length > 4 ? row[4]?.value?.toString().trim() : null;
-
         if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
           continue;
         }
@@ -169,7 +165,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         }
         if (lastClusterName == null || lastClusterName.isEmpty) continue;
         if (schoolName == null || schoolName.isEmpty) continue;
-
         rows.add({'cluster': lastClusterName, 'village': lastVillageName, 'school': schoolName, 'lat': rawLat, 'lng': rawLng});
       }
     }
@@ -259,7 +254,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           ),
         ),
         IconButton(
-          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
+          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
           onPressed: onToggleFullscreen,
         ),
       ],
@@ -354,8 +349,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         circleId: const CircleId('geofence_circle'),
                         center: selectedLatLng!,
                         radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
-                        fillColor: Colors.teal.withValues(alpha: 0.15),
-                        strokeColor: Colors.teal,
+                        fillColor: AppTheme.primaryBlue,
+                        strokeColor: AppTheme.accentBlue,
                         strokeWidth: 2,
                       ),
                     },
@@ -428,7 +423,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         },
                         icon: const Icon(Icons.upload_file),
                         label: const Text("Import Schools via Excel"),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40), foregroundColor: Colors.teal),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(40),
+                          foregroundColor: AppTheme.primaryBlue,
+                        ),
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -734,19 +732,42 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   List<String> _getUniqueValues(int columnIndex) {
     final Set<String> values = {};
+
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
-      if (columnIndex == 0) values.add(clusterName);
+
+      // Column 0 (Cluster) should ALWAYS show all clusters found in raw dataset
+      if (columnIndex == 0) {
+        values.add(clusterName);
+      }
+
+      // Villages and schools depend on whether their parent cluster is selected
+      if (columnIndex != 0 && _selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
+        continue;
+      }
+
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName) && columnIndex == 2) continue;
-        if (columnIndex == 1) values.add(villageName);
+
+        // Column 1 (Village) extracts names if its parent cluster is active
+        if (columnIndex == 1) {
+          values.add(villageName);
+        }
+
+        // Schools depend on whether their parent village is selected
+        if (columnIndex == 2 && _selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
+          continue;
+        }
+
         for (final school in (village['schools'] ?? [])) {
-          if (columnIndex == 2) values.add(school['name'].toString());
+          // Column 2 (School) extracts names if both parent cluster and village are active
+          if (columnIndex == 2) {
+            values.add(school['name'].toString());
+          }
         }
       }
     }
+
     return values.toList()..sort();
   }
 
@@ -1042,7 +1063,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         Navigator.pop(ctx);
                         _confirmDelete(type, entity);
                       },
-                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      icon: const Icon(Icons.delete, color: Colors.red),
                       label: Text("Delete this $type", style: const TextStyle(color: Colors.red)),
                     ),
                   ],
@@ -1211,7 +1232,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       floatingActionButton: FloatingActionButton(
         heroTag: "add_location_btn",
         onPressed: () => _showAddDialog('School'),
-        backgroundColor: Colors.teal,
+        backgroundColor: AppTheme.primaryBlue,
         child: const Icon(Icons.add_location_alt, color: Colors.white),
       ),
     );
@@ -1310,7 +1331,7 @@ class _ActionCell extends StatelessWidget {
                   ),
                 ),
               ),
-              if (text.isNotEmpty && text != "-") const Icon(Icons.edit_note, size: 14, color: AppTheme.textPrimary),
+              if (text.isNotEmpty && text != "-") const Icon(Icons.edit, size: 14, color: AppTheme.textPrimary),
             ],
           ),
         ),

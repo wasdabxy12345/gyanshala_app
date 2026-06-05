@@ -95,35 +95,24 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   bool _shouldShowQuestion(Map<String, dynamic> question) {
     final String currentSection = question['section'] ?? 'General';
-
-    // --- STEP 1: EVALUATE WHOLE SECTION SKIP LOGIC FIRST ---
-    // Find the first question in the form that belongs to this section
     final firstQuestionOfSection = _questions.firstWhere((q) => (q['section'] ?? 'General') == currentSection, orElse: () => {});
-
     if (firstQuestionOfSection.isNotEmpty) {
       final firstConfig = firstQuestionOfSection['field_config'] as Map<String, dynamic>? ?? {};
       final sectionSkip = firstConfig['section_skip_logic'] as Map<String, dynamic>?;
-
       if (sectionSkip != null && sectionSkip['enabled'] == true) {
         final bool sectionIsVisible = _evaluateLogicCondition(
           dependentQuestionId: sectionSkip['dependent_question_id']?.toString(),
           operator: sectionSkip['operator'],
           targetValue: sectionSkip['value']?.toString(),
         );
-
-        // If the section criteria is not met, hide this question immediately
         if (!sectionIsVisible) return false;
       }
     }
-
-    // --- STEP 2: EVALUATE INDIVIDUAL QUESTION SKIP LOGIC ---
     final config = question['field_config'] as Map<String, dynamic>? ?? {};
     final skipLogic = config['skip_logic'] as Map<String, dynamic>?;
-
     if (skipLogic == null || skipLogic['enabled'] != true) {
       return true;
     }
-
     return _evaluateLogicCondition(
       dependentQuestionId: skipLogic['dependent_question_id']?.toString(),
       operator: skipLogic['operator'],
@@ -131,7 +120,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     );
   }
 
-  /// Helper method to safely isolate conditional computations
   bool _evaluateLogicCondition({required String? dependentQuestionId, required dynamic operator, required String? targetValue}) {
     if (dependentQuestionId == null) return true;
 
@@ -156,17 +144,12 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
   void _handleNextStep() {
     if (_rootFormKey.currentState != null && _rootFormKey.currentState!.validate()) {
       _rootFormKey.currentState!.save();
-
       int nextIndex = _currentPageIndex + 1;
-
-      // Look ahead to bypass skipped panels recursively
       while (nextIndex < _questions.length && !_shouldShowQuestion(_questions[nextIndex])) {
-        // Clear value of skipped fields so historical answers do not pollute data submissions
         final skippedId = _questions[nextIndex]['id'].toString();
         _formAnswers.remove(skippedId);
         nextIndex++;
       }
-
       if (nextIndex < _questions.length) {
         setState(() => _currentPageIndex = nextIndex);
         _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
@@ -178,12 +161,9 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   void _handlePreviousStep() {
     int prevIndex = _currentPageIndex - 1;
-
-    // Look backward to step over questions that aren't matching visibility rules
     while (prevIndex >= 0 && !_shouldShowQuestion(_questions[prevIndex])) {
       prevIndex--;
     }
-
     if (prevIndex >= 0) {
       setState(() => _currentPageIndex = prevIndex);
       _pageController.animateToPage(prevIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
@@ -195,10 +175,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
-
       if (userId == null) throw Exception("Authentication session expired.");
       LocationPermission checkPermission = await Geolocator.checkPermission();
-
       if (checkPermission == LocationPermission.denied) {
         checkPermission = await Geolocator.requestPermission();
       }
@@ -268,7 +246,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Dynamically calculate if there are further fields left to answer after this one
     bool isLastCalculatedPage = true;
     for (int i = _currentPageIndex + 1; i < _questions.length; i++) {
       if (_shouldShowQuestion(_questions[i])) {
@@ -276,12 +253,11 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         break;
       }
     }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: Text(widget.formTitle),
-        backgroundColor: const Color(0xff00afef),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         bottom: _isLoading || _questions.isEmpty
             ? null
@@ -386,7 +362,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isLastPage ? Colors.green : const Color(0xff00afef),
+                    backgroundColor: isLastPage ? Colors.green : AppTheme.primaryBlue,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     elevation: 1,
                   ),
@@ -405,11 +381,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     final bool isRequired = q['required'] ?? false;
     final config = q['field_config'] as Map<String, dynamic>? ?? {};
     final String type = config['type'] ?? 'text';
-
-    // Read our custom 'allow_other' metadata flag
     final bool allowOther = config['allow_other'] ?? false;
     const String otherChoiceString = "Other (Please specify)";
-
     final fieldLabel = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Wrap(
@@ -419,7 +392,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         ],
       ),
     );
-
     switch (type) {
       case 'text':
         return Column(
@@ -442,18 +414,13 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             ),
           ],
         );
-
       case 'radio':
-        // Get a copy of options and inject "Other" if allowed
         final rawOptions = _resolvedOptions[qId] ?? [];
         final List<String> options = List<String>.from(rawOptions);
         if (allowOther && !options.contains(otherChoiceString)) {
           options.add(otherChoiceString);
         }
-
-        // Track sub-field raw string text inside answers map safely
         final String otherTextKey = "${qId}_other_text";
-
         return FormField<String>(
           key: ValueKey('radio_formfield_$qId'),
           initialValue: _formAnswers[qId],
@@ -467,7 +434,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
           },
           onSaved: (val) {
             if (val == otherChoiceString) {
-              // Persist write-in value directly to main response key
               _formAnswers[qId] = _formAnswers[otherTextKey]?.toString().trim() ?? otherChoiceString;
             } else {
               _formAnswers[qId] = val;
@@ -475,38 +441,40 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
           },
           builder: (FormFieldState<String> state) {
             final isOtherSelected = state.value == otherChoiceString;
-
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 fieldLabel,
-                Column(
-                  children: options.map((opt) {
-                    return Card(
-                      key: ValueKey('radio_card_${qId}_$opt'),
-                      color: state.value == opt ? AppTheme.lightBlue : Colors.white,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
-                      ),
-                      child: RadioListTile<String>(
-                        title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        value: opt,
-                        groupValue: state.value,
-                        onChanged: (String? val) {
-                          state.didChange(val);
-                          if (val == otherChoiceString) {
-                            _formAnswers[qId] = _formAnswers[otherTextKey] ?? '';
-                          } else {
-                            _formAnswers[qId] = val;
-                          }
-                        },
-                      ),
-                    );
-                  }).toList(),
+                // FIX: Modern Flutter approach uses RadioGroup with groupValue and onChanged
+                RadioGroup<String>(
+                  groupValue: state.value,
+                  onChanged: (String? val) {
+                    state.didChange(val);
+                    if (val == otherChoiceString) {
+                      _formAnswers[qId] = _formAnswers[otherTextKey] ?? '';
+                    } else {
+                      _formAnswers[qId] = val;
+                    }
+                  },
+                  child: Column(
+                    children: options.map((opt) {
+                      return Card(
+                        key: ValueKey('radio_card_${qId}_$opt'),
+                        color: state.value == opt ? AppTheme.lightBlue : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
+                        ),
+                        // Individual tiles only need a value. They inherit state from RadioGroup.
+                        child: RadioListTile<String>(
+                          title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
+                          value: opt,
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-                // DYNAMIC TOGGLE: Display Text Input Field below options if selected
                 if (isOtherSelected)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
@@ -534,7 +502,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             );
           },
         );
-
       case 'checkbox_search':
         final rawOptions = _resolvedOptions[qId] ?? [];
         final List<String> options = List<String>.from(rawOptions);
@@ -586,13 +553,13 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: isChecked ? const Color(0xff00afef) : Colors.grey.shade300),
+                        side: BorderSide(color: isChecked ? AppTheme.primaryBlue : Colors.grey.shade300),
                       ),
                       child: CheckboxListTile(
                         title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
                         value: isChecked,
                         controlAffinity: ListTileControlAffinity.trailing,
-                        activeColor: const Color(0xff00afef),
+                        activeColor: AppTheme.primaryBlue,
                         onChanged: (bool? checked) {
                           final updatedList = List<String>.from(selectedItems);
                           if (checked == true) {
@@ -607,7 +574,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                     );
                   }).toList(),
                 ),
-                // DYNAMIC TOGGLE: Display Text Input Field below checkbox list
                 if (isOtherSelected)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
@@ -672,7 +638,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             )
           else
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff00afef)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
               onPressed: () async {
                 Navigator.pop(context);
                 _submitFormEntries();
@@ -706,7 +672,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xff00afef),
+              backgroundColor: AppTheme.primaryBlue,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.location_searching, size: 16, color: Colors.white),

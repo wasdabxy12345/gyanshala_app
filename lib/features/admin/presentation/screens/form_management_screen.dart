@@ -115,7 +115,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00AFEF)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
             onPressed: () async {
               final text = titleController.text.trim();
               if (text.isEmpty) return;
@@ -159,7 +159,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Form Management Layout"),
-        backgroundColor: const Color(0xFF00AFEF),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchFormsFromSupabase)],
       ),
@@ -202,7 +202,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                            icon: const Icon(Icons.delete, color: Colors.redAccent, size: 22),
                             tooltip: "Remove Form Blueprint",
                             onPressed: () => _deleteFormDocument(currentFormId, currentFormTitle),
                           ),

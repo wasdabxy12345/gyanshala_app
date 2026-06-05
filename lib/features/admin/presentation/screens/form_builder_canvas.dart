@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/excel_parser/excel_parser.dart'
     if (dart.library.js_interop) 'package:gyanshala_app/core/utils/excel_parser/excel_web_parser.dart'
     if (dart.library.io) 'package:gyanshala_app/core/utils/excel_parser/excel_mobile_parser.dart';
@@ -280,7 +281,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Keep")),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff00afef)),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () => Navigator.pop(context, true),
                   child: const Text("Skip", style: TextStyle(color: Colors.white)),
                 ),
@@ -344,7 +345,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     String? selectedDependentQuestionId = skipBlock?['dependent_question_id']?.toString();
     String skipOperator = skipBlock?['operator']?.toString() ?? 'equals';
     final skipValueController = TextEditingController(text: skipBlock?['value']?.toString() ?? '');
-    String selectedSectionValue = existingQuestion?['section'] ?? (_sections.isNotEmpty ? _sections.last : 'General');
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -432,11 +432,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           width: double.infinity,
                           child: SegmentedButton<String>(
                             segments: const <ButtonSegment<String>>[
-                              ButtonSegment<String>(
-                                value: 'static',
-                                label: Text('Manual'),
-                                icon: Icon(Icons.edit_note, size: 16),
-                              ),
+                              ButtonSegment<String>(value: 'static', label: Text('Manual'), icon: Icon(Icons.edit, size: 16)),
                               ButtonSegment<String>(
                                 value: 'database',
                                 label: Text('Database'),
@@ -529,7 +525,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                     const SizedBox(width: 4),
                                     Switch(
                                       value: allowOtherOption,
-                                      activeThumbColor: const Color(0xff00afef),
+                                      activeThumbColor: AppTheme.primaryBlue,
                                       onChanged: (value) => setModalState(() => allowOtherOption = value),
                                     ),
                                   ],
@@ -582,7 +578,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                 Switch(
                                   value: enableSkipLogic,
                                   onChanged: (val) => setModalState(() => enableSkipLogic = val),
-                                  activeThumbColor: const Color(0xff00afef),
+                                  activeThumbColor: AppTheme.primaryBlue,
                                 ),
                               ],
                             ),
@@ -702,7 +698,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff00afef)),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () {
                     if (questionController.text.trim().isEmpty) return;
                     _commitQuestionToCanvas(
@@ -815,7 +811,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       backgroundColor: const Color(0xFFF4F7FC),
       appBar: AppBar(
         title: Text("Building: ${widget.formTitle}"),
-        backgroundColor: const Color(0xff00afef),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         actions: [
           if (_isLoading)
@@ -906,7 +902,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(
-                                color: isOverSection ? const Color(0xff00afef) : Colors.grey.shade300,
+                                color: isOverSection ? AppTheme.primaryBlue : Colors.grey.shade300,
                                 width: isOverSection ? 2.0 : 1.0,
                               ),
                             ),
@@ -934,11 +930,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                     onPressed: () => _moveEntireSection(sectionName, 1),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.edit_note, size: 18, color: Colors.indigo),
+                                    icon: const Icon(Icons.edit, size: 18, color: Colors.indigo),
                                     onPressed: () => _renameSectionDialog(sectionName),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.redAccent),
+                                    icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
                                     onPressed: () => _deleteEntireSectionDialog(sectionName),
                                   ),
                                 ],
@@ -994,7 +990,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                 ),
                                               ),
                                               IconButton(
-                                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                                icon: const Icon(Icons.delete, size: 18, color: Colors.red),
                                                 onPressed: () => _deleteQuestion(globalIdx),
                                               ),
                                             ],
@@ -1024,7 +1020,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                   Container(
                                                     height: 4,
                                                     margin: const EdgeInsets.symmetric(vertical: 4),
-                                                    color: const Color(0xff00afef),
+                                                    color: AppTheme.primaryBlue,
                                                   ),
                                                 cardItem,
                                               ],
@@ -1049,7 +1045,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: ElevatedButton.icon(
-        icon: Icon(icon, size: 16, color: const Color(0xff00afef)),
+        icon: Icon(icon, size: 16, color: AppTheme.primaryBlue),
         label: Text(label, style: const TextStyle(color: Colors.black87, fontSize: 12)),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,

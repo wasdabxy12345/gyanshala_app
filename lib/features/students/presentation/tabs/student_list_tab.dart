@@ -75,7 +75,7 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
                       ),
                       if (_selectedStudentIds.isNotEmpty)
                         IconButton(
-                          icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                          icon: const Icon(Icons.delete, color: Colors.red),
                           tooltip: 'Delete Selected',
                           onPressed: () => _confirmBatchDelete(context),
                         ),

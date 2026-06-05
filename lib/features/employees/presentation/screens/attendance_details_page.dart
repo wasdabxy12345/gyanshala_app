@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 class AttendanceDetailsPage extends ConsumerWidget {
@@ -110,7 +111,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Daily Attendance Summary'),
-        backgroundColor: const Color(0xff00afef),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<Map<String, dynamic>>(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -57,7 +58,7 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
       backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: Text(widget.formTitle),
-        backgroundColor: const Color(0xFF00AFEF),
+        backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTableData, tooltip: "Refresh Grid")],
       ),
