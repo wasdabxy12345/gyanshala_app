@@ -33,23 +33,27 @@ class ShikshaMitraDashboardScreen extends ConsumerWidget {
 class HomeContent extends StatelessWidget {
   final String shikshaMitraName;
   const HomeContent({super.key, required this.shikshaMitraName});
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Welcome, ${shikshaMitraName}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            SizedBox(height: 20),
-            AttendanceCard(),
-            SizedBox(height: 24),
-            Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            SizedBox(height: 12),
-            ActionGrid(),
-          ],
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Welcome, $shikshaMitraName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                const AttendanceCard(),
+                const SizedBox(height: 24),
+                const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                const ActionGrid(),
+              ],
+            ),
+          ),
         ),
       ),
     );

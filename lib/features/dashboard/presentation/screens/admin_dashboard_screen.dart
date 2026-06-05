@@ -36,57 +36,57 @@ class AdminDashboardScreen extends ConsumerWidget {
 class AdminHomeContent extends StatelessWidget {
   final String adminName;
   const AdminHomeContent({super.key, required this.adminName});
-
   @override
   Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> tiles = [
+      {
+        "title": "Approve Signups",
+        "icon": Icons.how_to_reg,
+        "color": Colors.red,
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupRequestsScreen())),
+      },
+      {
+        "title": "Employee List and Attendance",
+        "icon": Icons.groups,
+        "color": Colors.yellow,
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmployeeHubPage())),
+      },
+      {
+        "title": "Manage Locations",
+        "icon": Icons.map_outlined,
+        "color": Colors.green,
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocationManagementScreen())),
+      },
+      {
+        "title": "Manage Forms",
+        "icon": Icons.description_outlined,
+        "color": Colors.blue,
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FormManagementScreen())),
+      },
+    ];
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Welcome, ${adminName}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text("Welcome, $adminName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            GridView.count(
+            GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                _AdminActionTile(
-                  title: "Approve Signups",
-                  icon: Icons.how_to_reg,
-                  color: Colors.red,
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupRequestsScreen()));
-                  },
-                ),
-                _AdminActionTile(
-                  title: "Employee List and Attendance",
-                  icon: Icons.groups,
-                  color: Colors.yellow,
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const EmployeeHubPage()));
-                  },
-                ),
-                _AdminActionTile(
-                  title: "Manage Locations",
-                  icon: Icons.map_outlined,
-                  color: Colors.green,
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const LocationManagementScreen()));
-                  },
-                ),
-                _AdminActionTile(
-                  title: "Manage Forms",
-                  icon: Icons.description_outlined,
-                  color: Colors.blue,
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const FormManagementScreen()));
-                  },
-                ),
-              ],
+              itemCount: tiles.length,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.1,
+              ),
+              itemBuilder: (context, index) {
+                final item = tiles[index];
+                return _AdminActionTile(title: item["title"], icon: item["icon"], color: item["color"], onTap: item["onTap"]);
+              },
             ),
           ],
         ),
