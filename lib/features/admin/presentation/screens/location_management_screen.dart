@@ -219,7 +219,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.indigo : Colors.transparent,
+              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
@@ -735,32 +735,23 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-
-      // Column 0 (Cluster) should ALWAYS show all clusters found in raw dataset
       if (columnIndex == 0) {
         values.add(clusterName);
       }
-
-      // Villages and schools depend on whether their parent cluster is selected
       if (columnIndex != 0 && _selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
         continue;
       }
 
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-
-        // Column 1 (Village) extracts names if its parent cluster is active
         if (columnIndex == 1) {
           values.add(villageName);
         }
-
-        // Schools depend on whether their parent village is selected
         if (columnIndex == 2 && _selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
           continue;
         }
 
         for (final school in (village['schools'] ?? [])) {
-          // Column 2 (School) extracts names if both parent cluster and village are active
           if (columnIndex == 2) {
             values.add(school['name'].toString());
           }
@@ -904,8 +895,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         circleId: const CircleId('edit_geofence_circle'),
                         center: selectedLatLng!,
                         radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
-                        fillColor: Colors.indigo.withValues(alpha: 0.15),
-                        strokeColor: Colors.indigo,
+                        fillColor: AppTheme.primaryBlue.withValues(alpha: 0.15),
+                        strokeColor: AppTheme.primaryBlue,
                         strokeWidth: 2,
                       ),
                     },
@@ -965,7 +956,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           return AlertDialog(
             title: Row(
               children: [
-                const Icon(Icons.settings, color: Colors.indigo),
+                const Icon(Icons.settings, color: AppTheme.primaryBlue),
                 const SizedBox(width: 10),
                 Text("Manage $type"),
               ],

@@ -855,12 +855,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.create_new_folder, size: 16, color: Colors.indigo),
-                    label: const Text("New Section", style: TextStyle(color: Colors.indigo, fontSize: 12)),
+                    icon: const Icon(Icons.create_new_folder, size: 16, color: AppTheme.primaryBlue),
+                    label: const Text("New Section", style: TextStyle(color: AppTheme.primaryBlue, fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      side: const BorderSide(color: Colors.indigo),
+                      side: const BorderSide(color: AppTheme.primaryBlue),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _createNewSectionDialog(),
@@ -930,11 +930,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                     onPressed: () => _moveEntireSection(sectionName, 1),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.edit, size: 18, color: Colors.indigo),
+                                    icon: const Icon(Icons.edit, size: 18, color: AppTheme.primaryBlue),
                                     onPressed: () => _renameSectionDialog(sectionName),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, size: 18, color: Colors.redAccent),
+                                    icon: const Icon(Icons.delete, size: 18, color: Colors.red),
                                     onPressed: () => _deleteEntireSectionDialog(sectionName),
                                   ),
                                 ],
@@ -1081,7 +1081,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             return AlertDialog(
               title: const Text(
                 "Create New Section",
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
               ),
               content: SizedBox(
                 width: 500,
@@ -1108,17 +1108,17 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
+                                const Icon(Icons.layers, color: AppTheme.primaryBlue, size: 20),
                                 const SizedBox(width: 8),
                                 const Text(
                                   "Whole Section Visibility Logic",
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryBlue),
                                 ),
                                 const Spacer(),
                                 Switch(
                                   value: enableSectionSkip,
                                   onChanged: (val) => setModalState(() => enableSectionSkip = val),
-                                  activeThumbColor: Colors.indigo,
+                                  activeThumbColor: AppTheme.primaryBlue,
                                 ),
                               ],
                             ),
@@ -1227,7 +1227,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () {
                     final sectionName = textController.text.trim();
                     if (sectionName.isEmpty) return;
@@ -1287,7 +1287,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             return AlertDialog(
               title: Text(
                 "Modify Section Matrix: $oldName",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
               ),
               content: SizedBox(
                 width: 500,
@@ -1313,17 +1313,17 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
+                                const Icon(Icons.layers, color: AppTheme.primaryBlue, size: 20),
                                 const SizedBox(width: 8),
                                 const Text(
                                   "Whole Section Visibility Logic",
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryBlue),
                                 ),
                                 const Spacer(),
                                 Switch(
                                   value: enableSectionSkip,
                                   onChanged: (val) => setModalState(() => enableSectionSkip = val),
-                                  activeThumbColor: Colors.indigo,
+                                  activeThumbColor: AppTheme.primaryBlue,
                                 ),
                               ],
                             ),
@@ -1437,7 +1437,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () {
                     final newName = textController.text.trim().isEmpty ? oldName : textController.text.trim();
 

@@ -143,30 +143,51 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   void _handleNextStep() {
     if (_rootFormKey.currentState != null && _rootFormKey.currentState!.validate()) {
+      // Explicitly save the current field's form state to update _formAnswers
       _rootFormKey.currentState!.save();
+
       int nextIndex = _currentPageIndex + 1;
+      final List<String> fieldsToClear = [];
+
+      // Pre-calculate target step indexes cleanly
       while (nextIndex < _questions.length && !_shouldShowQuestion(_questions[nextIndex])) {
-        final skippedId = _questions[nextIndex]['id'].toString();
-        _formAnswers.remove(skippedId);
+        fieldsToClear.add(_questions[nextIndex]['id'].toString());
         nextIndex++;
       }
-      if (nextIndex < _questions.length) {
-        setState(() => _currentPageIndex = nextIndex);
-        _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-      } else {
-        _submitFormEntries();
+
+      if (nextIndex <= _questions.length) {
+        setState(() {
+          // Purge answers for skipped questions safely after the target is found
+          for (var skippedId in fieldsToClear) {
+            _formAnswers.remove(skippedId);
+            _formAnswers.remove("${skippedId}_other_text");
+          }
+
+          if (nextIndex < _questions.length) {
+            _currentPageIndex = nextIndex;
+            _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+          } else {
+            _submitFormEntries();
+          }
+        });
       }
     }
   }
 
   void _handlePreviousStep() {
+    // Clear validation flags safely before shifting context indices
+    _rootFormKey.currentState?.reset();
+
     int prevIndex = _currentPageIndex - 1;
     while (prevIndex >= 0 && !_shouldShowQuestion(_questions[prevIndex])) {
       prevIndex--;
     }
+
     if (prevIndex >= 0) {
-      setState(() => _currentPageIndex = prevIndex);
-      _pageController.animateToPage(prevIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      setState(() {
+        _currentPageIndex = prevIndex;
+        _pageController.animateToPage(prevIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      });
     }
   }
 
@@ -445,7 +466,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 fieldLabel,
-                // FIX: Modern Flutter approach uses RadioGroup with groupValue and onChanged
                 RadioGroup<String>(
                   groupValue: state.value,
                   onChanged: (String? val) {
@@ -466,7 +486,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                           borderRadius: BorderRadius.circular(8),
                           side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
                         ),
-                        // Individual tiles only need a value. They inherit state from RadioGroup.
                         child: RadioListTile<String>(
                           title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
                           value: opt,
@@ -663,11 +682,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             Text("GPS Switched Off", style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
-          "Your phone's location service is turned off completely. Gyanshala needs your GPS hardware active to securely log your school visit telemetry.\n\n"
-          "Please click 'Turn On GPS' to enable it in your device dropdown shortcuts or system panel.",
-          style: TextStyle(fontSize: 14, height: 1.4),
-        ),
+        content: const Text("Your phone's GPS is off. Please turn it on.", style: TextStyle(fontSize: 14, height: 1.4)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton.icon(

@@ -45,7 +45,7 @@ class AttendanceCard extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     Text(
-                      isCheckedIn ? "Location tracking active" : "Mark attendance to start",
+                      isCheckedIn ? "Work day started" : "Mark attendance to start",
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                     ),
                   ],

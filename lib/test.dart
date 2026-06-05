@@ -14,7 +14,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
   final String userId;
   final String dateString;
   const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
-
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
@@ -28,10 +27,8 @@ class AttendanceDetailsPage extends ConsumerWidget {
             .order('recorded_at', ascending: true),
         supabase.from('schools').select('id, name, latitude, longitude, radius_meters'),
       ]);
-
       final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
       final List<Map<String, dynamic>> schools = List<Map<String, dynamic>>.from(futures[1]);
-
       if (logs.isNotEmpty) {
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
@@ -65,11 +62,9 @@ class AttendanceDetailsPage extends ConsumerWidget {
       final start = DateTime.parse(checkInLog['recorded_at']);
       final end = DateTime.parse(checkOutLog['recorded_at']);
       final difference = end.difference(start);
-
       final hours = difference.inHours;
       final minutes = difference.inMinutes.remainder(60);
       final seconds = difference.inSeconds.remainder(60);
-
       if (hours > 0) {
         return "$hours hr $minutes min";
       } else if (minutes > 0) {
@@ -83,12 +78,10 @@ class AttendanceDetailsPage extends ConsumerWidget {
 
   Map<String, dynamic>? _checkSchoolGeofence(double? lat, double? lng, List<Map<String, dynamic>> schools) {
     if (lat == null || lng == null) return null;
-
     for (var school in schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
       final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
-
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
         if (distance <= radius) {
@@ -120,7 +113,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -133,24 +125,19 @@ class AttendanceDetailsPage extends ConsumerWidget {
               ),
             );
           }
-
           final data = snapshot.data;
           final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
           final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
-
           if (logs.isEmpty) {
             return const Center(child: Text('No details available for this day.'));
           }
-
           final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null
               ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
               : "Unknown Employee";
           final role = profile?['role'] ?? 'N/A';
-
           final formattedDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(logs.first['recorded_at']).toLocal());
           final totalHours = _calculateTotalHours(logs);
-
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: ListView(
@@ -173,14 +160,11 @@ class AttendanceDetailsPage extends ConsumerWidget {
                         ...logs.map((log) {
                           final isCheckIn = log['status'] == 'check_in';
                           final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
-
                           final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
                           final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
-
                           final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
                           final bool isAtSchool = matchingSchool != null;
                           final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "Off-site";
-
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: Icon(
@@ -231,9 +215,7 @@ class AttendanceMultiMapView extends StatefulWidget {
   final List<Map<String, dynamic>> logs;
   final List<Map<String, dynamic>> schools;
   final String employeeName;
-
   const AttendanceMultiMapView({super.key, required this.logs, required this.schools, required this.employeeName});
-
   @override
   State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
 }
@@ -242,13 +224,11 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   MapType _mapType = MapType.normal;
   int _mapRefreshKey = 0;
   GoogleMapController? _mapController;
-
   final Set<Marker> _markers = {};
   final Set<Circle> _circles = {};
   final Set<Polyline> _polylines = {};
   LatLngBounds? _mapBounds;
   bool _isLoadingIcons = true;
-
   @override
   void initState() {
     super.initState();
@@ -258,42 +238,34 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   Future<BitmapDescriptor> _createCustomMarkerBitmap({required String text, required Color badgeColor}) async {
     const int width = 60;
     const int height = 50;
-
     final pictureRecorder = ui.PictureRecorder();
     final canvas = Canvas(pictureRecorder);
     final paint = Paint()
       ..color = badgeColor
       ..style = PaintingStyle.fill;
-
     final RRect rRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble() - 10),
       const Radius.circular(8),
     );
     canvas.drawRRect(rRect, paint);
-
     final path = Path();
     path.moveTo(width / 2 - 10, height - 10);
     path.lineTo(width / 2 + 10, height - 10);
     path.lineTo(width / 2, height.toDouble());
     path.close();
     canvas.drawPath(path, paint);
-
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center);
-
     textPainter.text = TextSpan(
       text: text,
       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
     );
-
     textPainter.layout(minWidth: 0, maxWidth: width.toDouble());
     final offset = Offset((width - textPainter.width) / 2, ((height - 10) - textPainter.height) / 2);
     textPainter.paint(canvas, offset);
-
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(width, height);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     final Uint8List uint8list = byteData!.buffer.asUint8List();
-
     return BitmapDescriptor.bytes(uint8list);
   }
 
@@ -301,15 +273,12 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     List<LatLng> tracePoints = [];
     final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.blue);
     final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue);
-
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
       final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
-
       if (sLat != null && sLng != null) {
         final schoolPoint = LatLng(sLat, sLng);
-
         _markers.add(
           Marker(
             markerId: MarkerId('school_${school['id']}'),
@@ -318,28 +287,24 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
             infoWindow: InfoWindow(title: school['name'] ?? 'School', snippet: 'Radius: ${radius.toStringAsFixed(0)}m'),
           ),
         );
-
         _circles.add(
           Circle(
             circleId: CircleId('circle_${school['id']}'),
             center: schoolPoint,
             radius: radius,
-            fillColor: AppTheme.primaryBlue.withValues(alpha: 0.15),
-            strokeColor: AppTheme.primaryBlue.withValues(alpha: 0.5),
+            fillColor: Colors.indigo.withValues(alpha: 0.15),
+            strokeColor: Colors.indigo.withValues(alpha: 0.5),
             strokeWidth: 2,
           ),
         );
       }
     }
-
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
       final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
-
       if (lat != null && lng != null) {
         final point = LatLng(lat, lng);
         tracePoints.add(point);
-
         final bool isCheckIn = log['status'] == 'check_in';
         _markers.add(
           Marker(
@@ -355,19 +320,15 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         );
       }
     }
-
     if (tracePoints.length > 1) {
       _polylines.add(Polyline(polylineId: const PolylineId('route_trace'), points: tracePoints, color: Colors.black54, width: 3));
     }
-
     final pointsToBound = tracePoints.isNotEmpty ? tracePoints : _markers.map((m) => m.position).toList();
-
     if (pointsToBound.isNotEmpty) {
       double minLat = pointsToBound.first.latitude;
       double maxLat = pointsToBound.first.latitude;
       double minLng = pointsToBound.first.longitude;
       double maxLng = pointsToBound.first.longitude;
-
       for (var p in pointsToBound) {
         if (p.latitude < minLat) minLat = p.latitude;
         if (p.latitude > maxLat) maxLat = p.latitude;
@@ -379,7 +340,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         northeast: LatLng(maxLat + 0.002, maxLng + 0.002),
       );
     }
-
     if (mounted) {
       setState(() {
         _isLoadingIcons = false;
@@ -406,7 +366,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
+            color: isSelected ? Colors.indigo : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -444,7 +404,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         ),
         // Fullscreen action button isolated completely on the right side
         IconButton(
-          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
+          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.indigo),
           onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
         ),
       ],
@@ -455,7 +415,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     if (_isLoadingIcons || _markers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
@@ -481,45 +440,30 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         opaque: false,
         barrierDismissible: true,
         pageBuilder: (_, _, _) {
-          // FIX: Wrap the modal layout with a StatefulBuilder
-          // to manage map style swaps locally in the route overlay
-          return StatefulBuilder(
-            builder: (fsContext, setFsState) {
-              return Scaffold(
-                backgroundColor: Colors.black38,
-                body: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Material(
-                      elevation: 12,
-                      child: Column(
-                        children: [
-                          Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            child: _buildMapHeader(
-                              expanded: true,
-                              onRefresh: () {
-                                // Rebuilds BOTH the fullscreen overlay view...
-                                setFsState(() {});
-                                // ...and synchronizes the background layout context
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          Expanded(child: _buildBaseMapWidget()),
-                        ],
+          return Scaffold(
+            backgroundColor: Colors.black38,
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Material(
+                  elevation: 12,
+                  child: Column(
+                    children: [
+                      Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: _buildMapHeader(expanded: true, onRefresh: () => setState(() {})),
                       ),
-                    ),
+                      Expanded(child: _buildBaseMapWidget()),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           );
         },
       ),
     );
-    // Ensure the base map syncs when returning from fullscreen
     setState(() {});
   }
 

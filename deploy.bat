@@ -29,9 +29,6 @@ echo ========================================================
 echo 🚀 STARTING PARALLEL DEPLOYMENT PIPELINE FOR %VERSION%
 echo ========================================================
 
-echo 📥 Fetching dependencies...
-call flutter pub get
-
 if exist web_done.tmp del web_done.tmp
 if exist web_failed.tmp del web_failed.tmp
 

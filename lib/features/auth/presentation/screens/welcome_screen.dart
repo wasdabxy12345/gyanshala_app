@@ -49,11 +49,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       });
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _runGitHubUpdateCheck();
-      }
-    });
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _runGitHubUpdateCheck();
+        }
+      });
+    }
   }
 
   Future<void> _showInactivityLogoutMessage() async {
