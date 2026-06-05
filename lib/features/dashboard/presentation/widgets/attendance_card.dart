@@ -10,6 +10,11 @@ class AttendanceCard extends ConsumerWidget {
     final attendanceState = ref.watch(employeeAttendanceProvider);
     final bool isCheckedIn = attendanceState.value ?? false;
     final bool isLoading = attendanceState.isLoading;
+    ref.listen<AsyncValue<bool>>(employeeAttendanceProvider, (previous, next) {
+      if (next is AsyncError) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${next.error}'), backgroundColor: Colors.red));
+      }
+    });
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(

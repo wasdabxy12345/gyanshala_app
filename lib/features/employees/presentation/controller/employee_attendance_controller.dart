@@ -15,47 +15,44 @@ final employeeAttendanceProvider = StateNotifierProvider<EmployeeAttendanceContr
 
 class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
   final SupabaseClient _client;
-
   EmployeeAttendanceController(this._client) : super(const AsyncData(false));
-
   Future<void> processCheckIn() async {
     if (state.isLoading) return;
-
     final bool currentCheckStatus = state.value ?? false;
     state = const AsyncLoading<bool>();
-
     try {
       final Position? position = await LocationService.getCurrentPosition();
-
       if (position == null) {
-        state = AsyncData(currentCheckStatus);
-        return;
+        throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
       }
-
       final dynamic response = await _client.rpc(
         'get_school_at_location',
         params: {'lat': position.latitude, 'lon': position.longitude},
       );
       String? detectedSchoolId = response?.toString();
-
-      final userId = _client.auth.currentUser?.id;
-      if (userId != null) {
-        await _client.from('attendance').insert({
-          'user_id': userId,
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-          'status': !currentCheckStatus ? 'check_in' : 'check_out',
-          'school_id': detectedSchoolId,
-          'recorded_at': DateTime.now().toIso8601String(),
-        });
+      if (detectedSchoolId == null || detectedSchoolId.trim().isEmpty) {
+        detectedSchoolId = null;
       }
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) {
+        throw Exception("User is not authenticated.");
+      }
+
+      await _client.from('attendance').insert({
+        'user_id': userId,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'status': !currentCheckStatus ? 'check_in' : 'check_out',
+        'school_id': detectedSchoolId,
+        'recorded_at': DateTime.now().toIso8601String(),
+      });
 
       state = AsyncData(!currentCheckStatus);
       dev.log("Success: ${!currentCheckStatus ? 'Checked In' : 'Checked Out'} at $detectedSchoolId");
     } catch (e, stack) {
       dev.log("Attendance Error", error: e, stackTrace: stack);
       state = AsyncError(e, stack);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 3));
       state = AsyncData(currentCheckStatus);
     }
   }

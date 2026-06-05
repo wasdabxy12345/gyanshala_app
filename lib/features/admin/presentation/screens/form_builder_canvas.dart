@@ -24,7 +24,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   List<Map<String, dynamic>> _currentQuestions = [];
   List<String> _deletedQuestionIds = <String>[];
   bool _isLoading = false;
-
+  List<String> _sections = ['General'];
+  Map<String, Map<String, dynamic>> _sectionConditions = {};
   @override
   void initState() {
     super.initState();
@@ -262,16 +263,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     }
   }
 
-  void _moveQuestion(int oldGlobalIndex, int direction) {
-    int newGlobalIndex = oldGlobalIndex + direction;
-    if (newGlobalIndex < 0 || newGlobalIndex >= _currentQuestions.length) return;
-
-    setState(() {
-      final item = _currentQuestions.removeAt(oldGlobalIndex);
-      _currentQuestions.insert(newGlobalIndex, item);
-    });
-  }
-
   void _deleteQuestion(int globalIndex) {
     final q = _currentQuestions[globalIndex];
     final String id = q['id'].toString();
@@ -314,7 +305,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     String? selectedDependentQuestionId = skipBlock?['dependent_question_id']?.toString();
     String skipOperator = skipBlock?['operator']?.toString() ?? 'equals';
     final skipValueController = TextEditingController(text: skipBlock?['value']?.toString() ?? '');
-
+    String selectedSectionValue = existingQuestion?['section'] ?? (_sections.isNotEmpty ? _sections.last : 'General');
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -665,30 +656,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blueGrey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blueGrey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  "Whole Section Visibility Logic",
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -760,21 +727,23 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       'operator': skipOperator,
       'value': skipOperator == 'filled' ? '' : skipValue,
     };
+
+    // --- UPDATED LOGIC FOR FIELD SECTIONS ---
+    String targetSection = section.isEmpty ? (_sections.isNotEmpty ? _sections.last : 'General') : section;
+
     if (editIndex != null && _currentQuestions[editIndex]['field_config']?['section_skip_logic'] != null) {
       configBlock['section_skip_logic'] = _currentQuestions[editIndex]['field_config']['section_skip_logic'];
     } else {
-      final sibling = _currentQuestions.firstWhere(
-        (element) => element['section'] == section && element['field_config']?['section_skip_logic'] != null,
-        orElse: () => {},
-      );
-      if (sibling.isNotEmpty) {
-        configBlock['section_skip_logic'] = sibling['field_config']['section_skip_logic'];
+      // Look up directly from the master map tracker using the target section key
+      if (_sectionConditions.containsKey(targetSection)) {
+        configBlock['section_skip_logic'] = _sectionConditions[targetSection];
       }
     }
+
     final Map<String, dynamic> targetQuestionRow = {
       'id': existingId ?? 'new_${DateTime.now().millisecondsSinceEpoch}',
       'question': labelText,
-      'section': section.isEmpty ? 'General' : section,
+      'section': targetSection,
       'required': required,
       'field_config': configBlock,
     };
@@ -790,10 +759,17 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, List<int>> groupedSections = {};
+    final Map<String, List<int>> groupedQuestions = {};
+    for (var name in _sections) {
+      groupedQuestions[name] = [];
+    }
     for (int i = 0; i < _currentQuestions.length; i++) {
       final sectionName = _currentQuestions[i]['section'] ?? 'General';
-      groupedSections.putIfAbsent(sectionName, () => []).add(i);
+      if (!_sections.contains(sectionName)) {
+        _sections.add(sectionName);
+        groupedQuestions[sectionName] = [];
+      }
+      groupedQuestions.putIfAbsent(sectionName, () => []).add(i);
     }
 
     return Scaffold(
@@ -811,9 +787,9 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           else
             TextButton.icon(
               onPressed: _saveFormStructureToSupabase,
-              icon: const Icon(Icons.cloud_upload, color: Colors.white),
+              icon: const Icon(Icons.save, color: Colors.white),
               label: const Text(
-                "Save Structure",
+                "Save Form",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -868,107 +844,159 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                   )
                 : ListView(
                     padding: const EdgeInsets.all(16.0),
-                    children: groupedSections.keys.map((sectionName) {
-                      final globalIndexes = groupedSections[sectionName]!;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16.0),
-                        elevation: 1,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        child: ExpansionTile(
-                          initiallyExpanded: true,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  sectionName.toUpperCase(),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 14),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.expand_less, size: 18, color: Colors.blueGrey),
-                                tooltip: "Move Section Up",
-                                onPressed: () => _moveEntireSection(sectionName, -1),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.expand_more, size: 18, color: Colors.blueGrey),
-                                tooltip: "Move Section Down",
-                                onPressed: () => _moveEntireSection(sectionName, 1),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_note, size: 18, color: Colors.indigo),
-                                tooltip: "Rename Section",
-                                onPressed: () => _renameSectionDialog(sectionName),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.redAccent),
-                                tooltip: "Delete Section & Contents",
-                                onPressed: () => _deleteEntireSectionDialog(sectionName),
-                              ),
-                            ],
-                          ),
-                          childrenPadding: const EdgeInsets.all(8.0),
-                          children: globalIndexes.map((globalIdx) {
-                            final q = _currentQuestions[globalIdx];
-                            final String type = q['field_config']?['type'] ?? 'text';
-                            final bool isRequired = q['required'] ?? false;
+                    // 1. Loop through your explicit list of sections instead of the dynamic key map
+                    children: _sections.map((sectionName) {
+                      // 2. Fetch the question indices mapped for this section
+                      final globalIndexes = groupedQuestions[sectionName] ?? [];
 
-                            return Card(
-                              color: Colors.grey.shade50,
-                              margin: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.blue.shade50,
-                                  child: Icon(
-                                    type == 'text'
-                                        ? Icons.text_fields
-                                        : type == 'radio'
-                                        ? Icons.radio_button_checked
-                                        : Icons.check_box,
-                                    color: const Color(0xff00afef),
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(
-                                  "${q['question']} ${isRequired ? '*' : ''}",
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
-                                ),
-                                subtitle: Text(
-                                  "Type: ${type.toUpperCase()} | Global Order: ${globalIdx + 1}",
-                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.arrow_upward, size: 18, color: Colors.blueGrey),
-                                      onPressed: globalIdx == 0 ? null : () => _moveQuestion(globalIdx, -1),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.arrow_downward, size: 18, color: Colors.blueGrey),
-                                      onPressed: globalIdx == _currentQuestions.length - 1
-                                          ? null
-                                          : () => _moveQuestion(globalIdx, 1),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
-                                      onPressed: () =>
-                                          _showConfigureQuestionDialog(type: type, existingQuestion: q, editIndex: globalIdx),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                      onPressed: () => _deleteQuestion(globalIdx),
-                                    ),
-                                  ],
-                                ),
+                      return DragTarget<int>(
+                        onWillAcceptWithDetails: (details) {
+                          final draggedIdx = details.data;
+                          return _currentQuestions[draggedIdx]['section'] != sectionName;
+                        },
+                        onAcceptWithDetails: (details) {
+                          final draggedIdx = details.data;
+                          _handleSectionDataDrop(draggedIdx, sectionName);
+                        },
+                        builder: (context, candidateData, rejectedData) {
+                          final isOverSection = candidateData.isNotEmpty;
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 16.0),
+                            elevation: isOverSection ? 4 : 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isOverSection ? const Color(0xff00afef) : Colors.grey.shade300,
+                                width: isOverSection ? 2.0 : 1.0,
                               ),
-                            );
-                          }).toList(),
-                        ),
+                            ),
+                            child: ExpansionTile(
+                              initiallyExpanded: true,
+                              collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      sectionName.toUpperCase(),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 14),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.expand_less, size: 18, color: Colors.blueGrey),
+                                    onPressed: () => _moveEntireSection(sectionName, -1),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.expand_more, size: 18, color: Colors.blueGrey),
+                                    onPressed: () => _moveEntireSection(sectionName, 1),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_note, size: 18, color: Colors.indigo),
+                                    onPressed: () => _renameSectionDialog(sectionName),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_sweep, size: 18, color: Colors.redAccent),
+                                    onPressed: () => _deleteEntireSectionDialog(sectionName),
+                                  ),
+                                ],
+                              ),
+                              childrenPadding: const EdgeInsets.all(8.0),
+                              // 3. Conditional rendering block for managing empty sections smoothly
+                              children: globalIndexes.isEmpty
+                                  ? [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                                        child: Center(
+                                          child: Text(
+                                            "Empty Section. Drag items here or build new ones.",
+                                            style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 13,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ]
+                                  : globalIndexes.map((globalIdx) {
+                                      final q = _currentQuestions[globalIdx];
+                                      final String type = q['field_config']?['type'] ?? 'text';
+                                      final bool isRequired = q['required'] ?? false;
+
+                                      final Widget cardItem = Card(
+                                        color: Colors.grey.shade50,
+                                        margin: const EdgeInsets.symmetric(vertical: 4.0),
+                                        child: ListTile(
+                                          leading: const MouseRegion(
+                                            cursor: SystemMouseCursors.grab,
+                                            child: Icon(Icons.drag_indicator, color: Colors.grey),
+                                          ),
+                                          title: Text(
+                                            "${q['question']} ${isRequired ? '*' : ''}",
+                                            style: const TextStyle(fontWeight: FontWeight.w500),
+                                          ),
+                                          subtitle: Text(
+                                            "Type: ${type.toUpperCase()}",
+                                            style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                                                onPressed: () => _showConfigureQuestionDialog(
+                                                  type: type,
+                                                  existingQuestion: q,
+                                                  editIndex: globalIdx,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                                onPressed: () => _deleteQuestion(globalIdx),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+
+                                      return LongPressDraggable<int>(
+                                        data: globalIdx,
+                                        axis: Axis.vertical,
+                                        feedback: Material(
+                                          elevation: 6,
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: SizedBox(width: MediaQuery.of(context).size.width * 0.5, child: cardItem),
+                                        ),
+                                        childWhenDragging: Opacity(opacity: 0.3, child: cardItem),
+                                        child: DragTarget<int>(
+                                          onWillAcceptWithDetails: (details) => details.data != globalIdx,
+                                          onAcceptWithDetails: (details) {
+                                            final int draggedGlobalIdx = details.data;
+                                            _reorderQuestionIndices(draggedGlobalIdx, globalIdx, sectionName);
+                                          },
+                                          builder: (context, candidateData, rejectedData) {
+                                            return Column(
+                                              children: [
+                                                if (candidateData.isNotEmpty)
+                                                  Container(
+                                                    height: 4,
+                                                    margin: const EdgeInsets.symmetric(vertical: 4),
+                                                    color: const Color(0xff00afef),
+                                                  ),
+                                                cardItem,
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                            ),
+                          );
+                        },
                       );
                     }).toList(),
                   ),
@@ -1001,39 +1029,202 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
   void _createNewSectionDialog() {
     final textController = TextEditingController();
+    bool enableSectionSkip = false;
+    String? selectedSectionDepId;
+    String sectionOperator = 'equals';
+    final sectionValueController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Create Section"),
-        content: TextField(
-          controller: textController,
-          decoration: const InputDecoration(labelText: "Section Name"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () {
-              if (textController.text.trim().isNotEmpty) {
-                _commitQuestionToCanvas(
-                  type: 'text',
-                  labelText: 'First placeholder field (edit or replace me)',
-                  section: textController.text.trim(),
-                  required: false,
-                  sourceType: 'static',
-                  staticControllers: [],
-                  tableName: 'clusters',
-                  enableSkipLogic: false,
-                  dependentQuestionId: null,
-                  skipOperator: 'equals',
-                  skipValue: '',
-                );
-              }
-              Navigator.pop(context);
-            },
-            child: const Text("Create"),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            // New sections can depend on any question currently on the canvas
+            final filtratedPriorQuestions = _currentQuestions.toList();
+
+            return AlertDialog(
+              title: const Text(
+                "Create New Section",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+              ),
+              content: SizedBox(
+                width: 500,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: textController,
+                        decoration: const InputDecoration(labelText: "Section / Group Name *", border: OutlineInputBorder()),
+                      ),
+                      const Divider(height: 28),
+                      // --- Whole Section Visibility Block inside Creation window ---
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueGrey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.layers, color: Colors.indigo, size: 20),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  "Whole Section Visibility Logic",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.indigo),
+                                ),
+                                const Spacer(),
+                                Switch(
+                                  value: enableSectionSkip,
+                                  onChanged: (val) => setModalState(() => enableSectionSkip = val),
+                                  activeThumbColor: Colors.indigo,
+                                ),
+                              ],
+                            ),
+                            if (enableSectionSkip) ...[
+                              const SizedBox(height: 10),
+                              filtratedPriorQuestions.isEmpty
+                                  ? const Text(
+                                      "No questions available to depend on yet. Add some fields first.",
+                                      style: TextStyle(color: Colors.amber, fontSize: 12),
+                                    )
+                                  : Column(
+                                      children: [
+                                        DropdownButtonFormField<String>(
+                                          initialValue: selectedSectionDepId,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Select Prior Question',
+                                            border: OutlineInputBorder(),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                          ),
+                                          items: filtratedPriorQuestions.map((q) {
+                                            return DropdownMenuItem(
+                                              value: q['id'].toString(),
+                                              child: Text(q['question'] ?? '', overflow: TextOverflow.ellipsis),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) => setModalState(() {
+                                            selectedSectionDepId = val;
+                                            sectionValueController.clear();
+                                          }),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: DropdownButtonFormField<String>(
+                                                initialValue: sectionOperator,
+                                                decoration: const InputDecoration(
+                                                  labelText: 'Condition',
+                                                  border: OutlineInputBorder(),
+                                                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                ),
+                                                items: const [
+                                                  DropdownMenuItem(value: 'equals', child: Text("Matches (=)")),
+                                                  DropdownMenuItem(value: 'not_equals', child: Text("Does Not Match (≠)")),
+                                                  DropdownMenuItem(value: 'filled', child: Text("Is Answered")),
+                                                ],
+                                                onChanged: (val) => setModalState(() => sectionOperator = val ?? 'equals'),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (sectionOperator != 'filled')
+                                              Expanded(
+                                                flex: 4,
+                                                child: Builder(
+                                                  builder: (context) {
+                                                    final priorQ = filtratedPriorQuestions.firstWhere(
+                                                      (e) => e['id'].toString() == selectedSectionDepId,
+                                                      orElse: () => {},
+                                                    );
+                                                    final priorOpts = priorQ['field_config']?['options'] as List<dynamic>? ?? [];
+                                                    if (priorOpts.isNotEmpty) {
+                                                      return DropdownButtonFormField<String>(
+                                                        initialValue: priorOpts.contains(sectionValueController.text)
+                                                            ? sectionValueController.text
+                                                            : null,
+                                                        decoration: const InputDecoration(
+                                                          labelText: 'Select Option Match',
+                                                          border: OutlineInputBorder(),
+                                                          contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                        ),
+                                                        items: priorOpts
+                                                            .map(
+                                                              (opt) => DropdownMenuItem(
+                                                                value: opt.toString(),
+                                                                child: Text(opt.toString()),
+                                                              ),
+                                                            )
+                                                            .toList(),
+                                                        onChanged: (val) => {if (val != null) sectionValueController.text = val},
+                                                      );
+                                                    }
+                                                    return TextField(
+                                                      controller: sectionValueController,
+                                                      decoration: const InputDecoration(
+                                                        labelText: 'Value to match',
+                                                        border: OutlineInputBorder(),
+                                                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  onPressed: () {
+                    final sectionName = textController.text.trim();
+                    if (sectionName.isEmpty) return;
+
+                    // Define the skip logic block exactly as expected by your framework schema
+                    final sectionSkipBlock = {
+                      'enabled': enableSectionSkip && selectedSectionDepId != null,
+                      'dependent_question_id': selectedSectionDepId,
+                      'operator': sectionOperator,
+                      'value': sectionOperator == 'filled' ? '' : sectionValueController.text.trim(),
+                    };
+
+                    // --- UPDATED EXPLICIT STATE UPDATE ---
+                    setState(() {
+                      // 1. Store the empty section name if it doesn't exist yet
+                      if (!_sections.contains(sectionName)) {
+                        _sections.add(sectionName);
+                      }
+
+                      // 2. Map the visibility configuration conditions to this section key
+                      _sectionConditions[sectionName] = sectionSkipBlock;
+                    });
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Create Section", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1288,6 +1479,57 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       }
       distinctOrder.indexOf(sectionName);
       _currentQuestions.insertAll(0, targetItems);
+    });
+  }
+
+  void _handleSectionDataDrop(int draggedGlobalIdx, String targetSectionName) {
+    setState(() {
+      final movedItem = _currentQuestions[draggedGlobalIdx];
+      movedItem['section'] = targetSectionName;
+
+      // Direct lookup from the master map tracker instead of scanning siblings
+      final config = Map<String, dynamic>.from(movedItem['field_config'] ?? {});
+      if (_sectionConditions.containsKey(targetSectionName) && _sectionConditions[targetSectionName]?['enabled'] == true) {
+        config['section_skip_logic'] = _sectionConditions[targetSectionName];
+      } else {
+        config.remove('section_skip_logic');
+      }
+      movedItem['field_config'] = config;
+
+      _currentQuestions.removeAt(draggedGlobalIdx);
+
+      int lastTargetIdx = _currentQuestions.lastIndexWhere((q) => q['section'] == targetSectionName);
+      if (lastTargetIdx == -1) {
+        _currentQuestions.add(movedItem);
+      } else {
+        _currentQuestions.insert(lastTargetIdx + 1, movedItem);
+      }
+    });
+  }
+
+  void _reorderQuestionIndices(int sourceGlobalIdx, int targetGlobalIdx, String currentSection) {
+    setState(() {
+      final item = _currentQuestions.removeAt(sourceGlobalIdx);
+      item['section'] = currentSection;
+
+      // Direct lookup from the master map tracker here as well
+      final config = Map<String, dynamic>.from(item['field_config'] ?? {});
+      if (_sectionConditions.containsKey(currentSection) && _sectionConditions[currentSection]?['enabled'] == true) {
+        config['section_skip_logic'] = _sectionConditions[currentSection];
+      } else {
+        config.remove('section_skip_logic');
+      }
+      item['field_config'] = config;
+
+      int adjustedTargetIdx = targetGlobalIdx;
+      if (sourceGlobalIdx < targetGlobalIdx) {
+        adjustedTargetIdx--;
+      }
+
+      if (adjustedTargetIdx < 0) adjustedTargetIdx = 0;
+      if (adjustedTargetIdx > _currentQuestions.length) adjustedTargetIdx = _currentQuestions.length;
+
+      _currentQuestions.insert(adjustedTargetIdx, item);
     });
   }
 }
