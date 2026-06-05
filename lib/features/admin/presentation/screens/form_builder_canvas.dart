@@ -51,8 +51,30 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           .eq('form_id', currentFormId)
           .order('sort_order', ascending: true);
       setState(() {
-        _currentQuestions = List<Map<String, dynamic>>.from(data);
+        _currentQuestions = data.map((item) {
+          final row = Map<String, dynamic>.from(item);
+          if (row['field_config'] != null) {
+            row['field_config'] = Map<String, dynamic>.from(row['field_config'] as Map);
+          }
+          return row;
+        }).toList();
         _deletedQuestionIds = <String>[];
+        _sections = [];
+        _sectionConditions = {};
+        for (var q in _currentQuestions) {
+          final s = q['section']?.toString() ?? 'General';
+          if (!_sections.contains(s)) {
+            _sections.add(s);
+          }
+          final config = q['field_config'] as Map<String, dynamic>? ?? {};
+          final sectionSkip = config['section_skip_logic'] as Map<String, dynamic>?;
+          if (sectionSkip != null && sectionSkip['enabled'] == true) {
+            _sectionConditions[s] = sectionSkip;
+          }
+        }
+        if (!_sections.contains('General')) {
+          _sections.insert(0, 'General');
+        }
       });
     } catch (e) {
       if (mounted) {
@@ -132,34 +154,51 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         }
       }
 
+      if (existingRowsToUpsert.isNotEmpty) {
+        await supabase.from('form_questions').upsert(existingRowsToUpsert, onConflict: 'id');
+      }
+
       final rawFormQuestions = await supabase.from('form_questions').select('*').eq('form_id', widget.formId!);
       final List<Map<String, dynamic>> completeFormQuestions = List<Map<String, dynamic>>.from(rawFormQuestions);
       final List<Map<String, dynamic>> finalRemappedRows = [];
       for (var question in completeFormQuestions) {
         final config = Map<String, dynamic>.from(question['field_config'] ?? {});
+        bool needsUpsert = false;
+
         final skipLogic = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
         if (skipLogic != null && skipLogic['enabled'] == true) {
           final currentDepId = skipLogic['dependent_question_id']?.toString();
           if (currentDepId != null && tempToRealIdMap.containsKey(currentDepId)) {
             skipLogic['dependent_question_id'] = tempToRealIdMap[currentDepId];
             config['skip_logic'] = skipLogic;
-            finalRemappedRows.add({
-              'id': question['id'],
-              'form_id': question['form_id'],
-              'section': question['section'],
-              'question': question['question'],
-              'required': question['required'],
-              'sort_order': question['sort_order'],
-              'field_config': config,
-            });
+            needsUpsert = true;
           }
+        }
+
+        final sectionSkip = config['section_skip_logic'] != null ? Map<String, dynamic>.from(config['section_skip_logic']) : null;
+        if (sectionSkip != null && sectionSkip['enabled'] == true) {
+          final currentDepId = sectionSkip['dependent_question_id']?.toString();
+          if (currentDepId != null && tempToRealIdMap.containsKey(currentDepId)) {
+            sectionSkip['dependent_question_id'] = tempToRealIdMap[currentDepId];
+            config['section_skip_logic'] = sectionSkip;
+            needsUpsert = true;
+          }
+        }
+
+        if (needsUpsert) {
+          finalRemappedRows.add({
+            'id': question['id'],
+            'form_id': question['form_id'],
+            'section': question['section'],
+            'question': question['question'],
+            'required': question['required'],
+            'sort_order': question['sort_order'],
+            'field_config': config,
+          });
         }
       }
       if (finalRemappedRows.isNotEmpty) {
         await supabase.from('form_questions').upsert(finalRemappedRows, onConflict: 'id');
-      }
-      if (existingRowsToUpsert.isNotEmpty) {
-        await supabase.from('form_questions').upsert(existingRowsToUpsert, onConflict: 'id');
       }
       if (mounted) {
         ScaffoldMessenger.of(
@@ -731,13 +770,10 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     // --- UPDATED LOGIC FOR FIELD SECTIONS ---
     String targetSection = section.isEmpty ? (_sections.isNotEmpty ? _sections.last : 'General') : section;
 
-    if (editIndex != null && _currentQuestions[editIndex]['field_config']?['section_skip_logic'] != null) {
-      configBlock['section_skip_logic'] = _currentQuestions[editIndex]['field_config']['section_skip_logic'];
+    if (_sectionConditions.containsKey(targetSection) && _sectionConditions[targetSection]?['enabled'] == true) {
+      configBlock['section_skip_logic'] = _sectionConditions[targetSection];
     } else {
-      // Look up directly from the master map tracker using the target section key
-      if (_sectionConditions.containsKey(targetSection)) {
-        configBlock['section_skip_logic'] = _sectionConditions[targetSection];
-      }
+      configBlock.remove('section_skip_logic');
     }
 
     final Map<String, dynamic> targetQuestionRow = {
@@ -749,6 +785,9 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     };
 
     setState(() {
+      if (!_sections.contains(targetSection)) {
+        _sections.add(targetSection);
+      }
       if (editIndex != null) {
         _currentQuestions[editIndex] = targetQuestionRow;
       } else {
@@ -1414,6 +1453,16 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                     };
 
                     setState(() {
+                      final oldIndex = _sections.indexOf(oldName);
+                      if (oldIndex != -1) {
+                        _sections[oldIndex] = newName;
+                      } else if (!_sections.contains(newName)) {
+                        _sections.add(newName);
+                      }
+
+                      _sectionConditions.remove(oldName);
+                      _sectionConditions[newName] = updatedSectionSkipBlock;
+
                       for (var q in _currentQuestions) {
                         if (q['section'] == oldName) {
                           q['section'] = newName;
@@ -1449,6 +1498,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
               setState(() {
+                _sections.remove(sectionName);
+                _sectionConditions.remove(sectionName);
                 _currentQuestions.removeWhere((q) {
                   final match = q['section'] == sectionName;
                   if (match && !q['id'].toString().startsWith('new_')) {
@@ -1467,18 +1518,26 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   }
 
   void _moveEntireSection(String sectionName, int direction) {
-    final targetItems = _currentQuestions.where((q) => q['section'] == sectionName).toList();
-    if (targetItems.isEmpty) return;
+    final int index = _sections.indexOf(sectionName);
+    if (index == -1) return;
+
+    final int newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= _sections.length) return;
 
     setState(() {
-      _currentQuestions.removeWhere((q) => q['section'] == sectionName);
-      final List<String> distinctOrder = [];
-      for (var q in _currentQuestions) {
-        final s = q['section'] ?? 'General';
-        if (!distinctOrder.contains(s)) distinctOrder.add(s);
+      _sections.removeAt(index);
+      _sections.insert(newIndex, sectionName);
+
+      final List<Map<String, dynamic>> reorderedQuestions = [];
+      for (final s in _sections) {
+        reorderedQuestions.addAll(_currentQuestions.where((q) => (q['section'] ?? 'General') == s));
       }
-      distinctOrder.indexOf(sectionName);
-      _currentQuestions.insertAll(0, targetItems);
+      for (final q in _currentQuestions) {
+        if (!reorderedQuestions.contains(q)) {
+          reorderedQuestions.add(q);
+        }
+      }
+      _currentQuestions = reorderedQuestions;
     });
   }
 
