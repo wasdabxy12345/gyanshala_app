@@ -125,7 +125,7 @@ class AuthRepositoryImpl implements AuthRepository {
         }
 
         await _auth.updateUser(UserAttributes(password: password, data: metadata));
-        await _supabase.from('signup_requests').update({'status': 'completed'}).eq('phone', phone);
+        await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
       }
     } on AuthException catch (e) {
       if (e.message.contains('Invalid login credentials')) {

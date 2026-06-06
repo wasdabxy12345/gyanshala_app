@@ -1,0 +1,692 @@
+class AuthRepositoryImpl implements AuthRepository {
+AuthRepositoryImpl(this._supabase);
+final SupabaseClient _supabase;
+GoTrueClient get _auth => _supabase.auth;
+
+@override
+Future<UserModel> login({required String identifier, required String password}) async {
+final response = await _supabase.auth.signInWithPassword(phone: identifier, password: password);
+
+if (response.user == null) throw Exception("Login failed");
+
+final profileData = await _supabase.from('profiles').select().eq('id', response.user!.id).single();
+
+return UserModel.fromJson(profileData);
+}
+
+@override
+Future<void> signup({
+required String firstName,
+required String lastName,
+required String identifier,
+required String password,
+required String role,
+String? qualification,
+String? village,
+String? cluster,
+String? school,
+String? pushToken,
+}) async {
+final phone = _normalizePhone(identifier);
+
+await _auth.signUp(
+phone: phone,
+password: password,
+data: {
+'first_name': firstName.trim(),
+'last_name': lastName.trim(),
+'role': role,
+'status': 'pending',
+'push_token': pushToken,
+'qualification': qualification,
+'village': village,
+'cluster': cluster,
+'school': school,
+},
+);
+}
+
+@override
+Future<String> getSignupStatus(String identifier) async {
+final phone = _normalizePhone(identifier);
+final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status');
+
+if (rows.isEmpty) return 'not_found';
+return (rows.first['status'] as String).toLowerCase();
+}
+
+String _normalizePhone(String value) {
+final trimmed = value.trim();
+final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+if (Validators.isValidPhone(trimmed)) {
+return digitsOnly;
+}
+throw Exception('Enter a valid phone number.');
+}
+
+Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(String phone, {String columns = 'status'}) async {
+final candidates = _phoneCandidates(phone);
+for (final candidate in candidates) {
+final rows = await _supabase.from('signup_requests').select(columns).eq('phone', candidate).limit(1);
+if (rows.isNotEmpty) return List<Map<String, dynamic>>.from(rows);
+}
+return [];
+}
+
+Set<String> _phoneCandidates(String phone) {
+final candidates = <String>{phone};
+if (phone.length > 10) {
+candidates.add(phone.substring(phone.length - 10));
+} else if (phone.length == 10) {
+candidates.add('91$phone');
+}
+return candidates;
+}
+
+@override
+Future<void> updateProfile({
+required String firstName,
+required String lastName,
+String? qualification,
+String? village,
+String? cluster,
+String? school,
+}) async {
+final user = _supabase.auth.currentUser;
+if (user == null) throw Exception("No authenticated user found.");
+
+final String role = (user.userMetadata?['role'] ?? '').toString().toLowerCase();
+final bool isAdmin = role == 'Admin';
+
+final Map<String, dynamic> updateData = {
+'first_name': firstName.trim(),
+'last_name': lastName.trim(),
+'updated_at': DateTime.now().toIso8601String(),
+};
+
+if (!isAdmin) {
+if (qualification != null) updateData['qualification'] = qualification;
+if (village != null) updateData['village'] = village;
+if (cluster != null) updateData['cluster'] = cluster;
+if (school != null) updateData['school'] = school;
+}
+
+await _supabase.from('profiles').update(updateData).eq('id', user.id);
+
+await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
+}
+}
+
+class SignupRequestsScreen extends ConsumerStatefulWidget {
+const SignupRequestsScreen({super.key});
+@override
+ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
+}
+
+class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
+bool _isLoading = false;
+final _searchController = TextEditingController();
+int _sortColumnIndex = 0;
+bool _isAscending = true;
+Set<String>? _selectedNameFilters;
+Set<String>? _selectedPhoneFilters;
+Set<String>? _selectedRoleFilters;
+Set<String>? _selectedClusterFilters;
+Set<String>? _selectedVillageFilters;
+Set<String>? _selectedSchoolFilters;
+Set<String>? _selectedQualificationFilters;
+List<Map<String, dynamic>> _rawRequests = [];
+List<Map<String, dynamic>> _filteredRequests = [];
+void _onSort(int columnIndex) {
+if (columnIndex == 7) return;
+setState(() {
+if (_sortColumnIndex == columnIndex) {
+_isAscending = !_isAscending;
+} else {
+_sortColumnIndex = columnIndex;
+_isAscending = true;
+}
+_applySorting();
+});
+}
+
+void _applySorting() {
+_filteredRequests.sort((a, b) {
+String valA = "";
+String valB = "";
+switch (_sortColumnIndex) {
+case 0:
+valA = "${a['first_name'] ?? ''} ${a['last_name'] ?? ''}";
+valB = "${b['first_name'] ?? ''} ${b['last_name'] ?? ''}";
+break;
+case 1:
+valA = a['phone']?.toString() ?? "";
+valB = b['phone']?.toString() ?? "";
+break;
+case 2:
+valA = a['role']?.toString() ?? "";
+valB = b['role']?.toString() ?? "";
+break;
+case 3:
+valA = a['cluster']?.toString() ?? "";
+valB = b['cluster']?.toString() ?? "";
+break;
+case 4:
+valA = a['village']?.toString() ?? "";
+valB = b['village']?.toString() ?? "";
+break;
+case 5:
+valA = a['school']?.toString() ?? "";
+valB = b['school']?.toString() ?? "";
+break;
+case 6:
+valA = a['qualification']?.toString() ?? "";
+valB = b['qualification']?.toString() ?? "";
+break;
+}
+int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
+return _isAscending ? compare : -compare;
+});
+}
+
+void _applyAllFilters() {
+final query = _searchController.text.toLowerCase().trim();
+final result = _rawRequests.where((req) {
+final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+final phone = req['phone']?.toString() ?? "";
+final role = req['role']?.toString() ?? "";
+final cluster = req['cluster']?.toString() ?? "";
+final village = req['village']?.toString() ?? "";
+final school = req['school']?.toString() ?? "";
+final qualification = req['qualification']?.toString() ?? "";
+final matchesSearch =
+query.isEmpty ||
+fullName.toLowerCase().contains(query) ||
+phone.toLowerCase().contains(query) ||
+role.toLowerCase().contains(query) ||
+cluster.toLowerCase().contains(query) ||
+village.toLowerCase().contains(query) ||
+school.toLowerCase().contains(query) ||
+qualification.toLowerCase().contains(query);
+if (!matchesSearch) return false;
+if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
+if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role)) return false;
+if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
+if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
+if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
+if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
+return true;
+}).toList();
+setState(() {
+_filteredRequests = result;
+_applySorting();
+});
+}
+
+List<String> _getUniqueValuesForColumn(int columnIndex) {
+final Set<String> values = {};
+for (final req in _rawRequests) {
+switch (columnIndex) {
+case 0:
+values.add("${req['first_name'] ?? ''} ${req['last_name'] ?? ''}");
+break;
+case 1:
+if (req['phone'] != null) values.add(req['phone'].toString());
+break;
+case 2:
+if (req['role'] != null) values.add(req['role'].toString());
+break;
+case 3:
+if (req['cluster'] != null) values.add(req['cluster'].toString());
+break;
+case 4:
+if (req['village'] != null) values.add(req['village'].toString());
+break;
+case 5:
+if (req['school'] != null) values.add(req['school'].toString());
+break;
+case 6:
+if (req['qualification'] != null) values.add(req['qualification'].toString());
+break;
+}
+}
+return values.toList()..sort();
+}
+
+Future<void> _showFilterMenu(int columnIndex, String label) async {
+final allValues = _getUniqueValuesForColumn(columnIndex);
+Set<String> currentSelection;
+if (columnIndex == 0)
+currentSelection = _selectedNameFilters != null ? Set.from(_selectedNameFilters!) : Set.from(allValues);
+else if (columnIndex == 1)
+currentSelection = _selectedPhoneFilters != null ? Set.from(_selectedPhoneFilters!) : Set.from(allValues);
+else if (columnIndex == 2)
+currentSelection = _selectedRoleFilters != null ? Set.from(_selectedRoleFilters!) : Set.from(allValues);
+else if (columnIndex == 3)
+currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
+else if (columnIndex == 4)
+currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
+else if (columnIndex == 5)
+currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
+else
+currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
+final dialogSearchController = TextEditingController();
+List<String> filteredValues = List.from(allValues);
+await showDialog(
+context: context,
+builder: (ctx) => StatefulBuilder(
+builder: (context, setStateDialog) => AlertDialog(
+title: Text("Filter by $label"),
+content: SizedBox(
+width: 320,
+height: 450,
+child: Column(
+children: [
+TextField(
+controller: dialogSearchController,
+decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
+onChanged: (value) {
+setStateDialog(() {
+filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+});
+},
+),
+const SizedBox(height: 12),
+CheckboxListTile(
+dense: true,
+value: currentSelection.length == allValues.length,
+title: const Text("Select All"),
+onChanged: (checked) {
+setStateDialog(() {
+currentSelection = checked == true ? Set.from(allValues) : {};
+});
+},
+),
+const Divider(),
+Expanded(
+child: ListView(
+children: filteredValues.map((value) {
+return CheckboxListTile(
+dense: true,
+value: currentSelection.contains(value),
+title: Text(value),
+onChanged: (checked) {
+setStateDialog(() {
+checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+});
+},
+);
+}).toList(),
+),
+),
+],
+),
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+ElevatedButton(
+onPressed: () {
+setState(() {
+final isAllSelected = currentSelection.length == allValues.length;
+if (columnIndex == 0) _selectedNameFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 1) _selectedPhoneFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 2) _selectedRoleFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 3) _selectedClusterFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 4) _selectedVillageFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 5) _selectedSchoolFilters = isAllSelected ? null : Set.from(currentSelection);
+if (columnIndex == 6) _selectedQualificationFilters = isAllSelected ? null : Set.from(currentSelection);
+_applyAllFilters();
+});
+Navigator.pop(ctx);
+},
+child: const Text("Apply"),
+),
+],
+),
+),
+);
+}
+
+Future<void> _updateStatus(String id, String name, String status) async {
+setState(() => _isLoading = true);
+try {
+final supabase = ref.read(supabaseClientProvider);
+await supabase.from('signup_requests').update({'status': status}).eq('id', id);
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('User $name marked as $status')));
+}
+} catch (e) {
+if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+} finally {
+if (mounted) setState(() => _isLoading = false);
+}
+}
+
+@override
+Widget build(BuildContext context) {
+return DefaultTabController(
+length: 3,
+child: Scaffold(
+appBar: AppBar(
+title: const Text("User Management Matrix"),
+bottom: const TabBar(
+tabs: [
+Tab(text: "Pending"),
+Tab(text: "Approved"),
+Tab(text: "Rejected"),
+],
+),
+),
+body: TabBarView(children: [_buildGridContent('pending'), _buildGridContent('approved'), _buildGridContent('rejected')]),
+),
+);
+}
+
+Widget _buildGridContent(String statusFilter) {
+final supabase = ref.watch(supabaseClientProvider);
+return StreamBuilder<List<Map<String, dynamic>>>(
+stream: supabase.from('signup_requests').stream(primaryKey: ['id']).eq('status', statusFilter),
+builder: (context, snapshot) {
+if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+_rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
+final query = _searchController.text.toLowerCase().trim();
+_filteredRequests = _rawRequests.where((req) {
+final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(req['phone']?.toString())) return false;
+if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(req['role'])) return false;
+if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(req['cluster'])) return false;
+if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(req['village'])) return false;
+if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
+if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
+return false;
+return query.isEmpty ||
+fullName.toLowerCase().contains(query) ||
+(req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
+(req['qualification']?.toString().toLowerCase().contains(query) ?? false);
+}).toList();
+_applySorting();
+return Column(
+children: [
+Padding(
+padding: const EdgeInsets.all(12.0),
+child: TextField(
+controller: _searchController,
+onChanged: (_) => _applyAllFilters(),
+decoration: InputDecoration(
+hintText: "Global Matrix Search...",
+prefixIcon: const Icon(Icons.search),
+suffixIcon: _searchController.text.isNotEmpty
+? IconButton(
+icon: const Icon(Icons.clear),
+onPressed: () {
+_searchController.clear();
+_applyAllFilters();
+},
+)
+: null,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+filled: true,
+fillColor: Colors.white,
+),
+),
+),
+Expanded(
+child: _filteredRequests.isEmpty
+? const Center(child: Text("No records match your filters."))
+: SingleChildScrollView(
+scrollDirection: Axis.vertical,
+child: SingleChildScrollView(
+scrollDirection: Axis.horizontal,
+child: Table(
+defaultColumnWidth: const FixedColumnWidth(150),
+columnWidths: const {
+0: FixedColumnWidth(160),
+1: FixedColumnWidth(110),
+2: FixedColumnWidth(120),
+3: FixedColumnWidth(130),
+4: FixedColumnWidth(120),
+5: FixedColumnWidth(120),
+6: FixedColumnWidth(140),
+7: FixedColumnWidth(160),
+},
+border: TableBorder(
+verticalInside: BorderSide(color: Colors.grey.shade300),
+horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+bottom: BorderSide(color: Colors.grey.shade300),
+left: BorderSide(color: Colors.grey.shade300),
+right: BorderSide(color: Colors.grey.shade300),
+),
+children: [
+TableRow(
+decoration: BoxDecoration(color: Colors.grey.shade200),
+children: [
+_SortableHeader(
+label: "Full Name",
+onSort: () => _onSort(0),
+onFilter: () => _showFilterMenu(0, "Name"),
+isSorted: _sortColumnIndex == 0,
+isAscending: _isAscending,
+hasFilter: _selectedNameFilters != null,
+),
+_SortableHeader(
+label: "Phone",
+onSort: () => _onSort(1),
+onFilter: () => _showFilterMenu(1, "Phone"),
+isSorted: _sortColumnIndex == 1,
+isAscending: _isAscending,
+hasFilter: _selectedPhoneFilters != null,
+),
+_SortableHeader(
+label: "Role",
+onSort: () => _onSort(2),
+onFilter: () => _showFilterMenu(2, "Role"),
+isSorted: _sortColumnIndex == 2,
+isAscending: _isAscending,
+hasFilter: _selectedRoleFilters != null,
+),
+_SortableHeader(
+label: "Cluster",
+onSort: () => _onSort(3),
+onFilter: () => _showFilterMenu(3, "Cluster"),
+isSorted: _sortColumnIndex == 3,
+isAscending: _isAscending,
+hasFilter: _selectedClusterFilters != null,
+),
+_SortableHeader(
+label: "Village",
+onSort: () => _onSort(4),
+onFilter: () => _showFilterMenu(4, "Village"),
+isSorted: _sortColumnIndex == 4,
+isAscending: _isAscending,
+hasFilter: _selectedVillageFilters != null,
+),
+_SortableHeader(
+label: "School",
+onSort: () => _onSort(5),
+onFilter: () => _showFilterMenu(5, "School"),
+isSorted: _sortColumnIndex == 5,
+isAscending: _isAscending,
+hasFilter: _selectedSchoolFilters != null,
+),
+_SortableHeader(
+label: "Qualification",
+onSort: () => _onSort(6),
+onFilter: () => _showFilterMenu(6, "Qualification"),
+isSorted: _sortColumnIndex == 6,
+isAscending: _isAscending,
+hasFilter: _selectedQualificationFilters != null,
+),
+const Padding(
+padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+),
+],
+),
+..._filteredRequests.map((req) {
+final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+return TableRow(
+children: [
+_DataCell(text: currentName, isBold: true),
+_DataCell(text: req['phone']?.toString() ?? "-"),
+_DataCell(text: req['role']?.toString() ?? "-"),
+_DataCell(text: req['cluster']?.toString() ?? "-"),
+_DataCell(text: req['village']?.toString() ?? "-"),
+_DataCell(text: req['school']?.toString() ?? "-"),
+_DataCell(text: req['qualification']?.toString() ?? "-"),
+Padding(
+padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+child: statusFilter == 'pending'
+? Row(
+mainAxisSize: MainAxisSize.min,
+children: [
+Expanded(
+child: SizedBox(
+height: 32,
+child: ElevatedButton(
+onPressed: _isLoading
+? null
+: () => _updateStatus(req['id'], req['first_name'], 'rejected'),
+style: OutlinedButton.styleFrom(
+backgroundColor: Colors.red,
+foregroundColor: Colors.white,
+padding: EdgeInsets.zero,
+),
+child: const Text(
+"Reject",
+style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+),
+),
+),
+),
+const SizedBox(width: 6),
+Expanded(
+child: SizedBox(
+height: 32,
+child: ElevatedButton(
+onPressed: _isLoading
+? null
+: () => _updateStatus(req['id'], req['first_name'], 'approved'),
+style: ElevatedButton.styleFrom(
+backgroundColor: Colors.green,
+foregroundColor: Colors.white,
+padding: EdgeInsets.zero,
+),
+child: const Text(
+"Approve",
+style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+),
+),
+),
+),
+],
+)
+: SizedBox(
+height: 32,
+child: TextButton.icon(
+onPressed: _isLoading
+? null
+: () => _updateStatus(req['id'], req['first_name'], 'pending'),
+icon: const Icon(Icons.refresh, size: 14),
+label: const Text("Reset", style: TextStyle(fontSize: 12)),
+style: TextButton.styleFrom(padding: EdgeInsets.zero),
+),
+),
+),
+],
+);
+}),
+],
+),
+),
+),
+),
+],
+);
+},
+);
+}
+}
+
+class _SortableHeader extends StatelessWidget {
+final String label;
+final VoidCallback onSort;
+final VoidCallback onFilter;
+final bool isSorted;
+final bool isAscending;
+final bool hasFilter;
+const _SortableHeader({
+required this.label,
+required this.onSort,
+required this.onFilter,
+required this.isSorted,
+required this.isAscending,
+required this.hasFilter,
+});
+@override
+Widget build(BuildContext context) {
+return Container(
+padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+child: Row(
+children: [
+Expanded(
+child: InkWell(
+onTap: onSort,
+child: Row(
+mainAxisSize: MainAxisSize.min,
+children: [
+Flexible(
+child: Text(
+label,
+style: const TextStyle(fontWeight: FontWeight.bold),
+overflow: TextOverflow.ellipsis,
+),
+),
+const SizedBox(width: 2),
+Icon(
+isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
+size: 14,
+color: isSorted ? AppTheme.primaryBlue : Colors.grey,
+),
+],
+),
+),
+),
+InkWell(
+onTap: onFilter,
+borderRadius: BorderRadius.circular(4),
+child: Container(
+padding: const EdgeInsets.all(2),
+decoration: BoxDecoration(
+color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent,
+borderRadius: BorderRadius.circular(4),
+),
+child: Icon(Icons.filter_alt, size: 16, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
+),
+),
+],
+),
+);
+}
+}
+
+class _DataCell extends StatelessWidget {
+final String text;
+final bool isBold;
+const _DataCell({required this.text, this.isBold = false});
+@override
+Widget build(BuildContext context) {
+return Padding(
+padding: const EdgeInsets.all(12),
+child: Text(
+text,
+overflow: TextOverflow.ellipsis,
+style: TextStyle(
+fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+color: text == "-" ? Colors.grey : AppTheme.textPrimary,
+),
+),
+);
+}
+}

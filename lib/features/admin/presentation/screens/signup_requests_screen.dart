@@ -5,35 +5,241 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class SignupRequestsScreen extends ConsumerStatefulWidget {
   const SignupRequestsScreen({super.key});
-
   @override
   ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
 }
 
 class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
-  String _searchQuery = "";
-
-  final Set<String> selectedRoles = {};
-  final Set<String> selectedVillages = {};
-  final Set<String> selectedClusters = {};
-  final Set<String> selectedSchools = {};
-
-  bool _matchesSearch(Map<String, dynamic> req) {
-    if (_searchQuery.isEmpty) return true;
-    final query = _searchQuery.toLowerCase();
-    final fullName = "${req['first_name']} ${req['last_name']}".toLowerCase();
-    final phone = req['phone']?.toString().toLowerCase() ?? "";
-
-    return fullName.contains(query) || phone.contains(query);
+  final _searchController = TextEditingController();
+  int _sortColumnIndex = 0;
+  bool _isAscending = true;
+  Set<String>? _selectedNameFilters;
+  Set<String>? _selectedPhoneFilters;
+  Set<String>? _selectedRoleFilters;
+  Set<String>? _selectedClusterFilters;
+  Set<String>? _selectedVillageFilters;
+  Set<String>? _selectedSchoolFilters;
+  Set<String>? _selectedQualificationFilters;
+  List<Map<String, dynamic>> _rawRequests = [];
+  List<Map<String, dynamic>> _filteredRequests = [];
+  void _onSort(int columnIndex) {
+    if (columnIndex == 7) return;
+    setState(() {
+      if (_sortColumnIndex == columnIndex) {
+        _isAscending = !_isAscending;
+      } else {
+        _sortColumnIndex = columnIndex;
+        _isAscending = true;
+      }
+      _applySorting();
+    });
   }
 
-  bool _matchesFilters(Map<String, dynamic> req) {
-    if (selectedRoles.isNotEmpty && !selectedRoles.contains(req['role'])) return false;
-    if (selectedVillages.isNotEmpty && !selectedVillages.contains(req['village'])) return false;
-    if (selectedClusters.isNotEmpty && !selectedClusters.contains(req['cluster'])) return false;
-    if (selectedSchools.isNotEmpty && !selectedSchools.contains(req['school'])) return false;
-    return true;
+  void _applySorting() {
+    _filteredRequests.sort((a, b) {
+      String valA = "";
+      String valB = "";
+
+      switch (_sortColumnIndex) {
+        case 0:
+          valA = "${a['first_name'] ?? ''} ${a['last_name'] ?? ''}";
+          valB = "${b['first_name'] ?? ''} ${b['last_name'] ?? ''}";
+          break;
+        case 1:
+          valA = a['phone']?.toString() ?? "";
+          valB = b['phone']?.toString() ?? "";
+          break;
+        case 2:
+          valA = a['role']?.toString() ?? "";
+          valB = b['role']?.toString() ?? "";
+          break;
+        case 3:
+          valA = a['cluster']?.toString() ?? "";
+          valB = b['cluster']?.toString() ?? "";
+          break;
+        case 4:
+          valA = a['village']?.toString() ?? "";
+          valB = b['village']?.toString() ?? "";
+          break;
+        case 5:
+          valA = a['school']?.toString() ?? "";
+          valB = b['school']?.toString() ?? "";
+          break;
+        case 6:
+          valA = a['qualification']?.toString() ?? "";
+          valB = b['qualification']?.toString() ?? "";
+          break;
+      }
+
+      int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
+      return _isAscending ? compare : -compare;
+    });
+  }
+
+  void _applyAllFilters() {
+    final query = _searchController.text.toLowerCase().trim();
+
+    final result = _rawRequests.where((req) {
+      final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+      final phone = req['phone']?.toString() ?? "";
+      final role = req['role']?.toString() ?? "";
+      final cluster = req['cluster']?.toString() ?? "";
+      final village = req['village']?.toString() ?? "";
+      final school = req['school']?.toString() ?? "";
+      final qualification = req['qualification']?.toString() ?? "";
+      final matchesSearch =
+          query.isEmpty ||
+          fullName.toLowerCase().contains(query) ||
+          phone.toLowerCase().contains(query) ||
+          role.toLowerCase().contains(query) ||
+          cluster.toLowerCase().contains(query) ||
+          village.toLowerCase().contains(query) ||
+          school.toLowerCase().contains(query) ||
+          qualification.toLowerCase().contains(query);
+      if (!matchesSearch) return false;
+      if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+      if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
+      if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role)) return false;
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
+      if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
+      if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
+      if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
+
+      return true;
+    }).toList();
+
+    setState(() {
+      _filteredRequests = result;
+      _applySorting();
+    });
+  }
+
+  List<String> _getUniqueValuesForColumn(int columnIndex) {
+    final Set<String> values = {};
+    for (final req in _rawRequests) {
+      switch (columnIndex) {
+        case 0:
+          values.add("${req['first_name'] ?? ''} ${req['last_name'] ?? ''}");
+          break;
+        case 1:
+          if (req['phone'] != null) values.add(req['phone'].toString());
+          break;
+        case 2:
+          if (req['role'] != null) values.add(req['role'].toString());
+          break;
+        case 3:
+          if (req['cluster'] != null) values.add(req['cluster'].toString());
+          break;
+        case 4:
+          if (req['village'] != null) values.add(req['village'].toString());
+          break;
+        case 5:
+          if (req['school'] != null) values.add(req['school'].toString());
+          break;
+        case 6:
+          if (req['qualification'] != null) values.add(req['qualification'].toString());
+          break;
+      }
+    }
+    return values.toList()..sort();
+  }
+
+  Future<void> _showFilterMenu(int columnIndex, String label) async {
+    final allValues = _getUniqueValuesForColumn(columnIndex);
+
+    Set<String> currentSelection;
+    if (columnIndex == 0)
+      currentSelection = _selectedNameFilters != null ? Set.from(_selectedNameFilters!) : Set.from(allValues);
+    else if (columnIndex == 1)
+      currentSelection = _selectedPhoneFilters != null ? Set.from(_selectedPhoneFilters!) : Set.from(allValues);
+    else if (columnIndex == 2)
+      currentSelection = _selectedRoleFilters != null ? Set.from(_selectedRoleFilters!) : Set.from(allValues);
+    else if (columnIndex == 3)
+      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
+    else if (columnIndex == 4)
+      currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
+    else if (columnIndex == 5)
+      currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
+    else
+      currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
+
+    final dialogSearchController = TextEditingController();
+    List<String> filteredValues = List.from(allValues);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: Text("Filter by $label"),
+          content: SizedBox(
+            width: 320,
+            height: 450,
+            child: Column(
+              children: [
+                TextField(
+                  controller: dialogSearchController,
+                  decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
+                  onChanged: (value) {
+                    setStateDialog(() {
+                      filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  dense: true,
+                  value: currentSelection.length == allValues.length,
+                  title: const Text("Select All"),
+                  onChanged: (checked) {
+                    setStateDialog(() {
+                      currentSelection = checked == true ? Set.from(allValues) : {};
+                    });
+                  },
+                ),
+                const Divider(),
+                Expanded(
+                  child: ListView(
+                    children: filteredValues.map((value) {
+                      return CheckboxListTile(
+                        dense: true,
+                        value: currentSelection.contains(value),
+                        title: Text(value),
+                        onChanged: (checked) {
+                          setStateDialog(() {
+                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  final isAllSelected = currentSelection.length == allValues.length;
+                  if (columnIndex == 0) _selectedNameFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 1) _selectedPhoneFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 2) _selectedRoleFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 3) _selectedClusterFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 4) _selectedVillageFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 5) _selectedSchoolFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 6) _selectedQualificationFilters = isAllSelected ? null : Set.from(currentSelection);
+                  _applyAllFilters();
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _updateStatus(String id, String name, String status) async {
@@ -57,42 +263,21 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("User Management"),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(110),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: TextField(
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    decoration: InputDecoration(
-                      hintText: "Search by name or phone...",
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      fillColor: Colors.white,
-                      filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                    ),
-                  ),
-                ),
-                const TabBar(
-                  tabs: [
-                    Tab(text: "Pending"),
-                    Tab(text: "Approved"),
-                    Tab(text: "Rejected"),
-                  ],
-                ),
-              ],
-            ),
+          title: const Text("User Management Matrix"),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: "Pending"),
+              Tab(text: "Approved"),
+              Tab(text: "Rejected"),
+            ],
           ),
         ),
-        body: TabBarView(children: [_buildRequestList('pending'), _buildRequestList('approved'), _buildRequestList('rejected')]),
+        body: TabBarView(children: [_buildGridContent('pending'), _buildGridContent('approved'), _buildGridContent('rejected')]),
       ),
     );
   }
 
-  Widget _buildRequestList(String statusFilter) {
+  Widget _buildGridContent(String statusFilter) {
     final supabase = ref.watch(supabaseClientProvider);
 
     return StreamBuilder<List<Map<String, dynamic>>>(
@@ -100,29 +285,221 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-        final allData = snapshot.data!;
+        _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
 
-        final filteredData = allData.where((req) => _matchesSearch(req) && _matchesFilters(req)).toList();
+        final query = _searchController.text.toLowerCase().trim();
+        _filteredRequests = _rawRequests.where((req) {
+          final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+          if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+          if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(req['phone']?.toString())) return false;
+          if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(req['role'])) return false;
+          if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(req['cluster'])) return false;
+          if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(req['village'])) return false;
+          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
+          if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
+            return false;
 
-        final roles = allData.map((e) => e['role']?.toString()).whereType<String>().toSet().toList()..sort();
-        final villages = allData.map((e) => e['village']?.toString()).whereType<String>().toSet().toList()..sort();
-        final clusters = allData.map((e) => e['cluster']?.toString()).whereType<String>().toSet().toList()..sort();
-        final schools = allData.map((e) => e['school']?.toString()).whereType<String>().toSet().toList()..sort();
+          return query.isEmpty ||
+              fullName.toLowerCase().contains(query) ||
+              (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
+              (req['qualification']?.toString().toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        _applySorting();
 
         return Column(
           children: [
-            _buildFilterBar(roles, villages, clusters, schools),
-
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (_) => _applyAllFilters(),
+                decoration: InputDecoration(
+                  hintText: "Global Matrix Search...",
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _applyAllFilters();
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+              ),
+            ),
             Expanded(
-              child: filteredData.isEmpty
-                  ? const Center(child: Text("No users found matching filters."))
-                  : ListView.builder(
-                      itemCount: filteredData.length,
-                      padding: const EdgeInsets.all(8),
-                      itemBuilder: (context, index) {
-                        final req = filteredData[index];
-                        return _buildUserCard(req, statusFilter);
-                      },
+              child: _filteredRequests.isEmpty
+                  ? const Center(child: Text("No records match your filters."))
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Table(
+                          defaultColumnWidth: const FixedColumnWidth(150),
+                          columnWidths: const {
+                            0: FixedColumnWidth(160),
+                            1: FixedColumnWidth(110),
+                            2: FixedColumnWidth(120),
+                            3: FixedColumnWidth(130),
+                            4: FixedColumnWidth(120),
+                            5: FixedColumnWidth(120),
+                            6: FixedColumnWidth(140),
+                            7: FixedColumnWidth(160),
+                          },
+                          border: TableBorder(
+                            verticalInside: BorderSide(color: Colors.grey.shade300),
+                            horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                            bottom: BorderSide(color: Colors.grey.shade300),
+                            left: BorderSide(color: Colors.grey.shade300),
+                            right: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          children: [
+                            TableRow(
+                              decoration: BoxDecoration(color: Colors.grey.shade200),
+                              children: [
+                                _SortableHeader(
+                                  label: "Full Name",
+                                  onSort: () => _onSort(0),
+                                  onFilter: () => _showFilterMenu(0, "Name"),
+                                  isSorted: _sortColumnIndex == 0,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedNameFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "Phone",
+                                  onSort: () => _onSort(1),
+                                  onFilter: () => _showFilterMenu(1, "Phone"),
+                                  isSorted: _sortColumnIndex == 1,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedPhoneFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "Role",
+                                  onSort: () => _onSort(2),
+                                  onFilter: () => _showFilterMenu(2, "Role"),
+                                  isSorted: _sortColumnIndex == 2,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedRoleFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "Cluster",
+                                  onSort: () => _onSort(3),
+                                  onFilter: () => _showFilterMenu(3, "Cluster"),
+                                  isSorted: _sortColumnIndex == 3,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedClusterFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "Village",
+                                  onSort: () => _onSort(4),
+                                  onFilter: () => _showFilterMenu(4, "Village"),
+                                  isSorted: _sortColumnIndex == 4,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedVillageFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "School",
+                                  onSort: () => _onSort(5),
+                                  onFilter: () => _showFilterMenu(5, "School"),
+                                  isSorted: _sortColumnIndex == 5,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedSchoolFilters != null,
+                                ),
+                                _SortableHeader(
+                                  label: "Qualification",
+                                  onSort: () => _onSort(6),
+                                  onFilter: () => _showFilterMenu(6, "Qualification"),
+                                  isSorted: _sortColumnIndex == 6,
+                                  isAscending: _isAscending,
+                                  hasFilter: _selectedQualificationFilters != null,
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                                  child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            ..._filteredRequests.map((req) {
+                              final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                              return TableRow(
+                                children: [
+                                  _DataCell(text: currentName, isBold: true),
+                                  _DataCell(text: req['phone']?.toString() ?? "-"),
+                                  _DataCell(text: req['role']?.toString() ?? "-"),
+                                  _DataCell(text: req['cluster']?.toString() ?? "-"),
+                                  _DataCell(text: req['village']?.toString() ?? "-"),
+                                  _DataCell(text: req['school']?.toString() ?? "-"),
+                                  _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                    child: statusFilter == 'pending'
+                                        ? Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Expanded(
+                                                child: SizedBox(
+                                                  height: 32,
+                                                  child: ElevatedButton(
+                                                    onPressed: _isLoading
+                                                        ? null
+                                                        : () => _updateStatus(req['id'], req['first_name'], 'rejected'),
+                                                    style: OutlinedButton.styleFrom(
+                                                      backgroundColor: Colors.red,
+                                                      foregroundColor: Colors.white,
+                                                      padding: EdgeInsets.zero,
+                                                    ),
+                                                    child: const Text(
+                                                      "Reject",
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: SizedBox(
+                                                  height: 32,
+                                                  child: ElevatedButton(
+                                                    onPressed: _isLoading
+                                                        ? null
+                                                        : () => _updateStatus(req['id'], req['first_name'], 'approved'),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.green,
+                                                      foregroundColor: Colors.white,
+                                                      padding: EdgeInsets.zero,
+                                                    ),
+                                                    child: const Text(
+                                                      "Approve",
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : SizedBox(
+                                            height: 32,
+                                            child: TextButton.icon(
+                                              onPressed: _isLoading
+                                                  ? null
+                                                  : () => _updateStatus(req['id'], req['first_name'], 'pending'),
+                                              icon: const Icon(Icons.refresh, size: 14),
+                                              label: const Text("Reset", style: TextStyle(fontSize: 12)),
+                                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                            ),
+                                          ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ),
             ),
           ],
@@ -130,177 +507,89 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       },
     );
   }
+}
 
-  Widget _buildFilterBar(List<String> roles, List<String> villages, List<String> clusters, List<String> schools) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+class _SortableHeader extends StatelessWidget {
+  final String label;
+  final VoidCallback onSort;
+  final VoidCallback onFilter;
+  final bool isSorted;
+  final bool isAscending;
+  final bool hasFilter;
+
+  const _SortableHeader({
+    required this.label,
+    required this.onSort,
+    required this.onFilter,
+    required this.isSorted,
+    required this.isAscending,
+    required this.hasFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Row(
         children: [
-          _filterChip("Role", roles, selectedRoles),
-          _filterChip("Village", villages, selectedVillages),
-          _filterChip("Cluster", clusters, selectedClusters),
-          _filterChip("School", schools, selectedSchools),
-          if (selectedRoles.isNotEmpty ||
-              selectedVillages.isNotEmpty ||
-              selectedClusters.isNotEmpty ||
-              selectedSchools.isNotEmpty)
-            TextButton(
-              onPressed: () => setState(() {
-                selectedRoles.clear();
-                selectedVillages.clear();
-                selectedClusters.clear();
-                selectedSchools.clear();
-              }),
-              child: const Text("Clear"),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterChip(String title, List<String> options, Set<String> selected) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: OutlinedButton(
-        onPressed: () => _showMultiSelectDialog(title, options, selected),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: selected.isNotEmpty ? AppTheme.primaryBlue : null,
-          visualDensity: VisualDensity.compact,
-        ),
-        child: Text(selected.isEmpty ? "$title: All" : "$title: ${selected.length}"),
-      ),
-    );
-  }
-
-  Widget _buildUserCard(Map<String, dynamic> req, String statusFilter) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ExpansionTile(
-        leading: CircleAvatar(
-          backgroundColor: statusFilter == 'rejected' ? Colors.red.shade100 : AppTheme.primaryBlue,
-          child: Text(req['first_name']?[0].toUpperCase() ?? '?'),
-        ),
-        title: Text("${req['first_name']} ${req['last_name']}"),
-        subtitle: Text("Role: ${req['role']}"),
-        children: [
-          _bulletProofRow(Icons.phone, "Phone", req['phone']),
-          _bulletProofRow(Icons.location_on, "Village", req['village']),
-          _bulletProofRow(Icons.hub, "Cluster", req['cluster']),
-          _bulletProofRow(Icons.school, "School", req['school']),
-          _bulletProofRow(Icons.history_edu, "Qual.", req['qualification']),
-          const SizedBox(height: 10),
-          if (statusFilter == 'pending')
-            Padding(
-              padding: const EdgeInsets.all(16.0),
+          Expanded(
+            child: InkWell(
+              onTap: onSort,
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isLoading ? null : () => _updateStatus(req['id'], req['first_name'], 'rejected'),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                      child: const Text("Reject"),
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : () => _updateStatus(req['id'], req['first_name'], 'approved'),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                      child: const Text("Approve"),
-                    ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
+                    size: 14,
+                    color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
                 ],
               ),
             ),
-          if (statusFilter != 'pending')
-            TextButton(
-              onPressed: () => _updateStatus(req['id'], req['first_name'], 'pending'),
-              child: const Text("Reset to Pending"),
+          ),
+          InkWell(
+            onTap: onFilter,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Icon(Icons.filter_alt, size: 16, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _bulletProofRow(IconData icon, String label, dynamic value) {
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      leading: Icon(icon, size: 20, color: AppTheme.primaryBlue),
-      title: Text("$label: ${value?.toString() ?? 'N/A'}"),
-    );
-  }
+class _DataCell extends StatelessWidget {
+  final String text;
+  final bool isBold;
 
-  Future<void> _showMultiSelectDialog(String title, List<String> options, Set<String> selected) async {
-    final temp = Set<String>.from(selected);
+  const _DataCell({required this.text, this.isBold = false});
 
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text("Select $title"),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: StatefulBuilder(
-            builder: (context, setLocalState) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => setLocalState(() => temp.addAll(options)),
-                        icon: const Icon(Icons.select_all, size: 18),
-                        label: const Text("Select All"),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => setLocalState(() => temp.clear()),
-                        icon: const Icon(Icons.clear_all, size: 18),
-                        label: const Text("Clear All"),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: options
-                        .map(
-                          (opt) => CheckboxListTile(
-                            title: Text(opt),
-                            value: temp.contains(opt),
-                            onChanged: (val) => setLocalState(() {
-                              if (val == true) {
-                                temp.add(opt);
-                              } else {
-                                temp.remove(opt);
-                              }
-                            }),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        text,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          color: text == "-" ? Colors.grey : AppTheme.textPrimary,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                selected.clear();
-                selected.addAll(temp);
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text("Apply"),
-          ),
-        ],
       ),
     );
   }

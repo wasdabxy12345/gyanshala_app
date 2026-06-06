@@ -1139,7 +1139,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Locations Management"),
+        title: const Text("Location Management"),
         backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
         bottom: PreferredSize(
