@@ -15,7 +15,7 @@ flutter_native_splash:
     image: assets/splash/splash.png
     color: "#ffffff"
 
-version: 0.0.27+27
+version: 0.0.28+28
 
 environment:
   sdk: ^3.11.4
@@ -48,6 +48,7 @@ dependencies:
   google_maps_flutter: ^2.17.0
   flutter_native_splash: ^2.4.4
   webview_flutter: ^4.7.0
+  universal_html: ^2.3.0
 
 dev_dependencies:
   flutter_test:

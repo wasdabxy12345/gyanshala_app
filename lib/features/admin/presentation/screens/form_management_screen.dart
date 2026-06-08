@@ -102,7 +102,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text(
           "Create New Form Document",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00AFEF)),
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
         ),
         content: TextField(
           controller: titleController,
@@ -164,7 +164,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchFormsFromSupabase)],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00AFEF)))
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _formsList.isEmpty
           ? const Center(
               child: Text("No evaluation forms found. Create one to begin.", style: TextStyle(color: Colors.grey)),
@@ -183,9 +183,8 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: ListTile(
-                      leading: const Icon(Icons.assignment_turned_in, color: Color(0xFF00AFEF), size: 28),
+                      leading: const Icon(Icons.assignment_turned_in, color: AppTheme.primaryBlue, size: 28),
                       title: Text(currentFormTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text("UUID: $currentFormId", style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

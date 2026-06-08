@@ -239,7 +239,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         context: context,
         barrierDismissible: false,
         builder: (context) =>
-            const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Color(0xff00afef)))),
+            const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue))),
       );
       await Future.delayed(const Duration(milliseconds: 100));
       List<String> parsedOptions = [];
@@ -385,7 +385,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                 isEditing
                     ? "Modify ${type.toUpperCase()} Question Parameters"
                     : "Configure New ${type == 'checkbox_search' ? 'Check box' : type.toUpperCase()} Field",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xff00afef)),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
               ),
               content: SizedBox(
                 width: 680,

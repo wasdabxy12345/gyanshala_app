@@ -27,7 +27,7 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
                 const TabBar(
                   tabs: [
                     Tab(icon: Icon(Icons.how_to_reg), text: "Attendance"),
-                    Tab(icon: Icon(Icons.people_outline), text: "Students List"),
+                    Tab(icon: Icon(Icons.people_outline), text: "Student List"),
                   ],
                 ),
                 Padding(

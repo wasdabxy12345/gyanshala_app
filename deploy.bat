@@ -26,24 +26,14 @@ if "%CLEAN_FIRST%"=="true" (
 set /p NOTES="Enter Release Notes (Optional, press Enter to skip): "
 
 echo ========================================================
-echo 🚀 STARTING PARALLEL DEPLOYMENT PIPELINE FOR %VERSION%
+echo 🚀 STARTING DEPLOYMENT PIPELINE FOR %VERSION%
 echo ========================================================
 
-if exist web_done.tmp del web_done.tmp
-if exist web_failed.tmp del web_failed.tmp
-
-echo 🛠️ Launching Parallel Builds (Web and Android)...
-
-:: --- WEB PROCESS (Background) ---
-echo 🌐 [Web] Starting Web compilation and Vercel deployment...
-start /b "" cmd /c "echo 🌐 [Web] Compiling... && flutter build web --release && echo ☁️ [Web] Deploying to Vercel... && cd build\web && vercel link --yes && vercel --prod --yes && cd ..\.. && echo ✅ [Web] Web Deployment Complete! && echo done > ..\..\web_done.tmp" || (echo done > web_failed.tmp && exit /b 1)
-
-:: --- ANDROID PROCESS (Foreground) ---
+:: --- ANDROID PROCESS ---
 echo 📱 [Android] Compiling Android APK...
 call flutter build apk --release --no-pub
 if %ERRORLEVEL% NEQ 0 (
   echo ❌ Android compilation failed. Exiting...
-  del web_done.tmp
   pause
   exit /b %ERRORLEVEL%
 )
@@ -54,31 +44,19 @@ echo 🏷️ [Android] Renaming APK...
 copy /y "%ORIGINAL_APK%" "%RENAMED_APK%" >nul
 echo ✅ [Android] APK Ready!
 
-:: --- WAIT FOR WEB TO FINISH ---
-echo ⏳ Waiting for Web deployment pipeline to wrap up...
-:loop
-if exist web_failed.tmp (
-  echo ❌ Background Web build or Vercel deployment failed! Check logs.
-  del web_failed.tmp >nul
-  pause
-  exit /b 1
-)
-if not exist web_done.tmp (
-  timeout /t 3 /nobreak >nul
-  goto loop
-)
-del web_done.tmp >nul
-
-:: ========================================================
-:: 5. Create GitHub Release
-:: ========================================================
+:: --- GIT & GITHUB RELEASE ---
 echo 🛠️ Creating GitHub Release and uploading assets...
+:: This creates the tag/release and pushes it to GitHub, triggering your Vercel Web Build automatically.
 gh release create "%VERSION%" "%RENAMED_APK%" --title "Release %VERSION%" --notes "%NOTES%" --target main
 
 if %ERRORLEVEL% NEQ 0 (
-  echo ❌ GitHub Release failed. Check if version tag already exists.
+  echo ❌ GitHub Release failed. Check if version tag already exists or if 'gh' CLI is authenticated.
   ) else (
+  echo.
+  echo ========================================================
   echo 🎉 PIPELINE SUCCESSFUL FOR %VERSION%!
+  echo ☁️ Vercel should now be building your Web deployment automatically.
+  echo ========================================================
 )
 
 pause

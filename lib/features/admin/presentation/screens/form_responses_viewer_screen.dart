@@ -1,7 +1,14 @@
+import 'dart:io';
+
+import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:universal_html/html.dart' as html;
 
 class FormResponsesOverviewScreen extends StatefulWidget {
   final String formId;
@@ -63,7 +70,7 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTableData, tooltip: "Refresh Grid")],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00AFEF)))
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _rows.isEmpty
           ? const Center(
               child: Text("No submissions recorded yet for this form template.", style: TextStyle(color: Colors.grey)),
@@ -75,7 +82,7 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Text(
-                    "Total Submissions: ${_rows.length} Matrix Rows",
+                    "Total Submissions: ${_rows.length}",
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
                   ),
                 ),
@@ -151,6 +158,14 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
                 ),
               ],
             ),
+      floatingActionButton: _rows.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _exportToExcel,
+              backgroundColor: AppTheme.primaryBlue,
+              icon: const Icon(Icons.file_download),
+              label: const Text("Export Excel"),
+            ),
     );
   }
 
@@ -177,5 +192,96 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
         ),
       ),
     );
+  }
+
+  Future<void> _exportToExcel() async {
+    try {
+      final excel = Excel.createExcel();
+      final Sheet sheet = excel['Responses'];
+      final headers = ['Employee Name', 'Submission Date', 'GPS Location', ..._columns.map((q) => q['question'].toString())];
+
+      sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
+      for (final row in _rows) {
+        final profile = row['profiles'] as Map<String, dynamic>?;
+
+        final employeeName = profile != null
+            ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
+            : "User (${row['user_id'].toString().substring(0, 6)})";
+
+        final submittedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(row['submitted_at']));
+
+        final lat = row['latitude'];
+        final lon = row['longitude'];
+
+        final gps = lat != null && lon != null
+            ? "${(lat as num).toStringAsFixed(5)}, ${(lon as num).toStringAsFixed(5)}"
+            : "No GPS Data";
+
+        final answers = _columns.map((q) {
+          final questionId = q['id'].toString();
+          final rawAnswer = (row['responses'] as Map<String, dynamic>? ?? {})[questionId];
+
+          if (rawAnswer == null) return '';
+
+          if (rawAnswer is List) {
+            return rawAnswer.join(', ');
+          }
+
+          return rawAnswer.toString();
+        }).toList();
+
+        sheet.appendRow([
+          TextCellValue(employeeName),
+          TextCellValue(submittedAt),
+          TextCellValue(gps),
+          ...answers.map((e) => TextCellValue(e)),
+        ]);
+      }
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Failed to generate excel file');
+      }
+      final fileName = "${widget.formTitle} [${DateTime.now()}].xlsx";
+      if (kIsWeb) {
+        final bytes = excel.encode();
+        debugPrint("Excel bytes length: ${bytes?.length}");
+        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        final url = html.Url.createObjectUrlFromBlob(blob);
+
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..download = fileName
+          ..style.display = 'none';
+
+        html.document.body?.children.add(anchor);
+
+        anchor.click();
+
+        anchor.remove();
+
+        html.Url.revokeObjectUrl(url);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started")));
+        }
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+
+        final file = File('${dir.path}/$fileName');
+
+        await file.writeAsBytes(bytes);
+
+        await OpenFilex.open(file.path);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Excel exported successfully")));
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Export failed: $e"), backgroundColor: Colors.red));
+    }
   }
 }

@@ -67,7 +67,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('You were automatically logged out after $timeout minutes of inactivity.'),
-        backgroundColor: Color(0xFF00afef),
+        backgroundColor: AppTheme.primaryBlue,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         action: SnackBarAction(

@@ -15,24 +15,59 @@ final employeeAttendanceProvider = StateNotifierProvider<EmployeeAttendanceContr
 
 class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
   final SupabaseClient _client;
-  EmployeeAttendanceController(this._client) : super(const AsyncData(false));
+  EmployeeAttendanceController(this._client) : super(const AsyncLoading<bool>()) {
+    checkCurrentServerStatus();
+  }
+  Future<void> checkCurrentServerStatus() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      state = const AsyncData(false);
+      return;
+    }
+
+    try {
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final List<dynamic> data = await _client
+          .from('attendance')
+          .select('status')
+          .eq('user_id', userId)
+          .gte('recorded_at', '${todayStr}T00:00:00+00:00')
+          .order('recorded_at', ascending: false)
+          .limit(1);
+
+      if (data.isNotEmpty) {
+        final String latestStatus = data.first['status'] as String;
+        state = AsyncData(latestStatus == 'check_in');
+      } else {
+        state = const AsyncData(false);
+      }
+    } catch (e, stack) {
+      dev.log("Failed to fetch initial attendance state", error: e, stackTrace: stack);
+      state = const AsyncData(false);
+    }
+  }
+
   Future<void> processCheckIn() async {
     if (state.isLoading) return;
     final bool currentCheckStatus = state.value ?? false;
     state = const AsyncLoading<bool>();
+
     try {
       final Position? position = await LocationService.getCurrentPosition();
       if (position == null) {
         throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
       }
+
       final dynamic response = await _client.rpc(
         'get_school_at_location',
         params: {'lat': position.latitude, 'lon': position.longitude},
       );
+
       String? detectedSchoolId = response?.toString();
       if (detectedSchoolId == null || detectedSchoolId.trim().isEmpty) {
         detectedSchoolId = null;
       }
+
       final userId = _client.auth.currentUser?.id;
       if (userId == null) {
         throw Exception("User is not authenticated.");

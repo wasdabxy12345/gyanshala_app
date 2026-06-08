@@ -324,7 +324,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               key: ValueKey('add_map_${mapRefreshKey}_${dialogMapType.name}'),
               initialCameraPosition: CameraPosition(
                 target: selectedLatLng ?? const LatLng(23.0225, 72.5714),
-                zoom: selectedLatLng != null ? 14 : 12,
+                zoom: selectedLatLng != null ? 9 : 9,
               ),
               mapType: dialogMapType,
               zoomControlsEnabled: true,
@@ -873,7 +873,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           Widget buildBaseMap({VoidCallback? onMapTapTrigger}) {
             return GoogleMap(
               key: ValueKey('manage_map_${mapRefreshKey}_${dialogMapType.name}'),
-              initialCameraPosition: CameraPosition(target: LatLng(initialLat, initialLng), zoom: 14),
+              initialCameraPosition: CameraPosition(target: LatLng(initialLat, initialLng), zoom: 18),
               mapType: dialogMapType,
               zoomControlsEnabled: true,
               myLocationButtonEnabled: false,

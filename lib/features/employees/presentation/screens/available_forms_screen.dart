@@ -51,7 +51,7 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
         foregroundColor: Colors.white,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xff00afef)))
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _availableForms.isEmpty
           ? const Center(
               child: Text("No evaluation templates assigned yet.", style: TextStyle(color: Colors.grey)),

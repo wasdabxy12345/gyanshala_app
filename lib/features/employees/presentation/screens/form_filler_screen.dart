@@ -292,7 +292,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
               ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xff00afef)))
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _questions.isEmpty
           ? const Center(child: Text("This form contains no questions."))
           : Form(
@@ -310,7 +310,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                         ),
                         Text(
                           "Question ${_currentPageIndex + 1} of ${_questions.length}",
-                          style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xff00afef)),
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryBlue),
                         ),
                       ],
                     ),

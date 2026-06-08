@@ -1,4 +1,3 @@
-// lib/core/utils/excel_parser/excel_web_parser.dart
 import 'dart:async';
 import 'dart:js_interop';
 
@@ -33,7 +32,6 @@ external JSObject _xlsxRead(JSObject data, JSObject options);
 external JSArray _sheetToJson(JSObject sheet, JSObject options);
 
 class ExcelParser {
-  // FIX 1: Added missing parseFirstColumnFast implementation for Web
   static Future<List<String>> parseFirstColumnFast(List<int> bytes) async {
     try {
       final List<JSAny> jsAnyList = bytes.map((e) => e.toJS).toList();
@@ -74,7 +72,6 @@ class ExcelParser {
     }
   }
 
-  // FIX 2: Added 'static' modifier to match your interface file contract
   static Future<List<Map<String, dynamic>>> parseLocationMatrix(List<int> bytes) async {
     try {
       final List<JSAny> jsAnyList = bytes.map((e) => e.toJS).toList();
