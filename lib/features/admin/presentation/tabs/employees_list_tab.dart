@@ -8,10 +8,10 @@ class EmployeeListTab extends ConsumerStatefulWidget {
   final String searchQuery;
   const EmployeeListTab({super.key, required this.searchQuery});
   @override
-  ConsumerState<EmployeeListTab> createState() => _EmployeeListTabState();
+  ConsumerState<EmployeeListTab> createState() => EmployeeListTabState();
 }
 
-class _EmployeeListTabState extends ConsumerState<EmployeeListTab> {
+class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   final Set<String> _selectedEmployeeIds = {};
   int _sortColumnIndex = 0;
   bool _isAscending = true;
@@ -25,6 +25,9 @@ class _EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
   List<Map<String, dynamic>> _rawEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
+
+  List<Map<String, dynamic>> get filteredEmployees => _filteredEmployees;
+  Set<String> get selectedEmployeeIds => _selectedEmployeeIds;
 
   void _onSort(int columnIndex) {
     setState(() {

@@ -37,7 +37,6 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
           child: Row(
             children: [
-              // --- WEEK CONTROLS ---
               Expanded(
                 flex: 7,
                 child: Row(
@@ -74,8 +73,6 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // --- CENTER INTERACTIVE DATE RANGE ---
               Expanded(
                 flex: 10,
                 child: Padding(
@@ -97,8 +94,6 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // --- MONTH CONTROLS ---
               Expanded(
                 flex: 7,
                 child: Row(
