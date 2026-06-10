@@ -91,8 +91,6 @@ class _SignupVerificationScreenState extends ConsumerState<SignupVerificationScr
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
       return;
     }
-
-    // Production Path
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OtpVerificationScreen(

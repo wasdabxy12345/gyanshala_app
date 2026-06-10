@@ -28,7 +28,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     try {
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
       final List<dynamic> data = await _client
-          .from('attendance')
+          .from('employee_attendance')
           .select('status')
           .eq('user_id', userId)
           .gte('recorded_at', '${todayStr}T00:00:00+00:00')
@@ -73,7 +73,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
         throw Exception("User is not authenticated.");
       }
 
-      await _client.from('attendance').insert({
+      await _client.from('employee_attendance').insert({
         'user_id': userId,
         'latitude': position.latitude,
         'longitude': position.longitude,

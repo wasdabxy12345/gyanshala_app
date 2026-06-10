@@ -338,8 +338,6 @@ class _ConflictWorkspaceDialogState extends State<ConflictWorkspaceDialog> {
             ),
           ),
           const SizedBox(width: 4),
-
-          // filter icon
           GestureDetector(onTap: () => _openFilterMenu(f), child: const Icon(Icons.filter_alt, size: 14)),
         ],
       ),

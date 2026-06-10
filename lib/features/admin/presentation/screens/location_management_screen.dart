@@ -350,7 +350,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         center: selectedLatLng!,
                         radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
                         fillColor: AppTheme.primaryBlue,
-                        strokeColor: AppTheme.accentBlue,
+                        strokeColor: Colors.white,
                         strokeWidth: 2,
                       ),
                     },
@@ -451,7 +451,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             value: "ADD_NEW",
                             child: Text(
                               "+ Add New Cluster...",
-                              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold),
                             ),
                           ),
                           ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
@@ -895,8 +895,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         circleId: const CircleId('edit_geofence_circle'),
                         center: selectedLatLng!,
                         radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
-                        fillColor: AppTheme.primaryBlue.withValues(alpha: 0.15),
-                        strokeColor: AppTheme.primaryBlue,
+                        fillColor: AppTheme.primaryBlue,
+                        strokeColor: Colors.white,
                         strokeWidth: 2,
                       ),
                     },
@@ -1140,8 +1140,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Location Management"),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
+        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchHierarchy, tooltip: "Refresh")],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: Colors.grey.shade300, height: 1),
@@ -1153,29 +1152,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onRefresh: _fetchHierarchy,
               child: ListView(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (_) => _applyAllFilters(),
-                      decoration: InputDecoration(
-                        hintText: "Search clusters, villages, or schools...",
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  _applyAllFilters();
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                  ),
+                  Padding(padding: const EdgeInsets.all(13)),
                   Table(
                     border: TableBorder(
                       verticalInside: BorderSide(color: Colors.grey.shade300),

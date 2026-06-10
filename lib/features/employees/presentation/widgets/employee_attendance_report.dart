@@ -28,7 +28,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
     final employees = (employeesResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
     final attendanceResponse = await supabase
-        .from('attendance')
+        .from('employee_attendance')
         .select('id, user_id, status, recorded_at, school_id, schools(name)')
         .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
         .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String());

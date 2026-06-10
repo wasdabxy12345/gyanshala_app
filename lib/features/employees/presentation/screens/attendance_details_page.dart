@@ -20,7 +20,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
     try {
       final futures = await Future.wait([
         supabase
-            .from('attendance')
+            .from('employee_attendance')
             .select('*, schools(name)')
             .eq('user_id', userId)
             .gte('recorded_at', '$dateString 00:00:00+00')
@@ -109,11 +109,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Daily Attendance Summary'),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('Daily Attendance Summary')),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchPageData(ref),
         builder: (context, snapshot) {
@@ -427,9 +423,8 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
 
   Widget _buildMapHeader({bool expanded = false, VoidCallback? onRefresh}) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween, // Separates Left layout block from Right layout block
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Map types container on the left
         Container(
           decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.all(2),
@@ -442,7 +437,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
             ],
           ),
         ),
-        // Fullscreen action button isolated completely on the right side
         IconButton(
           icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
           onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
@@ -481,8 +475,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         opaque: false,
         barrierDismissible: true,
         pageBuilder: (_, _, _) {
-          // FIX: Wrap the modal layout with a StatefulBuilder
-          // to manage map style swaps locally in the route overlay
           return StatefulBuilder(
             builder: (fsContext, setFsState) {
               return Scaffold(
@@ -500,9 +492,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
                             child: _buildMapHeader(
                               expanded: true,
                               onRefresh: () {
-                                // Rebuilds BOTH the fullscreen overlay view...
                                 setFsState(() {});
-                                // ...and synchronizes the background layout context
                                 setState(() {});
                               },
                             ),
@@ -519,7 +509,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         },
       ),
     );
-    // Ensure the base map syncs when returning from fullscreen
     setState(() {});
   }
 

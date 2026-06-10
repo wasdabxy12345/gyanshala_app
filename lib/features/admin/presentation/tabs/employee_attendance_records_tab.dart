@@ -10,6 +10,23 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
 
   const EmployeeAttendanceRecordsTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
 
+  Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: isStart ? range.start : range.end,
+      firstDate: DateTime(2024),
+      lastDate: isStart ? range.end : DateTime.now(),
+    );
+
+    if (picked != null) {
+      if (isStart) {
+        onRangeChanged(DateTimeRange(start: picked, end: range.end));
+      } else {
+        onRangeChanged(DateTimeRange(start: range.start, end: picked));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -17,23 +34,18 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Text(
-            '${_formatDateWithMonth(range.start)} - ${_formatDateWithMonth(range.end)}',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
+              // --- WEEK CONTROLS ---
               Expanded(
+                flex: 7,
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_left),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.arrow_left, size: 20),
                       onPressed: () {
                         final newEnd = range.start.subtract(const Duration(days: 1));
                         final newStart = newEnd.subtract(const Duration(days: 6));
@@ -49,7 +61,9 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                       }),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.arrow_right),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.arrow_right, size: 20),
                       onPressed: () {
                         final newStart = range.end.add(const Duration(days: 1));
                         final newEnd = newStart.add(const Duration(days: 6));
@@ -60,12 +74,39 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+
+              // --- CENTER INTERACTIVE DATE RANGE ---
               Expanded(
+                flex: 10,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _dateInkWell(context: context, date: range.start, isStart: true),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 2.0),
+                        child: Text(
+                          "to",
+                          style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      _dateInkWell(context: context, date: range.end, isStart: false),
+                    ],
+                  ),
+                ),
+              ),
+
+              // --- MONTH CONTROLS ---
+              Expanded(
+                flex: 7,
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_left),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.arrow_left, size: 20),
                       onPressed: () {
                         final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
                         final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
@@ -81,7 +122,9 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                       }),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.arrow_right),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.arrow_right, size: 20),
                       onPressed: () {
                         final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
                         final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
@@ -91,13 +134,6 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.date_range),
-                onPressed: () async {
-                  final r = await showDateRangePicker(context: context, firstDate: DateTime(2024), lastDate: DateTime.now());
-                  if (r != null) onRangeChanged(r);
-                },
               ),
             ],
           ),
@@ -111,10 +147,43 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
   }
 
   Widget _quickBtn(String label, VoidCallback action) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: Colors.blue.shade50,
+        foregroundColor: Colors.blue.shade700,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
       onPressed: action,
-      child: Text(label, style: const TextStyle(fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _dateInkWell({required BuildContext context, required DateTime date, required bool isStart}) {
+    return InkWell(
+      onTap: () => _selectSingleDate(context, isStart: isStart),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.blue.shade200, width: 1),
+          borderRadius: BorderRadius.circular(6),
+          color: Colors.white,
+        ),
+        child: Text(
+          _formatDateWithMonth(date),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+        ),
+      ),
     );
   }
 

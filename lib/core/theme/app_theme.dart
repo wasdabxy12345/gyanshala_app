@@ -41,7 +41,9 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(50),
+          // Fixed: Gives a flexible default minimum size instead of an infinite full-height constraint
+          minimumSize: const Size(88, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),

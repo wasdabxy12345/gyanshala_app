@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'form_filler_screen.dart'; // Import the FormFillerScreen built previously
+import 'form_filler_screen.dart';
 
 class AvailableFormsScreen extends StatefulWidget {
   const AvailableFormsScreen({super.key});
@@ -24,7 +24,6 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
   Future<void> _fetchForms() async {
     try {
       final supabase = Supabase.instance.client;
-      // Fetch available valuation definitions
       final data = await supabase.from('forms').select('id, title').order('title');
 
       setState(() {
@@ -44,12 +43,7 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
-      appBar: AppBar(
-        title: const Text("Assigned Evaluations"),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text("Assigned Evaluations")),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _availableForms.isEmpty
@@ -74,7 +68,6 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
                     subtitle: const Text("Tap to open and fill responses"),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                     onTap: () {
-                      // Route explicitly to your user-facing filler canvas
                       Navigator.push(
                         context,
                         MaterialPageRoute(

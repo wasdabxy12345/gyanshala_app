@@ -62,11 +62,8 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: Text(widget.formTitle),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchTableData, tooltip: "Refresh Grid")],
       ),
       body: _isLoading
@@ -163,6 +160,7 @@ class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScree
           : FloatingActionButton.extended(
               onPressed: _exportToExcel,
               backgroundColor: AppTheme.primaryBlue,
+              foregroundColor: Colors.white,
               icon: const Icon(Icons.file_download),
               label: const Text("Export Excel"),
             ),

@@ -16,7 +16,7 @@ class UpdateChecker {
       if (response.statusCode != 200) return null;
 
       final Map<String, dynamic> releaseData = jsonDecode(response.body);
-      final String latestVersion = (releaseData['tag_name'] as String).replaceAll('v', '').trim(); // Cleans "v1.0.1" to "1.0.1"
+      final String latestVersion = (releaseData['tag_name'] as String).replaceAll('v', '').trim();
 
       if (_isNewerVersion(currentVersion, latestVersion)) {
         final List<dynamic> assets = releaseData['assets'];

@@ -59,7 +59,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
     final status = await getSignupStatus(identifier);
 
-    if (status == 'pending' || status == 'rejected') {
+    if (status == 'pending') {
       throw Exception('Your account is still $status. OTP cannot be sent.');
     }
 

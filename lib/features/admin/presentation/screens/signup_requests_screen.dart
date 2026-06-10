@@ -260,19 +260,18 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("User Management Matrix"),
+          title: const Text("Signup Request Management"),
           bottom: const TabBar(
             tabs: [
               Tab(text: "Pending"),
               Tab(text: "Approved"),
-              Tab(text: "Rejected"),
             ],
           ),
         ),
-        body: TabBarView(children: [_buildGridContent('pending'), _buildGridContent('approved'), _buildGridContent('rejected')]),
+        body: TabBarView(children: [_buildGridContent('pending'), _buildGridContent('approved')]),
       ),
     );
   }
@@ -309,29 +308,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
         return Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) => _applyAllFilters(),
-                decoration: InputDecoration(
-                  hintText: "Global Matrix Search...",
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _applyAllFilters();
-                          },
-                        )
-                      : null,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-            ),
             Expanded(
               child: _filteredRequests.isEmpty
                   ? const Center(child: Text("No records match your filters."))
@@ -339,131 +315,104 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       scrollDirection: Axis.vertical,
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: Table(
-                          defaultColumnWidth: const FixedColumnWidth(150),
-                          columnWidths: const {
-                            0: FixedColumnWidth(160),
-                            1: FixedColumnWidth(110),
-                            2: FixedColumnWidth(120),
-                            3: FixedColumnWidth(130),
-                            4: FixedColumnWidth(120),
-                            5: FixedColumnWidth(120),
-                            6: FixedColumnWidth(140),
-                            7: FixedColumnWidth(160),
-                          },
-                          border: TableBorder(
-                            verticalInside: BorderSide(color: Colors.grey.shade300),
-                            horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
-                            bottom: BorderSide(color: Colors.grey.shade300),
-                            left: BorderSide(color: Colors.grey.shade300),
-                            right: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          children: [
-                            TableRow(
-                              decoration: BoxDecoration(color: Colors.grey.shade200),
-                              children: [
-                                _SortableHeader(
-                                  label: "Full Name",
-                                  onSort: () => _onSort(0),
-                                  onFilter: () => _showFilterMenu(0, "Name"),
-                                  isSorted: _sortColumnIndex == 0,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedNameFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Phone",
-                                  onSort: () => _onSort(1),
-                                  onFilter: () => _showFilterMenu(1, "Phone"),
-                                  isSorted: _sortColumnIndex == 1,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedPhoneFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Role",
-                                  onSort: () => _onSort(2),
-                                  onFilter: () => _showFilterMenu(2, "Role"),
-                                  isSorted: _sortColumnIndex == 2,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedRoleFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Cluster",
-                                  onSort: () => _onSort(3),
-                                  onFilter: () => _showFilterMenu(3, "Cluster"),
-                                  isSorted: _sortColumnIndex == 3,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedClusterFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Village",
-                                  onSort: () => _onSort(4),
-                                  onFilter: () => _showFilterMenu(4, "Village"),
-                                  isSorted: _sortColumnIndex == 4,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedVillageFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "School",
-                                  onSort: () => _onSort(5),
-                                  onFilter: () => _showFilterMenu(5, "School"),
-                                  isSorted: _sortColumnIndex == 5,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedSchoolFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Qualification",
-                                  onSort: () => _onSort(6),
-                                  onFilter: () => _showFilterMenu(6, "Qualification"),
-                                  isSorted: _sortColumnIndex == 6,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedQualificationFilters != null,
-                                ),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                                  child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Table(
+                            defaultColumnWidth: const IntrinsicColumnWidth(),
+                            border: TableBorder(
+                              verticalInside: BorderSide(color: Colors.grey.shade300),
+                              horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                              bottom: BorderSide(color: Colors.grey.shade300),
+                              left: BorderSide(color: Colors.grey.shade300),
+                              right: BorderSide(color: Colors.grey.shade300),
                             ),
-                            ..._filteredRequests.map((req) {
-                              final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                              return TableRow(
+                            children: [
+                              TableRow(
+                                decoration: BoxDecoration(color: Colors.grey.shade200),
                                 children: [
-                                  _DataCell(text: currentName, isBold: true),
-                                  _DataCell(text: req['phone']?.toString() ?? "-"),
-                                  _DataCell(text: req['role']?.toString() ?? "-"),
-                                  _DataCell(text: req['cluster']?.toString() ?? "-"),
-                                  _DataCell(text: req['village']?.toString() ?? "-"),
-                                  _DataCell(text: req['school']?.toString() ?? "-"),
-                                  _DataCell(text: req['qualification']?.toString() ?? "-"),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    child: statusFilter == 'pending'
-                                        ? Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Expanded(
-                                                child: SizedBox(
+                                  _SortableHeader(
+                                    label: "Full Name",
+                                    onSort: () => _onSort(0),
+                                    onFilter: () => _showFilterMenu(0, "Name"),
+                                    isSorted: _sortColumnIndex == 0,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedNameFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Phone",
+                                    onSort: () => _onSort(1),
+                                    onFilter: () => _showFilterMenu(1, "Phone"),
+                                    isSorted: _sortColumnIndex == 1,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedPhoneFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Role",
+                                    onSort: () => _onSort(2),
+                                    onFilter: () => _showFilterMenu(2, "Role"),
+                                    isSorted: _sortColumnIndex == 2,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedRoleFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Cluster",
+                                    onSort: () => _onSort(3),
+                                    onFilter: () => _showFilterMenu(3, "Cluster"),
+                                    isSorted: _sortColumnIndex == 3,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedClusterFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Village",
+                                    onSort: () => _onSort(4),
+                                    onFilter: () => _showFilterMenu(4, "Village"),
+                                    isSorted: _sortColumnIndex == 4,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedVillageFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "School",
+                                    onSort: () => _onSort(5),
+                                    onFilter: () => _showFilterMenu(5, "School"),
+                                    isSorted: _sortColumnIndex == 5,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedSchoolFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Qualification",
+                                    onSort: () => _onSort(6),
+                                    onFilter: () => _showFilterMenu(6, "Qualification"),
+                                    isSorted: _sortColumnIndex == 6,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedQualificationFilters != null,
+                                  ),
+                                  const Padding(
+                                    // FIX #2: Increased padding to match dynamic header expansion safely
+                                    padding: EdgeInsets.only(left: 16, right: 24, top: 12, bottom: 12),
+                                    child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              ..._filteredRequests.map((req) {
+                                final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                                return TableRow(
+                                  children: [
+                                    _DataCell(text: currentName, isBold: true),
+                                    _DataCell(text: req['phone']?.toString() ?? "-"),
+                                    _DataCell(text: req['role']?.toString() ?? "-"),
+                                    _DataCell(text: req['cluster']?.toString() ?? "-"),
+                                    _DataCell(text: req['village']?.toString() ?? "-"),
+                                    _DataCell(text: req['school']?.toString() ?? "-"),
+                                    _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      child: statusFilter == 'pending'
+                                          ? Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
                                                   height: 32,
-                                                  child: ElevatedButton(
-                                                    onPressed: _isLoading
-                                                        ? null
-                                                        : () => _updateStatus(req['id'], req['first_name'], 'rejected'),
-                                                    style: OutlinedButton.styleFrom(
-                                                      backgroundColor: Colors.red,
-                                                      foregroundColor: Colors.white,
-                                                      padding: EdgeInsets.zero,
-                                                    ),
-                                                    child: const Text(
-                                                      "Reject",
-                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: SizedBox(
-                                                  height: 32,
+                                                  width: 75,
                                                   child: ElevatedButton(
                                                     onPressed: _isLoading
                                                         ? null
@@ -472,6 +421,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                                       backgroundColor: Colors.green,
                                                       foregroundColor: Colors.white,
                                                       padding: EdgeInsets.zero,
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                                     ),
                                                     child: const Text(
                                                       "Approve",
@@ -479,25 +429,26 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                                     ),
                                                   ),
                                                 ),
+                                              ],
+                                            )
+                                          : SizedBox(
+                                              height: 32,
+                                              width: 90,
+                                              child: TextButton.icon(
+                                                onPressed: _isLoading
+                                                    ? null
+                                                    : () => _updateStatus(req['id'], req['first_name'], 'pending'),
+                                                icon: const Icon(Icons.refresh, size: 14),
+                                                label: const Text("Reset", style: TextStyle(fontSize: 12)),
+                                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
                                               ),
-                                            ],
-                                          )
-                                        : SizedBox(
-                                            height: 32,
-                                            child: TextButton.icon(
-                                              onPressed: _isLoading
-                                                  ? null
-                                                  : () => _updateStatus(req['id'], req['first_name'], 'pending'),
-                                              icon: const Icon(Icons.refresh, size: 14),
-                                              label: const Text("Reset", style: TextStyle(fontSize: 12)),
-                                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
                                             ),
-                                          ),
-                                  ),
-                                ],
-                              );
-                            }),
-                          ],
+                                    ),
+                                  ],
+                                );
+                              }),
+                            ],
+                          ),
                         ),
                       ),
                     ),

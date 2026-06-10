@@ -24,7 +24,7 @@ Future<void> main() async {
   await _setupForegroundNotifications();
 
   try {
-    await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey, debug: true);
+    await Supabase.initialize(url: _supabaseUrl, publishableKey: _supabaseAnonKey, debug: true);
   } catch (e) {
     debugPrint("Supabase Initialization Error: $e");
   }

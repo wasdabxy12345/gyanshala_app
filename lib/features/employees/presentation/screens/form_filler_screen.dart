@@ -143,13 +143,10 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   void _handleNextStep() {
     if (_rootFormKey.currentState != null && _rootFormKey.currentState!.validate()) {
-      // Explicitly save the current field's form state to update _formAnswers
       _rootFormKey.currentState!.save();
 
       int nextIndex = _currentPageIndex + 1;
       final List<String> fieldsToClear = [];
-
-      // Pre-calculate target step indexes cleanly
       while (nextIndex < _questions.length && !_shouldShowQuestion(_questions[nextIndex])) {
         fieldsToClear.add(_questions[nextIndex]['id'].toString());
         nextIndex++;
@@ -157,7 +154,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
       if (nextIndex <= _questions.length) {
         setState(() {
-          // Purge answers for skipped questions safely after the target is found
           for (var skippedId in fieldsToClear) {
             _formAnswers.remove(skippedId);
             _formAnswers.remove("${skippedId}_other_text");
@@ -175,7 +171,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
   }
 
   void _handlePreviousStep() {
-    // Clear validation flags safely before shifting context indices
     _rootFormKey.currentState?.reset();
 
     int prevIndex = _currentPageIndex - 1;
@@ -275,11 +270,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
       }
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
         title: Text(widget.formTitle),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
         bottom: _isLoading || _questions.isEmpty
             ? null
             : PreferredSize(

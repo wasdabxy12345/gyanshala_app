@@ -317,6 +317,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   void _showConfigureQuestionDialog({required String type, Map<String, dynamic>? existingQuestion, int? editIndex}) {
     final isEditing = existingQuestion != null && editIndex != null;
     final questionController = TextEditingController(text: isEditing ? existingQuestion['question'] : '');
+    final questionFocusNode = FocusNode();
     String defaultSection = 'General';
     if (!isEditing && _currentQuestions.isNotEmpty) {
       defaultSection = _currentQuestions.last['section'] ?? 'General';
@@ -400,6 +401,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             flex: 4,
                             child: TextField(
                               controller: questionController,
+                              focusNode: questionFocusNode,
                               decoration: const InputDecoration(labelText: 'Question Text *', border: OutlineInputBorder()),
                             ),
                           ),
@@ -587,11 +589,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                               filtratedPriorQuestions.isEmpty
                                   ? const Text(
                                       "No prior fields to depend on.",
-                                      style: TextStyle(color: Colors.amber, fontSize: 12),
+                                      style: TextStyle(color: Colors.yellow, fontSize: 12),
                                     )
                                   : Column(
                                       children: [
                                         DropdownButtonFormField<String>(
+                                          isExpanded: true,
                                           initialValue:
                                               filtratedPriorQuestions.any(
                                                 (e) => e['id'].toString() == selectedDependentQuestionId,
@@ -618,6 +621,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                         ),
                                         const SizedBox(height: 8),
                                         Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Expanded(
                                               flex: 3,
@@ -638,8 +642,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                 }),
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
-                                            if (skipOperator != 'filled')
+                                            if (skipOperator != 'filled') ...[
+                                              const SizedBox(width: 8),
                                               Expanded(
                                                 flex: 4,
                                                 child: Builder(
@@ -683,6 +687,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                                   },
                                                 ),
                                               ),
+                                            ],
                                           ],
                                         ),
                                       ],
@@ -696,7 +701,13 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                 ),
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                TextButton(
+                  onPressed: () {
+                    questionFocusNode.dispose();
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Cancel"),
+                ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () {
@@ -717,6 +728,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                       existingId: isEditing ? existingQuestion['id']?.toString() : null,
                       allowOther: allowOtherOption,
                     );
+                    questionFocusNode.dispose();
                     Navigator.pop(context);
                   },
                   child: Text(isEditing ? "Save Changes" : "Add Field", style: const TextStyle(color: Colors.white)),
@@ -762,8 +774,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       'operator': skipOperator,
       'value': skipOperator == 'filled' ? '' : skipValue,
     };
-
-    // --- UPDATED LOGIC FOR FIELD SECTIONS ---
     String targetSection = section.isEmpty ? (_sections.isNotEmpty ? _sections.last : 'General') : section;
 
     if (_sectionConditions.containsKey(targetSection) && _sectionConditions[targetSection]?['enabled'] == true) {
@@ -808,11 +818,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FC),
       appBar: AppBar(
         title: Text("Building: ${widget.formTitle}"),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
         actions: [
           if (_isLoading)
             const Padding(
@@ -820,12 +827,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               child: Center(child: CircularProgressIndicator(color: Colors.white)),
             )
           else
-            TextButton.icon(
-              onPressed: _saveFormStructureToSupabase,
-              icon: const Icon(Icons.save, color: Colors.white),
-              label: const Text(
-                "Save Form",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: ElevatedButton.icon(
+                onPressed: _saveFormStructureToSupabase,
+                icon: const Icon(Icons.save),
+                label: const Text("Save Form"),
               ),
             ),
         ],
@@ -879,9 +886,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                   )
                 : ListView(
                     padding: const EdgeInsets.all(16.0),
-                    // 1. Loop through your explicit list of sections instead of the dynamic key map
                     children: _sections.map((sectionName) {
-                      // 2. Fetch the question indices mapped for this section
                       final globalIndexes = groupedQuestions[sectionName] ?? [];
 
                       return DragTarget<int>(
@@ -940,7 +945,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                 ],
                               ),
                               childrenPadding: const EdgeInsets.all(8.0),
-                              // 3. Conditional rendering block for managing empty sections smoothly
                               children: globalIndexes.isEmpty
                                   ? [
                                       Padding(
@@ -1075,7 +1079,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            // New sections can depend on any question currently on the canvas
             final filtratedPriorQuestions = _currentQuestions.toList();
 
             return AlertDialog(
@@ -1095,7 +1098,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         decoration: const InputDecoration(labelText: "Section / Group Name *", border: OutlineInputBorder()),
                       ),
                       const Divider(height: 28),
-                      // --- Whole Section Visibility Block inside Creation window ---
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -1231,23 +1233,16 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                   onPressed: () {
                     final sectionName = textController.text.trim();
                     if (sectionName.isEmpty) return;
-
-                    // Define the skip logic block exactly as expected by your framework schema
                     final sectionSkipBlock = {
                       'enabled': enableSectionSkip && selectedSectionDepId != null,
                       'dependent_question_id': selectedSectionDepId,
                       'operator': sectionOperator,
                       'value': sectionOperator == 'filled' ? '' : sectionValueController.text.trim(),
                     };
-
-                    // --- UPDATED EXPLICIT STATE UPDATE ---
                     setState(() {
-                      // 1. Store the empty section name if it doesn't exist yet
                       if (!_sections.contains(sectionName)) {
                         _sections.add(sectionName);
                       }
-
-                      // 2. Map the visibility configuration conditions to this section key
                       _sectionConditions[sectionName] = sectionSkipBlock;
                     });
 
@@ -1541,8 +1536,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     setState(() {
       final movedItem = _currentQuestions[draggedGlobalIdx];
       movedItem['section'] = targetSectionName;
-
-      // Direct lookup from the master map tracker instead of scanning siblings
       final config = Map<String, dynamic>.from(movedItem['field_config'] ?? {});
       if (_sectionConditions.containsKey(targetSectionName) && _sectionConditions[targetSectionName]?['enabled'] == true) {
         config['section_skip_logic'] = _sectionConditions[targetSectionName];
@@ -1566,8 +1559,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     setState(() {
       final item = _currentQuestions.removeAt(sourceGlobalIdx);
       item['section'] = currentSection;
-
-      // Direct lookup from the master map tracker here as well
       final config = Map<String, dynamic>.from(item['field_config'] ?? {});
       if (_sectionConditions.containsKey(currentSection) && _sectionConditions[currentSection]?['enabled'] == true) {
         config['section_skip_logic'] = _sectionConditions[currentSection];

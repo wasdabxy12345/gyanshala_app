@@ -193,10 +193,8 @@ class StudentController extends StateNotifier<bool> {
       final platformFile = result.files.first;
       List<int> bytes;
       if (platformFile.bytes != null) {
-        // This path runs on Web and small desktop uploads
         bytes = platformFile.bytes!;
       } else if (platformFile.path != null) {
-        // This path runs on Mobile/Desktop
         bytes = File(platformFile.path!).readAsBytesSync();
       } else {
         throw Exception("Could not read file data contents.");

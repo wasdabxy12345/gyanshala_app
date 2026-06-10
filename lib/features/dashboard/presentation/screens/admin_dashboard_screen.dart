@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
@@ -17,8 +16,6 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("GS + UNM Admin"),
         centerTitle: true,
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -40,7 +37,7 @@ class AdminHomeContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> tiles = [
       {
-        "title": "Approve Signups",
+        "title": "Manage Signup Requests",
         "icon": Icons.how_to_reg,
         "color": Colors.red,
         "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupRequestsScreen())),

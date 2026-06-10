@@ -37,7 +37,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
         ).showSnackBar(SnackBar(content: Text("Error syncing forms collection: $e"), backgroundColor: Colors.red));
       }
     } finally {
-      // FIXED: Corrected from 'final' to 'finally'
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -95,22 +94,17 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
   void _createNewForm() {
     final titleController = TextEditingController();
-    final messenger = ScaffoldMessenger.of(context);
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text(
-          "Create New Form Document",
+          "Create New Form",
           style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
         ),
         content: TextField(
           controller: titleController,
-          decoration: const InputDecoration(
-            labelText: "Form Evaluation Title *",
-            hintText: "e.g., Student Quality Assessment 2026",
-            border: OutlineInputBorder(),
-          ),
+          decoration: const InputDecoration(hintText: "Enter form title...", border: OutlineInputBorder()),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
@@ -119,35 +113,40 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
             onPressed: () async {
               final text = titleController.text.trim();
               if (text.isEmpty) return;
+
+              // 1. Immediately dismiss the dialog context safely
               Navigator.pop(dialogContext);
 
+              // 2. Set loading state on the primary screen frame
               setState(() => _isLoading = true);
+
               try {
                 final supabase = Supabase.instance.client;
                 final newFormRow = await supabase.from('forms').insert({'title': text}).select('id, title').single();
 
                 await _fetchFormsFromSupabase();
 
-                if (mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          FormBuilderCanvas(formId: newFormRow['id'].toString(), formTitle: newFormRow['title']),
-                    ),
-                  ).then((_) {
-                    if (mounted) _fetchFormsFromSupabase();
-                  });
-                }
+                if (!mounted) return;
+
+                // 3. Navigate straight into the workspace canvas
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FormBuilderCanvas(formId: newFormRow['id'].toString(), formTitle: newFormRow['title']),
+                  ),
+                ).then((_) {
+                  if (mounted) _fetchFormsFromSupabase();
+                });
               } catch (e) {
-                messenger.showSnackBar(
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text("Failed to instantiate form database entry: $e"), backgroundColor: Colors.red),
                 );
               } finally {
                 if (mounted) setState(() => _isLoading = false);
               }
             },
-            child: const Text("Create Document", style: TextStyle(color: Colors.white)),
+            child: const Text("Create Form", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -159,15 +158,13 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Form Management Layout"),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchFormsFromSupabase)],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _formsList.isEmpty
           ? const Center(
-              child: Text("No evaluation forms found. Create one to begin.", style: TextStyle(color: Colors.grey)),
+              child: Text("No forms found", style: TextStyle(color: Colors.grey)),
             )
           : ListView.builder(
               padding: const EdgeInsets.all(16),
