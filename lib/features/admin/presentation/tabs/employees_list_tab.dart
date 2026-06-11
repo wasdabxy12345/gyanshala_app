@@ -326,7 +326,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(20)),
+                      decoration: BoxDecoration(color: Colors.blue.shade50),
                       child: Text(
                         '${_selectedEmployeeIds.length} Selected',
                         style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),

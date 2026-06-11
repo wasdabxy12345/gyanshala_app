@@ -23,7 +23,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-
   @override
   void dispose() {
     _identifierController.dispose();
@@ -32,16 +31,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onLoginPressed() async {
+    FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
     setState(() => _isLoading = true);
-
     try {
       final authRepo = ref.read(authRepositoryProvider);
       final user = await authRepo.login(identifier: _identifierController.text.trim(), password: _passwordController.text);
       final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
       if (!mounted) return;
-
       Widget nextScreen;
       final userRole = UserRole.fromString(user.role);
       switch (userRole) {

@@ -113,11 +113,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
             onPressed: () async {
               final text = titleController.text.trim();
               if (text.isEmpty) return;
-
-              // 1. Immediately dismiss the dialog context safely
               Navigator.pop(dialogContext);
-
-              // 2. Set loading state on the primary screen frame
               setState(() => _isLoading = true);
 
               try {
@@ -127,8 +123,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                 await _fetchFormsFromSupabase();
 
                 if (!mounted) return;
-
-                // 3. Navigate straight into the workspace canvas
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -176,7 +170,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: ListTile(

@@ -421,7 +421,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                                       backgroundColor: Colors.green,
                                                       foregroundColor: Colors.white,
                                                       padding: EdgeInsets.zero,
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                                     ),
                                                     child: const Text(
                                                       "Approve",
@@ -508,13 +507,9 @@ class _SortableHeader extends StatelessWidget {
           ),
           InkWell(
             onTap: onFilter,
-            borderRadius: BorderRadius.circular(4),
             child: Container(
               padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
-              ),
+              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent),
               child: Icon(Icons.filter_alt, size: 16, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),

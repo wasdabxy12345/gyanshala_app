@@ -36,6 +36,57 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     }
   }
 
+  Future<void> _fetchAndPopulateDatabaseOptions({
+    required String tableName,
+    required void Function(void Function()) setModalState,
+    required List<TextEditingController> staticOptionControllers,
+  }) async {
+    // Show a loading dialog matching your Excel processing layout
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue))),
+    );
+
+    try {
+      final supabase = Supabase.instance.client;
+      List<String> fetchedOptions = [];
+
+      if (tableName == 'profiles') {
+        final res = await supabase.from('profiles').select('first_name, last_name');
+        fetchedOptions = res
+            .map((r) => "${r['first_name'] ?? ''} ${r['last_name'] ?? ''}".trim())
+            .where((name) => name.isNotEmpty)
+            .toList();
+      } else {
+        final res = await supabase.from(tableName).select('name').order('name', ascending: true);
+        fetchedOptions = res.map((r) => r['name'].toString().trim()).where((name) => name.isNotEmpty && name != "null").toList();
+      }
+      if (mounted) Navigator.pop(context);
+
+      if (fetchedOptions.isNotEmpty) {
+        setModalState(() {
+          staticOptionControllers.clear();
+          for (final optionText in fetchedOptions) {
+            staticOptionControllers.add(TextEditingController(text: optionText));
+          }
+        });
+      } else {
+        setModalState(() {
+          staticOptionControllers.clear();
+          staticOptionControllers.add(TextEditingController(text: 'No entries found in $tableName'));
+        });
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      debugPrint("Error auto-populating choices from table configuration: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to download lookups: $e"), backgroundColor: Colors.red));
+    }
+  }
+
   Future<void> _loadExistingFormQuestions() async {
     final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     final currentFormId = widget.formId;
@@ -382,12 +433,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             }
 
             return AlertDialog(
-              title: Text(
-                isEditing
-                    ? "Modify ${type.toUpperCase()} Question Parameters"
-                    : "Configure New ${type == 'checkbox_search' ? 'Check box' : type.toUpperCase()} Field",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
-              ),
+              //   title: Text(
+              //     isEditing
+              //         ? "Modify ${type.toUpperCase()} Question Parameters"
+              //         : "Configure New ${type == 'checkbox_search' ? 'Check box' : type.toUpperCase()} Field",
+              //     style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+              //   ),
               content: SizedBox(
                 width: 680,
                 child: SingleChildScrollView(
@@ -460,82 +511,16 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                     }
                                   });
                                 }
+                              } else if (val == 'database') {
+                                await _fetchAndPopulateDatabaseOptions(
+                                  tableName: selectedTable,
+                                  setModalState: setModalState,
+                                  staticOptionControllers: staticOptionControllers,
+                                );
                               }
                             },
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        if (sourceOptionType == 'static' || sourceOptionType == 'excel') ...[
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 220),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: staticOptionControllers.length,
-                              itemBuilder: (context, index) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6.0),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: SizedBox(
-                                          height: 40,
-                                          child: CallbackShortcuts(
-                                            bindings: <ShortcutActivator, VoidCallback>{
-                                              const SingleActivator(LogicalKeyboardKey.keyV, control: true): () =>
-                                                  handleSmartSpreadsheetPaste(index),
-                                              const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () =>
-                                                  handleSmartSpreadsheetPaste(index),
-                                            },
-                                            child: TextField(
-                                              controller: staticOptionControllers[index],
-                                              decoration: InputDecoration(
-                                                labelText: 'Option ${index + 1}',
-                                                border: const OutlineInputBorder(),
-                                                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.remove_circle, color: Colors.red, size: 22),
-                                        onPressed: () {
-                                          if (staticOptionControllers.length > 1) {
-                                            setModalState(() => staticOptionControllers.removeAt(index));
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              TextButton.icon(
-                                icon: const Icon(Icons.add, size: 18),
-                                label: const Text("Add Option Line"),
-                                onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
-                              ),
-                              Flexible(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text("Include 'Other'", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                                    const SizedBox(width: 4),
-                                    Switch(
-                                      value: allowOtherOption,
-                                      activeThumbColor: AppTheme.primaryBlue,
-                                      onChanged: (value) => setModalState(() => allowOtherOption = value),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
                         if (sourceOptionType == 'database') ...[
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
@@ -546,23 +531,101 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                               contentPadding: EdgeInsets.symmetric(horizontal: 10),
                             ),
                             items: const [
-                              DropdownMenuItem(value: 'clusters', child: Text("Clusters (name)")),
-                              DropdownMenuItem(value: 'villages', child: Text("Villages (name)")),
-                              DropdownMenuItem(value: 'schools', child: Text("Schools (name)")),
-                              DropdownMenuItem(value: 'profiles', child: Text("Profiles (Name Structure)")),
+                              DropdownMenuItem(value: 'clusters', child: Text("Clusters")),
+                              DropdownMenuItem(value: 'villages', child: Text("Villages")),
+                              DropdownMenuItem(value: 'schools', child: Text("Schools")),
+                              DropdownMenuItem(value: 'profiles', child: Text("Profiles")),
                             ],
-                            onChanged: (val) => setModalState(() {
-                              if (val != null) selectedTable = val;
-                            }),
+                            onChanged: (val) async {
+                              if (val != null) {
+                                setModalState(() {
+                                  selectedTable = val;
+                                });
+                                await _fetchAndPopulateDatabaseOptions(
+                                  tableName: val,
+                                  setModalState: setModalState,
+                                  staticOptionControllers: staticOptionControllers,
+                                );
+                              }
+                            },
                           ),
                         ],
+                        const SizedBox(height: 13),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 220),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: staticOptionControllers.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: SizedBox(
+                                        height: 40,
+                                        child: CallbackShortcuts(
+                                          bindings: <ShortcutActivator, VoidCallback>{
+                                            const SingleActivator(LogicalKeyboardKey.keyV, control: true): () =>
+                                                handleSmartSpreadsheetPaste(index),
+                                            const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () =>
+                                                handleSmartSpreadsheetPaste(index),
+                                          },
+                                          child: TextField(
+                                            controller: staticOptionControllers[index],
+                                            decoration: InputDecoration(
+                                              labelText: 'Option ${index + 1}',
+                                              border: const OutlineInputBorder(),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle, color: Colors.red, size: 22),
+                                      onPressed: () {
+                                        if (staticOptionControllers.length > 1) {
+                                          setModalState(() => staticOptionControllers.removeAt(index));
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton.icon(
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text("Add Option Line"),
+                              onPressed: () => setModalState(() => staticOptionControllers.add(TextEditingController())),
+                            ),
+                            Flexible(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text("Include 'Other'", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                                  const SizedBox(width: 4),
+                                  Switch(
+                                    value: allowOtherOption,
+                                    activeThumbColor: AppTheme.primaryBlue,
+                                    onChanged: (value) => setModalState(() => allowOtherOption = value),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                       const Divider(height: 28),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.grey.shade300),
                         ),
                         child: Column(
@@ -731,7 +794,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                     questionFocusNode.dispose();
                     Navigator.pop(context);
                   },
-                  child: Text(isEditing ? "Save Changes" : "Add Field", style: const TextStyle(color: Colors.white)),
+                  child: Text(isEditing ? "Save Changes" : "Add Question", style: const TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -840,7 +903,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       body: Row(
         children: [
           Container(
-            width: 180,
+            width: 130,
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border(right: BorderSide(color: Colors.grey.shade300)),
@@ -849,26 +912,25 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(12.0),
+                  padding: EdgeInsets.all(13.0),
                   child: Text(
-                    "COMPONENTS",
+                    "Add a question",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
                   ),
                 ),
-                _buildToolButton(icon: Icons.text_fields, label: "Text Area", type: "text"),
-                _buildToolButton(icon: Icons.radio_button_checked, label: "Radio Select", type: "radio"),
-                _buildToolButton(icon: Icons.check_box, label: "Check Box List", type: "checkbox_search"),
+                _buildToolButton(icon: Icons.text_fields, label: "Text", type: "text"),
+                _buildToolButton(icon: Icons.radio_button_checked, label: "Radio", type: "radio"),
+                _buildToolButton(icon: Icons.check_box, label: "Check Box", type: "checkbox_search"),
                 const Divider(height: 24),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 13.0),
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.create_new_folder, size: 16, color: AppTheme.primaryBlue),
+                    icon: const Icon(Icons.create_new_folder, color: AppTheme.primaryBlue),
                     label: const Text("New Section", style: TextStyle(color: AppTheme.primaryBlue, fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
                       side: const BorderSide(color: AppTheme.primaryBlue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _createNewSectionDialog(),
                   ),
@@ -879,10 +941,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           Expanded(
             child: _currentQuestions.isEmpty
                 ? const Center(
-                    child: Text(
-                      "Your canvas is currently blank. Click a component on the left panel to begin.",
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                    child: Text("No Questions found.", style: TextStyle(color: Colors.grey)),
                   )
                 : ListView(
                     padding: const EdgeInsets.all(16.0),
@@ -905,7 +964,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             margin: const EdgeInsets.only(bottom: 16.0),
                             elevation: isOverSection ? 4 : 1,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
                               side: BorderSide(
                                 color: isOverSection ? AppTheme.primaryBlue : Colors.grey.shade300,
                                 width: isOverSection ? 2.0 : 1.0,
@@ -913,11 +971,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                             ),
                             child: ExpansionTile(
                               initiallyExpanded: true,
-                              collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.grey.shade300),
-                              ),
                               title: Row(
                                 children: [
                                   Expanded(
@@ -1007,7 +1060,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                         axis: Axis.vertical,
                                         feedback: Material(
                                           elevation: 6,
-                                          borderRadius: BorderRadius.circular(8),
                                           child: SizedBox(width: MediaQuery.of(context).size.width * 0.5, child: cardItem),
                                         ),
                                         childWhenDragging: Opacity(opacity: 0.3, child: cardItem),
@@ -1056,10 +1108,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
         ),
         onPressed: () => _showConfigureQuestionDialog(type: type),
       ),
@@ -1102,7 +1150,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.blueGrey.shade50,
-                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.blueGrey.shade200),
                         ),
                         child: Column(
@@ -1300,7 +1347,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.blueGrey.shade50,
-                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.blueGrey.shade200),
                         ),
                         child: Column(

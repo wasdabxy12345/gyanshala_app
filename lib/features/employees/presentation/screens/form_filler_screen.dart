@@ -20,6 +20,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
   final List<Map<String, dynamic>> _questions = [];
   final Map<String, dynamic> _formAnswers = {};
   final Map<String, List<String>> _resolvedOptions = {};
+  final Map<String, String> _searchQueries = {};
 
   final PageController _pageController = PageController();
   int _currentPageIndex = 0;
@@ -54,7 +55,9 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
         if (config['type'] == 'radio' || config['type'] == 'checkbox_search') {
           if (config.containsKey('options')) {
-            _resolvedOptions[qId] = List<String>.from(config['options']);
+            final List<String> staticOptions = List<String>.from(config['options']);
+            staticOptions.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            _resolvedOptions[qId] = staticOptions;
           } else if (config.containsKey('datasource')) {
             _resolvedOptions[qId] = await _fetchDropdownLookup(config['datasource']);
           }
@@ -82,10 +85,12 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
           query = query.eq(ds['filter_column'], ds['filter_value']);
         }
         final res = await query;
-        return res.map((r) => "${r['first_name'] ?? ''} ${r['last_name'] ?? ''}".trim()).toList();
+        final List<String> profileNames = res.map((r) => "${r['first_name'] ?? ''} ${r['last_name'] ?? ''}".trim()).toList();
+        profileNames.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        return profileNames;
       } else {
         final String labelCol = ds['label_column'] ?? 'name';
-        final res = await supabase.from(tableName).select(labelCol).order(labelCol);
+        final res = await supabase.from(tableName).select(labelCol).order(labelCol, ascending: true);
         return res.map((r) => r[labelCol].toString()).toList();
       }
     } catch (e) {
@@ -319,13 +324,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                           child: Card(
                             elevation: 2,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20.0),
-                              child: SingleChildScrollView(
-                                key: ValueKey('scroll_${_questions[index]['id']}'),
-                                child: _buildDynamicField(_questions[index]),
-                              ),
-                            ),
+                            child: Padding(padding: const EdgeInsets.all(20.0), child: _buildDynamicField(_questions[index])),
                           ),
                         );
                       },
@@ -388,6 +387,32 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     );
   }
 
+  Widget _buildSearchField(String qId, String placeholder) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: TextField(
+        key: ValueKey('search_input_$qId'),
+        decoration: InputDecoration(
+          hintText: placeholder,
+          prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+          suffixIcon: _searchQueries[qId] != null && _searchQueries[qId]!.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.cancel, size: 18, color: Colors.grey),
+                  onPressed: () => setState(() => _searchQueries.remove(qId)),
+                )
+              : null,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+        ),
+        onChanged: (text) => setState(() {
+          _searchQueries[qId] = text;
+        }),
+      ),
+    );
+  }
+
   Widget _buildDynamicField(Map<String, dynamic> q) {
     final String qId = q['id'].toString();
     final String label = q['question'] ?? '';
@@ -396,6 +421,10 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     final String type = config['type'] ?? 'text';
     final bool allowOther = config['allow_other'] ?? false;
     const String otherChoiceString = "Other (Please specify)";
+
+    final currentQuery = _searchQueries[qId]?.toLowerCase() ?? '';
+
+    // 1. Fixed Header Element: Contains the Question Text and Required Asterisk
     final fieldLabel = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Wrap(
@@ -405,11 +434,11 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         ],
       ),
     );
+
     switch (type) {
       case 'text':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          key: ValueKey('text_container_$qId'),
           children: [
             fieldLabel,
             TextFormField(
@@ -427,12 +456,19 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             ),
           ],
         );
+
       case 'radio':
         final rawOptions = _resolvedOptions[qId] ?? [];
         final List<String> options = List<String>.from(rawOptions);
         if (allowOther && !options.contains(otherChoiceString)) {
           options.add(otherChoiceString);
         }
+
+        final filteredOptions = options.where((opt) {
+          if (currentQuery.isEmpty) return true;
+          return opt.toLowerCase().contains(currentQuery);
+        }).toList();
+
         final String otherTextKey = "${qId}_other_text";
         return FormField<String>(
           key: ValueKey('radio_formfield_$qId'),
@@ -454,56 +490,80 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
           },
           builder: (FormFieldState<String> state) {
             final isOtherSelected = state.value == otherChoiceString;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // FIXED ITEMS AT THE TOP
                 fieldLabel,
-                RadioGroup<String>(
-                  groupValue: state.value,
-                  onChanged: (String? val) {
-                    state.didChange(val);
-                    if (val == otherChoiceString) {
-                      _formAnswers[qId] = _formAnswers[otherTextKey] ?? '';
-                    } else {
-                      _formAnswers[qId] = val;
-                    }
-                  },
-                  child: Column(
-                    children: options.map((opt) {
-                      return Card(
-                        key: ValueKey('radio_card_${qId}_$opt'),
-                        color: state.value == opt ? AppTheme.lightBlue : Colors.white,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
+                _buildSearchField(qId, "Search options..."),
+                const SizedBox(height: 4),
+
+                // SCROLLABLE AREA FOR OPTIONS ONLY
+                Expanded(
+                  child: SingleChildScrollView(
+                    key: ValueKey('scroll_options_$qId'),
+                    child: Column(
+                      children: [
+                        RadioGroup<String>(
+                          groupValue: state.value,
+                          onChanged: (String? val) {
+                            state.didChange(val);
+                            if (val == otherChoiceString) {
+                              _formAnswers[qId] = _formAnswers[otherTextKey] ?? '';
+                            } else {
+                              _formAnswers[qId] = val;
+                            }
+                          },
+                          child: Column(
+                            children: filteredOptions.isEmpty
+                                ? [
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                                      child: Text("No options match your query.", style: TextStyle(color: Colors.grey)),
+                                    ),
+                                  ]
+                                : filteredOptions.map((opt) {
+                                    return Card(
+                                      key: ValueKey('radio_card_${qId}_$opt'),
+                                      color: state.value == opt ? AppTheme.lightBlue : Colors.white,
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
+                                      ),
+                                      child: RadioListTile<String>(
+                                        title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
+                                        value: opt,
+                                      ),
+                                    );
+                                  }).toList(),
+                          ),
                         ),
-                        child: RadioListTile<String>(
-                          title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
-                          value: opt,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                if (isOtherSelected)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                    child: TextFormField(
-                      key: ValueKey('radio_other_input_$qId'),
-                      initialValue: _formAnswers[otherTextKey],
-                      decoration: const InputDecoration(
-                        labelText: "Please specify custom response *",
-                        hintText: "Type details here...",
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      onChanged: (text) {
-                        _formAnswers[otherTextKey] = text;
-                      },
+                        if (isOtherSelected)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                            child: TextFormField(
+                              key: ValueKey('radio_other_input_$qId'),
+                              initialValue: _formAnswers[otherTextKey],
+                              decoration: const InputDecoration(
+                                labelText: "Please specify custom response *",
+                                hintText: "Type details here...",
+                                border: OutlineInputBorder(),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
+                              onChanged: (text) {
+                                _formAnswers[otherTextKey] = text;
+                              },
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                ),
+
+                // FIXED ERROR BOX AT THE BOTTOM
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
@@ -513,12 +573,18 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             );
           },
         );
+
       case 'checkbox_search':
         final rawOptions = _resolvedOptions[qId] ?? [];
         final List<String> options = List<String>.from(rawOptions);
         if (allowOther && !options.contains(otherChoiceString)) {
           options.add(otherChoiceString);
         }
+
+        final filteredOptions = options.where((opt) {
+          if (currentQuery.isEmpty) return true;
+          return opt.toLowerCase().contains(currentQuery);
+        }).toList();
 
         _formAnswers[qId] ??= <String>[];
         final String otherTextKey = "${qId}_other_text";
@@ -552,57 +618,80 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // FIXED ITEMS AT THE TOP
                 fieldLabel,
+                _buildSearchField(qId, "Search and filter listings..."),
+                const SizedBox(height: 4),
                 const Text("Select all that apply:", style: TextStyle(color: Colors.grey, fontSize: 13)),
                 const SizedBox(height: 12),
-                Column(
-                  children: options.map((opt) {
-                    final isChecked = selectedItems.contains(opt);
-                    return Card(
-                      key: ValueKey('checkbox_card_${qId}_$opt'),
-                      color: isChecked ? const Color(0xFFE6F7FF) : Colors.white,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: isChecked ? AppTheme.primaryBlue : Colors.grey.shade300),
-                      ),
-                      child: CheckboxListTile(
-                        title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        value: isChecked,
-                        controlAffinity: ListTileControlAffinity.trailing,
-                        activeColor: AppTheme.primaryBlue,
-                        onChanged: (bool? checked) {
-                          final updatedList = List<String>.from(selectedItems);
-                          if (checked == true) {
-                            updatedList.add(opt);
-                          } else {
-                            updatedList.remove(opt);
-                          }
-                          state.didChange(updatedList);
-                          _formAnswers[qId] = updatedList;
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
-                if (isOtherSelected)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                    child: TextFormField(
-                      key: ValueKey('checkbox_other_input_$qId'),
-                      initialValue: _formAnswers[otherTextKey],
-                      decoration: const InputDecoration(
-                        labelText: "Please specify custom details *",
-                        hintText: "Type details here...",
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                      onChanged: (text) {
-                        _formAnswers[otherTextKey] = text;
-                      },
+
+                // SCROLLABLE AREA FOR OPTIONS ONLY
+                Expanded(
+                  child: SingleChildScrollView(
+                    key: ValueKey('scroll_options_$qId'),
+                    child: Column(
+                      children: [
+                        Column(
+                          children: filteredOptions.isEmpty
+                              ? [
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 16.0),
+                                    child: Text("No parameters match your filter.", style: TextStyle(color: Colors.grey)),
+                                  ),
+                                ]
+                              : filteredOptions.map((opt) {
+                                  final isChecked = selectedItems.contains(opt);
+                                  return Card(
+                                    key: ValueKey('checkbox_card_${qId}_$opt'),
+                                    color: isChecked ? const Color(0xFFE6F7FF) : Colors.white,
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: BorderSide(color: isChecked ? AppTheme.primaryBlue : Colors.grey.shade300),
+                                    ),
+                                    child: CheckboxListTile(
+                                      title: Text(opt, style: const TextStyle(fontWeight: FontWeight.w500)),
+                                      value: isChecked,
+                                      controlAffinity: ListTileControlAffinity.trailing,
+                                      activeColor: AppTheme.primaryBlue,
+                                      onChanged: (bool? checked) {
+                                        final updatedList = List<String>.from(selectedItems);
+                                        if (checked == true) {
+                                          updatedList.add(opt);
+                                        } else {
+                                          updatedList.remove(opt);
+                                        }
+                                        state.didChange(updatedList);
+                                        _formAnswers[qId] = updatedList;
+                                      },
+                                    ),
+                                  );
+                                }).toList(),
+                        ),
+                        if (isOtherSelected)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                            child: TextFormField(
+                              key: ValueKey('checkbox_other_input_$qId'),
+                              initialValue: _formAnswers[otherTextKey],
+                              decoration: const InputDecoration(
+                                labelText: "Please specify custom details *",
+                                hintText: "Type details here...",
+                                border: OutlineInputBorder(),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
+                              onChanged: (text) {
+                                _formAnswers[otherTextKey] = text;
+                              },
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                ),
+
+                // FIXED ERROR BOX AT THE BOTTOM
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
@@ -624,8 +713,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.location_off, color: Colors.red, size: 28),
             Spacer(),
             Text("Location Needed", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -667,8 +756,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
+        title: const Row(
+          children: [
             Icon(Icons.gps_off, color: Colors.yellow, size: 28),
             Spacer(),
             Text("GPS Switched Off", style: TextStyle(fontWeight: FontWeight.bold)),

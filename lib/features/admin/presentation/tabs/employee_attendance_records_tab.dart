@@ -149,7 +149,6 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
         padding: EdgeInsets.zero,
         minimumSize: const Size(0, 36),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
       onPressed: action,
       child: Text(
@@ -163,13 +162,11 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
   Widget _dateInkWell({required BuildContext context, required DateTime date, required bool isStart}) {
     return InkWell(
       onTap: () => _selectSingleDate(context, isStart: isStart),
-      borderRadius: BorderRadius.circular(6),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
+        padding: const EdgeInsets.symmetric(vertical: 3.0, horizontal: 2.0),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.blue.shade200, width: 1),
-          borderRadius: BorderRadius.circular(6),
           color: Colors.white,
         ),
         child: Text(

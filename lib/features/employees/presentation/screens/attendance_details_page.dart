@@ -26,7 +26,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
             .gte('recorded_at', '$dateString 00:00:00+00')
             .lte('recorded_at', '$dateString 23:59:59+00')
             .order('recorded_at', ascending: true),
-        supabase.from('schools').select('id, name, latitude, longitude, radius_meters'),
+        supabase.from('schools').select('id, name, latitude, longitude, radius'),
       ]);
 
       final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
@@ -87,7 +87,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
     for (var school in schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
-      final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
+      final double radius = double.tryParse(school['radius'].toString()) ?? 50.0;
 
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
@@ -301,7 +301,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
-      final double radius = double.tryParse(school['radius_meters'].toString()) ?? 50.0;
+      final double radius = double.tryParse(school['radius'].toString()) ?? 50.0;
 
       if (sLat != null && sLng != null) {
         final schoolPoint = LatLng(sLat, sLng);
