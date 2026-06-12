@@ -45,7 +45,7 @@ class AdminHomeContent extends StatelessWidget {
       {
         "title": "Employee List and Attendance",
         "icon": Icons.groups,
-        "color": Colors.yellow,
+        "color": Colors.amber,
         "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmployeeHubPage())),
       },
       {

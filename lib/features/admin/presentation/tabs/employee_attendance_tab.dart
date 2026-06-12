@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
+import 'package:gyanshala_app/features/employees/presentation/widgets/employee_attendance_table.dart';
 import 'package:intl/intl.dart';
 
-import '../../../employees/presentation/widgets/employee_attendance_report.dart';
-
-class EmployeeAttendanceRecordsTab extends StatelessWidget {
+class EmployeeAttendanceTab extends StatelessWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
 
-  const EmployeeAttendanceRecordsTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
+  const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
 
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? range.start : range.end,
-      firstDate: DateTime(2024),
+      firstDate: DateTime(2025),
       lastDate: isStart ? range.end : DateTime.now(),
     );
 
@@ -34,17 +34,16 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1),
           child: Row(
             children: [
               Expanded(
-                flex: 7,
                 child: Row(
                   children: [
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_left, size: 20),
+                      icon: const Icon(Icons.arrow_left, size: 37),
                       onPressed: () {
                         final newEnd = range.start.subtract(const Duration(days: 1));
                         final newStart = newEnd.subtract(const Duration(days: 6));
@@ -62,7 +61,7 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_right, size: 20),
+                      icon: const Icon(Icons.arrow_right, size: 37),
                       onPressed: () {
                         final newStart = range.end.add(const Duration(days: 1));
                         final newEnd = newStart.add(const Duration(days: 6));
@@ -73,35 +72,31 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(
-                flex: 10,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _dateInkWell(context: context, date: range.start, isStart: true),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 2.0),
-                        child: Text(
-                          "to",
-                          style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      _dateInkWell(context: context, date: range.end, isStart: false),
-                    ],
+              Center(
+                child: Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 37),
+                        _dateInkWell(context: context, date: range.start, isStart: true),
+                        const SizedBox(width: 13),
+                        Text("to"),
+                        const SizedBox(width: 13),
+                        _dateInkWell(context: context, date: range.end, isStart: false),
+                        const SizedBox(width: 37),
+                      ],
+                    ),
                   ),
                 ),
               ),
               Expanded(
-                flex: 7,
                 child: Row(
                   children: [
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_left, size: 20),
+                      icon: const Icon(Icons.arrow_left, size: 37),
                       onPressed: () {
                         final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
                         final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
@@ -119,7 +114,7 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
                     IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_right, size: 20),
+                      icon: const Icon(Icons.arrow_right, size: 37),
                       onPressed: () {
                         final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
                         final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
@@ -135,7 +130,7 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
         ),
         const Divider(),
         Expanded(
-          child: EmployeeAttendanceReportTab(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
+          child: EmployeeAttendanceTable(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
         ),
       ],
     );
@@ -144,16 +139,16 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
   Widget _quickBtn(String label, VoidCallback action) {
     return TextButton(
       style: TextButton.styleFrom(
-        backgroundColor: Colors.blue.shade50,
-        foregroundColor: Colors.blue.shade700,
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
         padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 36),
+        minimumSize: const Size(0, 37),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       onPressed: action,
       child: Text(
         label,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         textAlign: TextAlign.center,
       ),
     );
@@ -163,15 +158,14 @@ class EmployeeAttendanceRecordsTab extends StatelessWidget {
     return InkWell(
       onTap: () => _selectSingleDate(context, isStart: isStart),
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 3.0, horizontal: 2.0),
+        padding: const EdgeInsets.symmetric(vertical: 3.0, horizontal: 13),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.blue.shade200, width: 1),
+          border: Border.all(color: AppTheme.primaryBlue, width: 1),
           color: Colors.white,
         ),
         child: Text(
           _formatDateWithMonth(date),
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
           textAlign: TextAlign.center,
           maxLines: 1,
         ),

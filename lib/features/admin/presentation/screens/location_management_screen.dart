@@ -197,439 +197,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     }
   }
 
-  Widget _buildMapHeaderControl({
-    required BuildContext context,
-    required MapType currentType,
-    required bool expanded,
-    required Function(MapType) onTypeChanged,
-    required VoidCallback onToggleFullscreen,
-  }) {
-    Widget buildTypeButton(String label, IconData icon, MapType type) {
-      final bool isSelected = currentType == type;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => onTypeChanged(type),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black87),
-                const SizedBox(width: 3),
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black87),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Container(
-          decoration: BoxDecoration(color: Colors.grey.shade300),
-          padding: const EdgeInsets.all(2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              buildTypeButton("Map", Icons.map, MapType.normal),
-              buildTypeButton("Sat", Icons.satellite_alt, MapType.satellite),
-              buildTypeButton("Hybrid", Icons.layers, MapType.hybrid),
-            ],
-          ),
-        ),
-        IconButton(
-          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
-          onPressed: onToggleFullscreen,
-        ),
-      ],
-    );
-  }
-
-  Future<void> _showAddDialog(String type) async {
-    final nameController = TextEditingController();
-    final latController = TextEditingController();
-    final lngController = TextEditingController();
-    final radiusController = TextEditingController(text: "50");
-
-    String? selectedClusterId;
-    String? selectedVillageId;
-
-    GoogleMapController? mapController;
-    LatLng? selectedLatLng;
-    MapType dialogMapType = MapType.normal;
-    int mapRefreshKey = 0;
-
-    void updateMapLocation() {
-      final double? lat = double.tryParse(latController.text.trim());
-      final double? lng = double.tryParse(lngController.text.trim());
-      final double radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
-
-      if (lat != null && lng != null && mapController != null) {
-        _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
-      }
-    }
-
-    latController.addListener(updateMapLocation);
-    lngController.addListener(updateMapLocation);
-
-    Future<String?> showQuickAdd(String parentType) async {
-      final quickController = TextEditingController();
-      return showDialog<String>(
-        context: context,
-        builder: (qCtx) => AlertDialog(
-          title: Text("Quick Add $parentType"),
-          content: TextField(
-            controller: quickController,
-            decoration: InputDecoration(labelText: "$parentType Name"),
-            autofocus: true,
-          ),
-
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(qCtx), child: const Text("Cancel")),
-            ElevatedButton(
-              onPressed: () async {
-                final name = quickController.text.trim();
-
-                if (name.isEmpty) return;
-
-                final table = parentType == 'Cluster' ? 'clusters' : 'villages';
-                final Map<String, dynamic> insertData = {'name': name};
-
-                if (parentType == 'Village') {
-                  insertData['cluster_id'] = selectedClusterId;
-                }
-
-                final response = await _supabase.from(table).insert(insertData).select().single();
-
-                await _fetchHierarchy();
-
-                if (qCtx.mounted) Navigator.pop(qCtx, response['id'].toString());
-              },
-              child: const Text("Create"),
-            ),
-          ],
-        ),
-      );
-    }
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final double currentRadius = double.tryParse(radiusController.text.trim()) ?? 50.0;
-          Widget buildBaseMap({VoidCallback? onMapTapTrigger}) {
-            return GoogleMap(
-              key: ValueKey('add_map_${mapRefreshKey}_${dialogMapType.name}'),
-              initialCameraPosition: CameraPosition(
-                target: selectedLatLng ?? const LatLng(0, 0),
-                zoom: selectedLatLng != null ? _getZoomLevel(currentRadius) : 9,
-              ),
-              mapType: dialogMapType,
-              zoomControlsEnabled: true,
-              myLocationButtonEnabled: true,
-              gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
-              onMapCreated: (ctrl) async {
-                mapController = ctrl;
-
-                if (selectedLatLng != null) {
-                  await Future.delayed(const Duration(milliseconds: 100));
-
-                  await _fitCircleInView(
-                    controller: ctrl,
-                    center: selectedLatLng!,
-                    radiusMeters: double.tryParse(radiusController.text.trim()) ?? 50,
-                  );
-                }
-              },
-              onTap: (latLng) async {
-                setDialogState(() {
-                  selectedLatLng = latLng;
-                  latController.text = latLng.latitude.toStringAsFixed(6);
-                  lngController.text = latLng.longitude.toStringAsFixed(6);
-                });
-                if (onMapTapTrigger != null) onMapTapTrigger();
-                updateMapLocation();
-                if (mapController != null) {
-                  await _fitCircleInView(
-                    controller: mapController!,
-                    center: latLng,
-                    radiusMeters: double.tryParse(radiusController.text.trim()) ?? 50,
-                  );
-                }
-              },
-
-              markers: selectedLatLng == null
-                  ? {}
-                  : {Marker(markerId: const MarkerId('selected_pin'), position: selectedLatLng!)},
-
-              circles: selectedLatLng == null
-                  ? {}
-                  : {
-                      Circle(
-                        circleId: const CircleId('geofence_circle'),
-                        center: selectedLatLng!,
-                        radius: double.tryParse(radiusController.text.trim()) ?? 50,
-                        fillColor: Colors.blue.withAlpha(100),
-                        strokeColor: Colors.blue,
-                        strokeWidth: 2,
-                      ),
-                    },
-            );
-          }
-
-          void openFullscreenMap() async {
-            await Navigator.of(context).push(
-              PageRouteBuilder(
-                opaque: false,
-                barrierDismissible: true,
-                pageBuilder: (_, __, ___) => StatefulBuilder(
-                  builder: (fsContext, setFsState) => Scaffold(
-                    backgroundColor: Colors.black38,
-                    body: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Material(
-                          elevation: 13,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                                child: _buildMapHeaderControl(
-                                  context: context,
-                                  currentType: dialogMapType,
-                                  expanded: true,
-                                  onTypeChanged: (type) {
-                                    setDialogState(() {
-                                      dialogMapType = type;
-                                      mapRefreshKey++;
-                                    });
-                                    setFsState(() {});
-                                  },
-                                  onToggleFullscreen: () => Navigator.of(context).pop(),
-                                ),
-                              ),
-                              Expanded(child: buildBaseMap(onMapTapTrigger: () => setFsState(() {}))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-            setDialogState(() {});
-          }
-
-          return AlertDialog(
-            title: Text("Add New $type"),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (type == 'School') ...[
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _importFromExcel();
-                        },
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text("Import Schools via Excel"),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(37),
-                          foregroundColor: AppTheme.primaryBlue,
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Row(
-                          children: [
-                            Expanded(child: Divider()),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8.0),
-                              child: Text("OR MANUALLY", style: TextStyle(fontSize: 13, color: Colors.grey)),
-                            ),
-                            Expanded(child: Divider()),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (type == 'Village' || type == 'School')
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedClusterId,
-                        hint: const Text("Select Cluster"),
-                        items: [
-                          const DropdownMenuItem(
-                            value: "ADD_NEW",
-                            child: Text(
-                              "+ Add New Cluster...",
-                              style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
-                        ],
-                        onChanged: (val) async {
-                          if (val == "ADD_NEW") {
-                            final newId = await showQuickAdd("Cluster");
-                            if (newId != null) setDialogState(() => selectedClusterId = newId);
-                          } else {
-                            setDialogState(() {
-                              selectedClusterId = val;
-                              selectedVillageId = null;
-                            });
-                          }
-                        },
-                      ),
-                    if (type == 'School') ...[
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedVillageId,
-                        hint: const Text("Select Village"),
-                        disabledHint: const Text("Select a Cluster first"),
-                        items: selectedClusterId == null
-                            ? []
-                            : [
-                                const DropdownMenuItem(
-                                  value: "ADD_NEW",
-                                  child: Text(
-                                    "+ Add New Village...",
-                                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages'] as List)
-                                    .map((v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name']))),
-                              ],
-                        onChanged: selectedClusterId == null
-                            ? null
-                            : (val) async {
-                                if (val == "ADD_NEW") {
-                                  final newId = await showQuickAdd("Village");
-                                  if (newId != null) setDialogState(() => selectedVillageId = newId);
-                                } else {
-                                  setDialogState(() => selectedVillageId = val);
-                                }
-                              },
-                      ),
-                    ],
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(labelText: "$type Name"),
-                    ),
-                    if (type == 'School') ...[
-                      const SizedBox(height: 13),
-                      _buildMapHeaderControl(
-                        context: context,
-                        currentType: dialogMapType,
-                        expanded: false,
-                        onTypeChanged: (type) {
-                          setDialogState(() {
-                            dialogMapType = type;
-                            mapRefreshKey++;
-                          });
-                        },
-                        onToggleFullscreen: openFullscreenMap,
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        height: 200,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: buildBaseMap(),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: latController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: "Latitude"),
-                            ),
-                          ),
-                          const SizedBox(width: 13),
-                          Expanded(
-                            child: TextField(
-                              controller: lngController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: "Longitude"),
-                            ),
-                          ),
-                        ],
-                      ),
-                      TextField(
-                        controller: radiusController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: "Geofence Radius (Meters)"),
-                        onChanged: (_) => setDialogState(() {}),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-              ElevatedButton(
-                onPressed: () async {
-                  final name = nameController.text.trim();
-                  if (name.isEmpty) return;
-                  final Map<String, dynamic> insertData = {'name': name};
-                  String table = '';
-                  try {
-                    if (type == 'Cluster') {
-                      table = 'clusters';
-                    } else if (type == 'Village') {
-                      if (selectedClusterId == null) return;
-                      table = 'villages';
-                      insertData['cluster_id'] = selectedClusterId;
-                    } else if (type == 'School') {
-                      if (selectedVillageId == null) return;
-                      table = 'schools';
-                      insertData['village_id'] = selectedVillageId;
-                      insertData['latitude'] = double.tryParse(latController.text.trim());
-                      insertData['longitude'] = double.tryParse(lngController.text.trim());
-                      insertData['radius'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
-                    }
-                    await _supabase.from(table).insert(insertData);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    _fetchHierarchy();
-                  } catch (e) {
-                    debugPrint("Insert Error: $e");
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error saving $type: ${e.toString()}")));
-                    }
-                  }
-                },
-                child: const Text("Save"),
-              ),
-            ],
-          );
-        },
-      ),
-    ).then((_) {
-      latController.removeListener(updateMapLocation);
-      lngController.removeListener(updateMapLocation);
-    });
-  }
-
   Future<void> _confirmDelete(String type, dynamic entity) async {
     String warning = "";
     if (type == 'Cluster') {
@@ -871,300 +438,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     );
   }
 
-  Future<void> _showManageDialog(String type, dynamic entity) async {
-    final nameController = TextEditingController(text: entity['name']);
-    String? selectedParentId = (type == 'Village') ? entity['cluster_id']?.toString() : entity['village_id']?.toString();
-
-    final latController = TextEditingController(text: entity['latitude']?.toString() ?? '');
-    final lngController = TextEditingController(text: entity['longitude']?.toString() ?? '');
-    final radiusController = TextEditingController(text: entity['radius']?.toString() ?? '50');
-    GoogleMapController? mapController;
-    MapType dialogMapType = MapType.normal;
-    int mapRefreshKey = 0;
-    double initialLat = entity['latitude'] != null ? double.tryParse(entity['latitude'].toString()) ?? 0 : 0;
-    double initialLng = entity['longitude'] != null ? double.tryParse(entity['longitude'].toString()) ?? 0 : 0;
-    LatLng? selectedLatLng = entity['latitude'] != null && entity['longitude'] != null ? LatLng(initialLat, initialLng) : null;
-
-    void updateMapLocation() {
-      final double? lat = double.tryParse(latController.text.trim());
-      final double? lng = double.tryParse(lngController.text.trim());
-      final double radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
-      if (lat != null && lng != null && mapController != null) {
-        _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
-      }
-    }
-
-    latController.addListener(updateMapLocation);
-    lngController.addListener(updateMapLocation);
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final double currentRadius = double.tryParse(radiusController.text.trim()) ?? 50.0;
-          Widget buildBaseMap({VoidCallback? onMapTapTrigger}) {
-            return GoogleMap(
-              key: ValueKey('manage_map_${mapRefreshKey}_${dialogMapType.name}'),
-              initialCameraPosition: CameraPosition(target: LatLng(initialLat, initialLng), zoom: _getZoomLevel(currentRadius)),
-              mapType: dialogMapType,
-              gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
-              onMapCreated: (ctrl) async {
-                mapController = ctrl;
-
-                if (selectedLatLng != null) {
-                  await Future.delayed(const Duration(milliseconds: 100));
-
-                  await _fitCircleInView(
-                    controller: ctrl,
-                    center: selectedLatLng!,
-                    radiusMeters: double.tryParse(radiusController.text.trim()) ?? 50,
-                  );
-                }
-              },
-              onTap: (latLng) async {
-                setDialogState(() {
-                  selectedLatLng = latLng;
-                  latController.text = latLng.latitude.toStringAsFixed(6);
-                  lngController.text = latLng.longitude.toStringAsFixed(6);
-                });
-                if (onMapTapTrigger != null) onMapTapTrigger();
-                updateMapLocation();
-                if (mapController != null) {
-                  await _fitCircleInView(
-                    controller: mapController!,
-                    center: latLng,
-                    radiusMeters: double.tryParse(radiusController.text.trim()) ?? 50,
-                  );
-                }
-              },
-              markers: selectedLatLng == null ? {} : {Marker(markerId: const MarkerId('edit_pin'), position: selectedLatLng!)},
-              circles: selectedLatLng == null
-                  ? {}
-                  : {
-                      Circle(
-                        circleId: const CircleId('edit_geofence_circle'),
-                        center: selectedLatLng!,
-                        radius: double.tryParse(radiusController.text.trim()) ?? 50.0,
-                        fillColor: Colors.blue.withAlpha(37),
-                        strokeColor: Colors.blue,
-                        strokeWidth: 2,
-                      ),
-                    },
-            );
-          }
-
-          void openFullscreenMap() async {
-            await Navigator.of(context).push(
-              PageRouteBuilder(
-                opaque: false,
-                barrierDismissible: true,
-                pageBuilder: (_, __, ___) => StatefulBuilder(
-                  builder: (fsContext, setFsState) => Scaffold(
-                    backgroundColor: Colors.black38,
-                    body: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Material(
-                          elevation: 13,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                                child: _buildMapHeaderControl(
-                                  context: context,
-                                  currentType: dialogMapType,
-                                  expanded: true,
-                                  onTypeChanged: (type) {
-                                    setDialogState(() {
-                                      dialogMapType = type;
-                                      mapRefreshKey++;
-                                    });
-                                    setFsState(() {});
-                                  },
-                                  onToggleFullscreen: () => Navigator.of(context).pop(),
-                                ),
-                              ),
-                              Expanded(child: buildBaseMap(onMapTapTrigger: () => setFsState(() {}))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-            setDialogState(() {});
-          }
-
-          double mult = (type == 'School' ? 0.9 : 0.3);
-          return AlertDialog(
-            content: SizedBox(
-              width: MediaQuery.of(context).size.width * mult,
-              height: MediaQuery.of(context).size.height * mult,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 13),
-                        if (type == 'Village')
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedParentId,
-                            decoration: const InputDecoration(labelText: "Cluster"),
-                            items: _hierarchy
-                                .map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name'])))
-                                .toList(),
-                            onChanged: (val) => setDialogState(() => selectedParentId = val),
-                          ),
-                        if (type == 'School') ...[
-                          DropdownButtonFormField<String>(
-                            initialValue: selectedParentId,
-                            decoration: const InputDecoration(labelText: "Village"),
-                            onChanged: (val) => setDialogState(() => selectedParentId = val),
-                            items: _hierarchy.expand((cluster) {
-                              return (cluster['villages'] as List).map((village) {
-                                return DropdownMenuItem<String>(
-                                  value: village['id'].toString(),
-                                  child: Text("${village['name']} (${cluster['name']})"),
-                                );
-                              });
-                            }).toList(),
-                          ),
-                        ],
-                        const SizedBox(height: 13),
-                        TextField(
-                          controller: nameController,
-                          decoration: InputDecoration(labelText: "$type"),
-                        ),
-                        if (type == 'School') ...[
-                          const SizedBox(height: 13),
-                          TextField(
-                            controller: latController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: "Latitude"),
-                          ),
-                          const SizedBox(height: 13),
-                          TextField(
-                            controller: lngController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: "Longitude"),
-                          ),
-                          const SizedBox(height: 13),
-                          TextField(
-                            controller: radiusController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: "Radius"),
-                            onChanged: (_) async {
-                              setDialogState(() {});
-
-                              updateMapLocation();
-
-                              if (mapController != null && selectedLatLng != null) {
-                                await _fitCircleInView(
-                                  controller: mapController!,
-                                  center: selectedLatLng!,
-                                  radiusMeters: double.tryParse(radiusController.text.trim()) ?? 50,
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (type == 'School') ...[
-                    const SizedBox(width: 13),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildMapHeaderControl(
-                            context: context,
-                            currentType: dialogMapType,
-                            expanded: false,
-                            onTypeChanged: (type) {
-                              setDialogState(() {
-                                dialogMapType = type;
-                                mapRefreshKey++;
-                              });
-                            },
-                            onToggleFullscreen: openFullscreenMap,
-                          ),
-                          const SizedBox(height: 13),
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: buildBaseMap(),
-                            ),
-                          ),
-                          const SizedBox(height: 13),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _confirmDelete(type, entity);
-                    },
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    label: Text("Delete", style: const TextStyle(color: Colors.red)),
-                  ),
-                  const Spacer(),
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-                  const SizedBox(width: 13),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) return;
-                      final messenger = ScaffoldMessenger.of(context);
-                      try {
-                        final Map<String, dynamic> updateData = {'name': name};
-                        String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
-                        if (type == 'Village') updateData['cluster_id'] = selectedParentId;
-                        if (type == 'School') {
-                          updateData['village_id'] = selectedParentId;
-                          updateData['latitude'] = double.tryParse(latController.text.trim());
-                          updateData['longitude'] = double.tryParse(lngController.text.trim());
-                          updateData['radius'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
-                        }
-                        await _supabase.from(table).update(updateData).eq('id', entity['id']);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        _fetchHierarchy();
-                        messenger.showSnackBar(SnackBar(content: Text("$type updated!")));
-                      } catch (e) {
-                        messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
-                      }
-                    },
-                    child: const Text("Save Changes"),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    ).then((_) {
-      latController.removeListener(updateMapLocation);
-      lngController.removeListener(updateMapLocation);
-    });
-  }
-
   void _applyAllFilters() {
     final query = _searchController.text.toLowerCase().trim();
     final List<dynamic> result = [];
@@ -1202,6 +475,498 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     });
   }
 
+  Future<void> _showLocationFormDialog(LocationFormConfig config) async {
+    final nameController = TextEditingController(text: config.isEditMode ? config.entity['name'] : '');
+    final latController = TextEditingController(text: config.isEditMode ? config.entity['latitude']?.toString() ?? '' : '');
+    final lngController = TextEditingController(text: config.isEditMode ? config.entity['longitude']?.toString() ?? '' : '');
+    final radiusController = TextEditingController(text: config.isEditMode ? config.entity['radius']?.toString() ?? '50' : '50');
+
+    String? selectedClusterId = config.isEditMode && config.type == 'Village' ? config.entity['cluster_id']?.toString() : null;
+    String? selectedVillageId = config.isEditMode && config.type == 'School' ? config.entity['village_id']?.toString() : null;
+
+    if (config.isEditMode && config.type == 'School' && selectedVillageId != null) {
+      try {
+        final matchingCluster = _hierarchy.firstWhere(
+          (c) => (c['villages'] as List).any((v) => v['id'].toString() == selectedVillageId),
+        );
+        selectedClusterId = matchingCluster['id'].toString();
+      } catch (_) {}
+    }
+
+    GoogleMapController? mapController;
+    MapType dialogMapType = MapType.normal;
+    int mapRefreshKey = 0;
+
+    double initialLat = config.isEditMode && config.entity['latitude'] != null
+        ? double.tryParse(config.entity['latitude'].toString()) ?? 0.0
+        : 0.0;
+    double initialLng = config.isEditMode && config.entity['longitude'] != null
+        ? double.tryParse(config.entity['longitude'].toString()) ?? 0.0
+        : 0.0;
+    LatLng? selectedLatLng = initialLat != 0.0 || initialLng != 0.0 ? LatLng(initialLat, initialLng) : null;
+
+    void updateMapLocation() {
+      final double? lat = double.tryParse(latController.text.trim());
+      final double? lng = double.tryParse(lngController.text.trim());
+      final double radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+
+      if (lat != null && lng != null && mapController != null) {
+        _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
+      }
+    }
+
+    latController.addListener(updateMapLocation);
+    lngController.addListener(updateMapLocation);
+
+    Future<String?> showQuickAdd(String parentType) async {
+      final quickController = TextEditingController();
+      return showDialog<String>(
+        context: context,
+        builder: (qCtx) => AlertDialog(
+          title: Text("Quick Add $parentType"),
+          content: TextField(
+            controller: quickController,
+            decoration: InputDecoration(labelText: "$parentType Name"),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(qCtx), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () async {
+                final name = quickController.text.trim();
+                if (name.isEmpty) return;
+
+                final table = parentType == 'Cluster' ? 'clusters' : 'villages';
+                final Map<String, dynamic> insertData = {'name': name};
+
+                if (parentType == 'Village') {
+                  insertData['cluster_id'] = selectedClusterId;
+                }
+
+                final response = await _supabase.from(table).insert(insertData).select().single();
+                await _fetchHierarchy();
+                if (qCtx.mounted) Navigator.pop(qCtx, response['id'].toString());
+              },
+              child: const Text("Create"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final double currentRadius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+
+          Widget buildUnifiedMapCanvas({VoidCallback? onTapOverride}) {
+            return _LocationMapCanvas(
+              refreshKey: mapRefreshKey,
+              mapType: dialogMapType,
+              selectedLatLng: selectedLatLng,
+              initialLat: initialLat,
+              initialLng: initialLng,
+              currentRadius: currentRadius,
+              onMapCreated: (ctrl) async {
+                mapController = ctrl;
+                if (selectedLatLng != null) {
+                  await Future.delayed(const Duration(milliseconds: 150));
+                  await _fitCircleInView(controller: ctrl, center: selectedLatLng!, radiusMeters: currentRadius);
+                }
+              },
+              onTap: (latLng) async {
+                setDialogState(() {
+                  selectedLatLng = latLng;
+                  latController.text = latLng.latitude.toStringAsFixed(6);
+                  lngController.text = latLng.longitude.toStringAsFixed(6);
+                });
+                if (onTapOverride != null) onTapOverride();
+                updateMapLocation();
+                if (mapController != null) {
+                  await _fitCircleInView(controller: mapController!, center: latLng, radiusMeters: currentRadius);
+                }
+              },
+            );
+          }
+
+          void handleFullscreenPipeline() async {
+            await Navigator.of(context).push(
+              PageRouteBuilder(
+                opaque: false,
+                barrierDismissible: true,
+                pageBuilder: (_, __, ___) => StatefulBuilder(
+                  builder: (fsCtx, setFsState) => Scaffold(
+                    backgroundColor: Colors.black38,
+                    body: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Material(
+                          elevation: 13,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                                child: _buildMapHeaderControl(
+                                  context: context,
+                                  currentType: dialogMapType,
+                                  expanded: true,
+                                  onTypeChanged: (type) {
+                                    setDialogState(() {
+                                      dialogMapType = type;
+                                      mapRefreshKey++;
+                                    });
+                                    setFsState(() {});
+                                  },
+                                  onToggleFullscreen: () => Navigator.of(context).pop(),
+                                ),
+                              ),
+                              Expanded(child: buildUnifiedMapCanvas(onTapOverride: () => setFsState(() {}))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+            setDialogState(() {
+              mapRefreshKey++;
+            });
+          }
+
+          double sizeMultiplier = config.type == 'School' ? 0.9 : 0.3;
+
+          return AlertDialog(
+            title: config.isEditMode ? null : Text("Add New ${config.type}"),
+            contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            content: SizedBox(
+              width: MediaQuery.of(context).size.width * sizeMultiplier,
+              height: MediaQuery.of(context).size.height * sizeMultiplier,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!config.isEditMode && config.type == 'School') ...[
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _importFromExcel();
+                              },
+                              icon: const Icon(Icons.upload_file),
+                              label: const Text("Import Schools via Excel"),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(37),
+                                foregroundColor: AppTheme.primaryBlue,
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Divider()),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                    child: Text("OR MANUALLY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                                  ),
+                                  Expanded(child: Divider()),
+                                ],
+                              ),
+                            ),
+                          ],
+                          if (config.type == 'Village' || config.type == 'School')
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedClusterId,
+                              hint: const Text("Select Cluster"),
+                              decoration: config.isEditMode ? const InputDecoration(labelText: "Cluster") : null,
+                              items: [
+                                if (!config.isEditMode)
+                                  const DropdownMenuItem(
+                                    value: "ADD_NEW",
+                                    child: Text(
+                                      "+ Add New Cluster...",
+                                      style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
+                              ],
+                              onChanged: (val) async {
+                                if (val == "ADD_NEW") {
+                                  final newId = await showQuickAdd("Cluster");
+                                  if (newId != null) setDialogState(() => selectedClusterId = newId);
+                                } else {
+                                  setDialogState(() {
+                                    selectedClusterId = val;
+                                    selectedVillageId = null;
+                                  });
+                                }
+                              },
+                            ),
+                          if (config.type == 'School') ...[
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedVillageId,
+                              hint: const Text("Select Village"),
+                              disabledHint: const Text("Select a Cluster first"),
+                              decoration: config.isEditMode ? const InputDecoration(labelText: "Village") : null,
+                              items: selectedClusterId == null
+                                  ? []
+                                  : [
+                                      if (!config.isEditMode)
+                                        const DropdownMenuItem(
+                                          value: "ADD_NEW",
+                                          child: Text(
+                                            "+ Add New Village...",
+                                            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages']
+                                              as List)
+                                          .map((v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name']))),
+                                    ],
+                              onChanged: selectedClusterId == null
+                                  ? null
+                                  : (val) async {
+                                      if (val == "ADD_NEW") {
+                                        final newId = await showQuickAdd("Village");
+                                        if (newId != null) setDialogState(() => selectedVillageId = newId);
+                                      } else {
+                                        setDialogState(() => selectedVillageId = val);
+                                      }
+                                    },
+                            ),
+                          ],
+                          const SizedBox(height: 13),
+                          TextField(
+                            controller: nameController,
+                            decoration: InputDecoration(labelText: config.isEditMode ? config.type : "${config.type} Name"),
+                          ),
+                          if (config.type == 'School') ...[
+                            const SizedBox(height: 13),
+                            TextField(
+                              controller: latController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Latitude"),
+                            ),
+                            const SizedBox(height: 13),
+                            TextField(
+                              controller: lngController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: const InputDecoration(labelText: "Longitude"),
+                            ),
+                            const SizedBox(height: 13),
+                            TextField(
+                              controller: radiusController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: "Radius"),
+                              onChanged: (_) async {
+                                setDialogState(() {});
+                                updateMapLocation();
+                                if (mapController != null && selectedLatLng != null) {
+                                  await _fitCircleInView(
+                                    controller: mapController!,
+                                    center: selectedLatLng!,
+                                    radiusMeters: currentRadius,
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (config.type == 'School') ...[
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMapHeaderControl(
+                            context: context,
+                            currentType: dialogMapType,
+                            expanded: false,
+                            onTypeChanged: (type) {
+                              setDialogState(() {
+                                dialogMapType = type;
+                                mapRefreshKey++;
+                              });
+                            },
+                            onToggleFullscreen: handleFullscreenPipeline,
+                          ),
+                          const SizedBox(height: 13),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: buildUnifiedMapCanvas(),
+                            ),
+                          ),
+                          const SizedBox(height: 13),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              Row(
+                children: [
+                  if (config.isEditMode)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _confirmDelete(config.type, config.entity);
+                      },
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      label: const Text("Delete", style: TextStyle(color: Colors.red)),
+                    ),
+                  const Spacer(),
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+                  const SizedBox(width: 13),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final name = nameController.text.trim();
+                      if (name.isEmpty) return;
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        final Map<String, dynamic> dataPayload = {'name': name};
+                        String table = config.type == 'Cluster'
+                            ? 'clusters'
+                            : (config.type == 'Village' ? 'villages' : 'schools');
+
+                        if (config.type == 'Village') dataPayload['cluster_id'] = selectedClusterId;
+                        if (config.type == 'School') {
+                          dataPayload['village_id'] = selectedVillageId;
+                          dataPayload['latitude'] = double.tryParse(latController.text.trim());
+                          dataPayload['longitude'] = double.tryParse(lngController.text.trim());
+                          dataPayload['radius'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
+                        }
+
+                        if (config.isEditMode) {
+                          await _supabase.from(table).update(dataPayload).eq('id', config.entity['id']);
+                        } else {
+                          await _supabase.from(table).insert(dataPayload);
+                        }
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _fetchHierarchy();
+                        messenger.showSnackBar(SnackBar(content: Text("${config.type} saved successfully!")));
+                      } catch (e) {
+                        messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
+                      }
+                    },
+                    child: Text(config.isEditMode ? "Save Changes" : "Save"),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    ).then((_) {
+      latController.removeListener(updateMapLocation);
+      lngController.removeListener(updateMapLocation);
+    });
+  }
+
+  Future<void> _showAddDialog(String type) async {
+    await _showLocationFormDialog(LocationFormConfig(type: type, isEditMode: false));
+  }
+
+  Future<void> _showManageDialog(String type, dynamic entity) async {
+    await _showLocationFormDialog(LocationFormConfig(type: type, isEditMode: true, entity: entity));
+  }
+
+  Widget _buildMapHeaderControl({
+    required BuildContext context,
+    required MapType currentType,
+    required bool expanded,
+    required Function(MapType) onTypeChanged,
+    required VoidCallback onToggleFullscreen,
+  }) {
+    Widget buildTypeButton(String label, IconData icon, MapType type) {
+      final bool isSelected = currentType == type;
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => onTypeChanged(type),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black87),
+                const SizedBox(width: 3),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black87),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.all(2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildTypeButton("Map", Icons.map, MapType.normal),
+              buildTypeButton("Sat", Icons.satellite_alt, MapType.satellite),
+              buildTypeButton("Hybrid", Icons.layers, MapType.hybrid),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
+          onPressed: onToggleFullscreen,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _fitCircleInView({
+    required GoogleMapController controller,
+    required LatLng center,
+    required double radiusMeters,
+  }) async {
+    final latOffset = radiusMeters / 111320.0;
+
+    final lngOffset = radiusMeters / (111320.0 * math.cos(center.latitude * math.pi / 180));
+
+    final bounds = LatLngBounds(
+      southwest: LatLng(center.latitude - latOffset, center.longitude - lngOffset),
+      northeast: LatLng(center.latitude + latOffset, center.longitude + lngOffset),
+    );
+
+    await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 37));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1219,7 +984,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               onRefresh: _fetchHierarchy,
               child: ListView(
                 children: [
-                  Padding(padding: const EdgeInsets.all(13)),
+                  const Padding(padding: EdgeInsets.all(13)),
                   Table(
                     border: TableBorder(
                       verticalInside: BorderSide(color: Colors.grey.shade300),
@@ -1272,28 +1037,54 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       ),
     );
   }
+}
 
-  double _getZoomLevel(double radius) {
-    if (radius <= 0) return 18.0;
-    double zoom = 20;
-    return zoom.clamp(0.0, 22.0);
-  }
+class _LocationMapCanvas extends StatelessWidget {
+  final int refreshKey;
+  final MapType mapType;
+  final LatLng? selectedLatLng;
+  final double initialLat;
+  final double initialLng;
+  final double currentRadius;
+  final ArgumentCallback<GoogleMapController> onMapCreated;
+  final ArgumentCallback<LatLng> onTap;
 
-  Future<void> _fitCircleInView({
-    required GoogleMapController controller,
-    required LatLng center,
-    required double radiusMeters,
-  }) async {
-    final latOffset = radiusMeters / 111320.0;
+  const _LocationMapCanvas({
+    required this.refreshKey,
+    required this.mapType,
+    required this.selectedLatLng,
+    required this.initialLat,
+    required this.initialLng,
+    required this.currentRadius,
+    required this.onMapCreated,
+    required this.onTap,
+  });
 
-    final lngOffset = radiusMeters / (111320.0 * math.cos(center.latitude * math.pi / 180));
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(center.latitude - latOffset, center.longitude - lngOffset),
-      northeast: LatLng(center.latitude + latOffset, center.longitude + lngOffset),
+  @override
+  Widget build(BuildContext context) {
+    return GoogleMap(
+      key: ValueKey('unified_canvas_${refreshKey}_${mapType.name}'),
+      initialCameraPosition: CameraPosition(target: selectedLatLng ?? LatLng(initialLat, initialLng), zoom: 13),
+      mapType: mapType,
+      zoomControlsEnabled: true,
+      myLocationButtonEnabled: true,
+      gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+      onMapCreated: onMapCreated,
+      onTap: onTap,
+      markers: selectedLatLng == null ? {} : {Marker(markerId: const MarkerId('canvas_pin'), position: selectedLatLng!)},
+      circles: selectedLatLng == null
+          ? {}
+          : {
+              Circle(
+                circleId: const CircleId('canvas_geofence'),
+                center: selectedLatLng!,
+                radius: currentRadius,
+                fillColor: Colors.blue.withAlpha(37),
+                strokeColor: Colors.blue,
+                strokeWidth: 2,
+              ),
+            },
     );
-
-    await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 37));
   }
 }
 
@@ -1394,4 +1185,12 @@ class _ActionCell extends StatelessWidget {
       ),
     );
   }
+}
+
+class LocationFormConfig {
+  final String type;
+  final bool isEditMode;
+  final dynamic entity;
+
+  LocationFormConfig({required this.type, this.isEditMode = false, this.entity});
 }

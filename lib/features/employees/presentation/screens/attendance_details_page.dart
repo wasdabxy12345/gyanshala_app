@@ -108,6 +108,9 @@ class AttendanceDetailsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool useWideLayout = screenWidth > 850;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Daily Attendance Summary')),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -147,74 +150,92 @@ class AttendanceDetailsPage extends ConsumerWidget {
           final formattedDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(logs.first['recorded_at']).toLocal());
           final totalHours = _calculateTotalHours(logs);
 
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ListView(
+          Widget logsDetailsPanel() {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                Text(employeeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 13),
+                Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
+                const Divider(height: 13),
+                Text("Date: $formattedDate"),
+                Text("Total Time Active: $totalHours"),
+                const Divider(height: 13),
+                ...logs.map((log) {
+                  final isCheckIn = log['status'] == 'check_in';
+                  final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
+
+                  final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
+                  final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+
+                  final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
+                  final bool isAtSchool = matchingSchool != null;
+                  final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "Off-site";
+
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
+                      color: isAtSchool ? Colors.green : Colors.red,
+                    ),
+                    title: Row(
                       children: [
-                        Text(employeeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 13),
-                        Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
-                        const Divider(height: 13),
-                        Text("Date: $formattedDate"),
-                        Text("Total Time Active: $totalHours"),
-                        const Divider(height: 13),
-                        ...logs.map((log) {
-                          final isCheckIn = log['status'] == 'check_in';
-                          final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
-
-                          final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
-                          final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
-
-                          final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
-                          final bool isAtSchool = matchingSchool != null;
-                          final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "Off-site";
-
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
+                        Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isAtSchool ? Colors.green.shade50 : Colors.red.shade50,
+                            border: Border.all(color: isAtSchool ? Colors.green : Colors.red, width: 0.5),
+                          ),
+                          child: Text(
+                            isAtSchool ? "At a school" : "Not at a school",
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
                               color: isAtSchool ? Colors.green : Colors.red,
                             ),
-                            title: Row(
-                              children: [
-                                Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isAtSchool ? Colors.green.shade50 : Colors.red.shade50,
-                                    border: Border.all(color: isAtSchool ? Colors.green : Colors.red, width: 0.5),
-                                  ),
-                                  child: Text(
-                                    isAtSchool ? "At a school" : "Not at a school",
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: isAtSchool ? Colors.green : Colors.red,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            subtitle: Text(presenceSubtitle),
-                            trailing: Text(timeStr, style: const TextStyle(fontSize: 13)),
-                          );
-                        }),
-                        const Divider(height: 24),
-                        AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ),
+                    subtitle: Text(presenceSubtitle),
+                    trailing: Text(timeStr, style: const TextStyle(fontSize: 13)),
+                  );
+                }),
               ],
+            );
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(13.0),
+            child: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(13.0),
+                child: useWideLayout
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 1, child: logsDetailsPanel()),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            flex: 2,
+                            child: AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          logsDetailsPanel(),
+                          const Divider(height: 13),
+                          AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
+                        ],
+                      ),
+              ),
             ),
           );
         },
@@ -227,8 +248,15 @@ class AttendanceMultiMapView extends StatefulWidget {
   final List<Map<String, dynamic>> logs;
   final List<Map<String, dynamic>> schools;
   final String employeeName;
+  final double height;
 
-  const AttendanceMultiMapView({super.key, required this.logs, required this.schools, required this.employeeName});
+  const AttendanceMultiMapView({
+    super.key,
+    required this.logs,
+    required this.schools,
+    required this.employeeName,
+    this.height = 280,
+  });
 
   @override
   State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
@@ -301,7 +329,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
-      final double radius = double.tryParse(school['radius'].toString()) ?? 50.0;
+      final double radius = double.tryParse(school['radius'].toString()) ?? 50;
 
       if (sLat != null && sLng != null) {
         final schoolPoint = LatLng(sLat, sLng);
@@ -320,7 +348,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
             circleId: CircleId('circle_${school['id']}'),
             center: schoolPoint,
             radius: radius,
-            fillColor: AppTheme.primaryBlue.withValues(alpha: 0.15),
+            fillColor: AppTheme.primaryBlue.withValues(alpha: 0.13),
             strokeColor: AppTheme.primaryBlue.withValues(alpha: 0.5),
             strokeWidth: 2,
           ),
@@ -343,10 +371,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
             position: point,
             icon: isCheckIn ? checkInIcon : checkOutIcon,
             anchor: const Offset(0.5, 1.0),
-            infoWindow: InfoWindow(
-              title: isCheckIn ? "Check-In Point" : "Check-Out Point",
-              snippet: DateFormat('hh:mm a').format(DateTime.parse(log['recorded_at']).toLocal()),
-            ),
           ),
         );
       }
@@ -400,7 +424,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: BoxDecoration(
             color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
@@ -453,7 +477,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
-      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 14.0),
+      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 20),
       markers: _markers,
       circles: _circles,
       polylines: _polylines,
@@ -481,14 +505,14 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
                 backgroundColor: Colors.black38,
                 body: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(3),
                     child: Material(
-                      elevation: 12,
+                      elevation: 13,
                       child: Column(
                         children: [
                           Container(
                             color: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
                             child: _buildMapHeader(
                               expanded: true,
                               onRefresh: () {
@@ -509,28 +533,35 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         },
       ),
     );
-    setState(() {});
+    setState(() {
+      _mapRefreshKey++;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     if (_markers.isEmpty && !_isLoadingIcons) return const SizedBox();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildMapHeader(),
-        const SizedBox(height: 8),
-        Container(
-          height: 280,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final Widget mapContainer = Container(
           width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
+          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
           clipBehavior: Clip.antiAlias,
           child: _buildBaseMapWidget(),
-        ),
-      ],
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildMapHeader(),
+            const SizedBox(height: 8),
+            if (constraints.maxHeight != double.infinity)
+              Expanded(child: mapContainer)
+            else
+              SizedBox(height: widget.height, child: mapContainer),
+          ],
+        );
+      },
     );
   }
 }

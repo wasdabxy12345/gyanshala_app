@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/features/students/presentation/views/attendance_records_view.dart';
-import 'package:gyanshala_app/features/students/presentation/views/daily_marking_view.dart';
+import 'package:gyanshala_app/features/students/presentation/views/attendance_taking_view.dart';
 
 class StudentAttendanceParentTab extends StatefulWidget {
   final String searchQuery;
@@ -30,7 +30,7 @@ class _StudentAttendanceParentTabState extends State<StudentAttendanceParentTab>
           Expanded(
             child: TabBarView(
               children: [
-                DailyMarkingView(
+                AttendanceTakingView(
                   date: _selectedDate,
                   searchQuery: widget.searchQuery,
                   onDateChanged: (d) => setState(() => _selectedDate = d),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
-import 'package:gyanshala_app/features/admin/presentation/screens/form_responses_viewer_screen.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/form_response_hub.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'form_builder_canvas.dart';
@@ -52,7 +52,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
               children: [
                 Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
                 SizedBox(width: 8),
-                Text("Delete Form Blueprint?", style: TextStyle(fontWeight: FontWeight.bold)),
+                Text("Delete?", style: TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
             content: Text(
@@ -151,7 +151,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Form Management Layout"),
+        title: const Text("Form Management"),
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchFormsFromSupabase)],
       ),
       body: _isLoading
@@ -166,20 +166,31 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
               itemBuilder: (context, index) {
                 final form = _formsList[index];
                 final String currentFormId = form['id'].toString();
-                final String currentFormTitle = form['title'] ?? 'Evaluation Framework';
+                final String currentFormTitle = form['title'] ?? '[no title]';
 
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 13),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(vertical: 3),
                     child: ListTile(
-                      leading: const Icon(Icons.assignment_turned_in, color: AppTheme.primaryBlue, size: 28),
                       title: Text(currentFormTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.grey, size: 22),
+                            icon: const Icon(Icons.visibility, color: Colors.green),
+                            tooltip: "View Form's Responses",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FormResponseHub(formId: currentFormId, formTitle: currentFormTitle),
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.amber),
                             tooltip: "Edit Form Template",
                             onPressed: () {
                               Navigator.push(
@@ -191,22 +202,12 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.redAccent, size: 22),
-                            tooltip: "Remove Form Blueprint",
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            tooltip: "Delete",
                             onPressed: () => _deleteFormDocument(currentFormId, currentFormTitle),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right, color: Colors.grey),
                         ],
                       ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => FormResponsesOverviewScreen(formId: currentFormId, formTitle: currentFormTitle),
-                          ),
-                        );
-                      },
                     ),
                   ),
                 );

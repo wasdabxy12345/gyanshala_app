@@ -153,7 +153,7 @@ class _EntityManagerState extends State<EntityManager> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showForm(),
-        backgroundColor: Colors.yellow,
+        backgroundColor: Colors.amber,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

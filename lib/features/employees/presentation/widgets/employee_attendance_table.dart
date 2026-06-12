@@ -5,35 +5,36 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/attendance_details_page.dart';
 import 'package:intl/intl.dart';
 
-class EmployeeAttendanceReportTab extends ConsumerStatefulWidget {
+class EmployeeAttendanceTable extends ConsumerStatefulWidget {
   final String searchQuery;
   final DateTime startDate;
   final DateTime endDate;
 
-  const EmployeeAttendanceReportTab({super.key, required this.searchQuery, required this.startDate, required this.endDate});
+  const EmployeeAttendanceTable({super.key, required this.searchQuery, required this.startDate, required this.endDate});
 
   @override
-  ConsumerState<EmployeeAttendanceReportTab> createState() => _EmployeeAttendanceReportTabState();
+  ConsumerState<EmployeeAttendanceTable> createState() => _EmployeeAttendanceTableState();
 }
 
-class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendanceReportTab> {
+class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable> {
   Future<Map<String, dynamic>> _getEmployeeAttendanceData() async {
     final supabase = ref.read(supabaseClientProvider);
 
-    final employeesResponse = await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', [
-      'shikshaMitra',
-      'seniorMentor',
-    ]);
+    final employees =
+        ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', ['shikshaMitra', 'seniorMentor']))
+                as List<dynamic>)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
 
-    final employees = (employeesResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-
-    final attendanceResponse = await supabase
-        .from('employee_attendance')
-        .select('id, user_id, status, recorded_at, school_id, schools(name)')
-        .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
-        .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String());
-
-    final attendanceRecords = (attendanceResponse as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final attendanceRecords =
+        ((await supabase
+                    .from('employee_attendance')
+                    .select('id, user_id, status, recorded_at, school_id, schools(name)')
+                    .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
+                    .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String()))
+                as List<dynamic>)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
 
     Map<String, Map<String, dynamic>> employeeData = {};
 
@@ -76,19 +77,10 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
   }
 
   Widget _buildNameCell(String fullName) {
-    final parts = fullName.split(' ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(parts[0], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-        if (parts.length > 1)
-          Text(
-            parts.sublist(1).join(' '),
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
-            overflow: TextOverflow.ellipsis,
-          ),
-      ],
+      children: [Text(fullName)],
     );
   }
 
@@ -143,18 +135,18 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
         }
 
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("No attendance data found."));
+          return const Center(child: Text("No attendance data found"));
         }
 
-        final employeeDataMap = snapshot.data!['employees'] as Map<String, dynamic>;
-        final employeesList = employeeDataMap.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-
-        final employees = employeesList
-            .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
-            .toList();
+        final employees =
+            ((snapshot.data!['employees'] as Map<String, dynamic>).values
+                    .map((e) => Map<String, dynamic>.from(e as Map))
+                    .toList())
+                .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
+                .toList();
 
         if (employees.isEmpty) {
-          return const Center(child: Text("No employees matching search."));
+          return const Center(child: Text("No employees found"));
         }
 
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
@@ -173,7 +165,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                     columnSpacing: 12,
                     horizontalMargin: 10,
                     columns: [
-                      const DataColumn(label: Text('Employee\nName')),
+                      const DataColumn(label: Text('Employee')),
                       ...dates.map(
                         (d) => DataColumn(
                           label: SizedBox(
@@ -182,7 +174,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                               child: Text(
                                 "${DateFormat('MM/dd').format(d)}\n${DateFormat('E').format(d)}",
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 11, color: _isHoliday(d) ? Colors.grey : Colors.black),
+                                style: TextStyle(color: _isHoliday(d) ? Colors.grey : Colors.black),
                               ),
                             ),
                           ),
@@ -214,7 +206,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
 
                               return DataCell(
                                 Tooltip(
-                                  message: isPresent ? "Location: $location\nClick to view details" : "No record",
+                                  message: isPresent ? "Location: $location" : "No record",
                                   child: InkWell(
                                     onTap: isPresent && targetUserId.isNotEmpty
                                         ? () {
@@ -230,7 +222,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                     child: Container(
                                       width: 35,
                                       height: double.infinity,
-                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.yellow[100] : null),
+                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.amber : null),
                                       alignment: Alignment.center,
                                       child: holiday
                                           ? const Text("-")
@@ -238,9 +230,8 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                               isPresent ? 'P' : '-',
                                               style: TextStyle(
                                                 color: isPresent
-                                                    ? (location == "off-site" ? Colors.yellow : Colors.green)
+                                                    ? (location == "off-site" ? Colors.amber : Colors.green)
                                                     : Colors.red,
-                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                     ),
@@ -253,7 +244,7 @@ class _EmployeeAttendanceReportTabState extends ConsumerState<EmployeeAttendance
                                 child: Text(
                                   "$presentCount\n${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%",
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                             ),

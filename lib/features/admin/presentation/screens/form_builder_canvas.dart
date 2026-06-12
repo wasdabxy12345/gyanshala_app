@@ -16,7 +16,6 @@ class FormBuilderCanvas extends StatefulWidget {
   final String? formId;
   final String formTitle;
   const FormBuilderCanvas({super.key, this.formId, required this.formTitle});
-
   @override
   State<FormBuilderCanvas> createState() => _FormBuilderCanvasState();
 }
@@ -30,7 +29,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   @override
   void initState() {
     super.initState();
-
     if (widget.formId != null) {
       _loadExistingFormQuestions();
     }
@@ -41,18 +39,15 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     required void Function(void Function()) setModalState,
     required List<TextEditingController> staticOptionControllers,
   }) async {
-    // Show a loading dialog matching your Excel processing layout
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) =>
           const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue))),
     );
-
     try {
       final supabase = Supabase.instance.client;
       List<String> fetchedOptions = [];
-
       if (tableName == 'profiles') {
         final res = await supabase.from('profiles').select('first_name, last_name');
         fetchedOptions = res
@@ -64,7 +59,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         fetchedOptions = res.map((r) => r['name'].toString().trim()).where((name) => name.isNotEmpty && name != "null").toList();
       }
       if (mounted) Navigator.pop(context);
-
       if (fetchedOptions.isNotEmpty) {
         setModalState(() {
           staticOptionControllers.clear();
@@ -155,7 +149,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       final List<Map<String, dynamic>> newRowsToInsert = [];
       final List<Map<String, dynamic>> existingRowsToUpsert = [];
       final Map<String, String> tempToRealIdMap = {};
-
       for (int i = 0; i < _currentQuestions.length; i++) {
         final q = _currentQuestions[i];
         final String currentId = q['id'].toString();
@@ -175,7 +168,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           tempToRealIdMap[currentId] = currentId;
         }
       }
-
       if (newRowsToInsert.isNotEmpty) {
         final pureInserts = newRowsToInsert.map((r) {
           final clone = Map<String, dynamic>.from(r);
@@ -205,18 +197,15 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
           }
         }
       }
-
       if (existingRowsToUpsert.isNotEmpty) {
         await supabase.from('form_questions').upsert(existingRowsToUpsert, onConflict: 'id');
       }
-
       final rawFormQuestions = await supabase.from('form_questions').select('*').eq('form_id', widget.formId!);
       final List<Map<String, dynamic>> completeFormQuestions = List<Map<String, dynamic>>.from(rawFormQuestions);
       final List<Map<String, dynamic>> finalRemappedRows = [];
       for (var question in completeFormQuestions) {
         final config = Map<String, dynamic>.from(question['field_config'] ?? {});
         bool needsUpsert = false;
-
         final skipLogic = config['skip_logic'] != null ? Map<String, dynamic>.from(config['skip_logic']) : null;
         if (skipLogic != null && skipLogic['enabled'] == true) {
           final currentDepId = skipLogic['dependent_question_id']?.toString();
@@ -226,7 +215,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             needsUpsert = true;
           }
         }
-
         final sectionSkip = config['section_skip_logic'] != null ? Map<String, dynamic>.from(config['section_skip_logic']) : null;
         if (sectionSkip != null && sectionSkip['enabled'] == true) {
           final currentDepId = sectionSkip['dependent_question_id']?.toString();
@@ -236,7 +224,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             needsUpsert = true;
           }
         }
-
         if (needsUpsert) {
           finalRemappedRows.add({
             'id': question['id'],
@@ -408,7 +395,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
               final currentIdx = _currentQuestions.indexOf(q);
               return currentIdx < editIndex;
             }).toList();
-
             Future<void> handleSmartSpreadsheetPaste(int index) async {
               final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
               if (data == null || data.text == null || data.text!.isEmpty) return;
@@ -433,12 +419,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             }
 
             return AlertDialog(
-              //   title: Text(
-              //     isEditing
-              //         ? "Modify ${type.toUpperCase()} Question Parameters"
-              //         : "Configure New ${type == 'checkbox_search' ? 'Check box' : type.toUpperCase()} Field",
-              //     style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
-              //   ),
               content: SizedBox(
                 width: 680,
                 child: SingleChildScrollView(
@@ -648,12 +628,9 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                               ],
                             ),
                             if (enableSkipLogic) ...[
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 13),
                               filtratedPriorQuestions.isEmpty
-                                  ? const Text(
-                                      "No prior fields to depend on.",
-                                      style: TextStyle(color: Colors.yellow, fontSize: 12),
-                                    )
+                                  ? const Text("No prior fields")
                                   : Column(
                                       children: [
                                         DropdownButtonFormField<String>(
@@ -667,7 +644,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                           decoration: const InputDecoration(
                                             labelText: 'Select Prior Question',
                                             border: OutlineInputBorder(),
-                                            contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 13),
                                           ),
                                           items: filtratedPriorQuestions
                                               .map(
@@ -838,13 +815,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       'value': skipOperator == 'filled' ? '' : skipValue,
     };
     String targetSection = section.isEmpty ? (_sections.isNotEmpty ? _sections.last : 'General') : section;
-
     if (_sectionConditions.containsKey(targetSection) && _sectionConditions[targetSection]?['enabled'] == true) {
       configBlock['section_skip_logic'] = _sectionConditions[targetSection];
     } else {
       configBlock.remove('section_skip_logic');
     }
-
     final Map<String, dynamic> targetQuestionRow = {
       'id': existingId ?? 'new_${DateTime.now().millisecondsSinceEpoch}',
       'question': labelText,
@@ -852,7 +827,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       'required': required,
       'field_config': configBlock,
     };
-
     setState(() {
       if (!_sections.contains(targetSection)) {
         _sections.add(targetSection);
@@ -879,7 +853,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       }
       groupedQuestions.putIfAbsent(sectionName, () => []).add(i);
     }
-
     return Scaffold(
       appBar: AppBar(
         title: Text("Building: ${widget.formTitle}"),
@@ -947,7 +920,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                     padding: const EdgeInsets.all(16.0),
                     children: _sections.map((sectionName) {
                       final globalIndexes = groupedQuestions[sectionName] ?? [];
-
                       return DragTarget<int>(
                         onWillAcceptWithDetails: (details) {
                           final draggedIdx = details.data;
@@ -959,7 +931,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         },
                         builder: (context, candidateData, rejectedData) {
                           final isOverSection = candidateData.isNotEmpty;
-
                           return Card(
                             margin: const EdgeInsets.only(bottom: 16.0),
                             elevation: isOverSection ? 4 : 1,
@@ -1018,7 +989,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                       final q = _currentQuestions[globalIdx];
                                       final String type = q['field_config']?['type'] ?? 'text';
                                       final bool isRequired = q['required'] ?? false;
-
                                       final Widget cardItem = Card(
                                         color: Colors.grey.shade50,
                                         margin: const EdgeInsets.symmetric(vertical: 4.0),
@@ -1054,7 +1024,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                           ),
                                         ),
                                       );
-
                                       return LongPressDraggable<int>(
                                         data: globalIdx,
                                         axis: Axis.vertical,
@@ -1120,7 +1089,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     String? selectedSectionDepId;
     String sectionOperator = 'equals';
     final sectionValueController = TextEditingController();
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1128,7 +1096,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final filtratedPriorQuestions = _currentQuestions.toList();
-
             return AlertDialog(
               title: const Text(
                 "Create New Section",
@@ -1292,7 +1259,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                       }
                       _sectionConditions[sectionName] = sectionSkipBlock;
                     });
-
                     Navigator.pop(context);
                   },
                   child: const Text("Create Section", style: TextStyle(color: Colors.white)),
@@ -1325,7 +1291,6 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
             final filtratedPriorQuestions = _currentQuestions.where((q) {
               return q['section'] != oldName;
             }).toList();
-
             return AlertDialog(
               title: Text(
                 "Modify Section Matrix: $oldName",
@@ -1481,14 +1446,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                   style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
                   onPressed: () {
                     final newName = textController.text.trim().isEmpty ? oldName : textController.text.trim();
-
                     final updatedSectionSkipBlock = {
                       'enabled': enableSectionSkip && selectedSectionDepId != null,
                       'dependent_question_id': selectedSectionDepId,
                       'operator': sectionOperator,
                       'value': sectionOperator == 'filled' ? '' : sectionValueController.text.trim(),
                     };
-
                     setState(() {
                       final oldIndex = _sections.indexOf(oldName);
                       if (oldIndex != -1) {
@@ -1496,10 +1459,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                       } else if (!_sections.contains(newName)) {
                         _sections.add(newName);
                       }
-
                       _sectionConditions.remove(oldName);
                       _sectionConditions[newName] = updatedSectionSkipBlock;
-
                       for (var q in _currentQuestions) {
                         if (q['section'] == oldName) {
                           q['section'] = newName;
@@ -1557,14 +1518,11 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
   void _moveEntireSection(String sectionName, int direction) {
     final int index = _sections.indexOf(sectionName);
     if (index == -1) return;
-
     final int newIndex = index + direction;
     if (newIndex < 0 || newIndex >= _sections.length) return;
-
     setState(() {
       _sections.removeAt(index);
       _sections.insert(newIndex, sectionName);
-
       final List<Map<String, dynamic>> reorderedQuestions = [];
       for (final s in _sections) {
         reorderedQuestions.addAll(_currentQuestions.where((q) => (q['section'] ?? 'General') == s));
@@ -1589,9 +1547,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         config.remove('section_skip_logic');
       }
       movedItem['field_config'] = config;
-
       _currentQuestions.removeAt(draggedGlobalIdx);
-
       int lastTargetIdx = _currentQuestions.lastIndexWhere((q) => q['section'] == targetSectionName);
       if (lastTargetIdx == -1) {
         _currentQuestions.add(movedItem);
@@ -1612,15 +1568,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         config.remove('section_skip_logic');
       }
       item['field_config'] = config;
-
       int adjustedTargetIdx = targetGlobalIdx;
       if (sourceGlobalIdx < targetGlobalIdx) {
         adjustedTargetIdx--;
       }
-
       if (adjustedTargetIdx < 0) adjustedTargetIdx = 0;
       if (adjustedTargetIdx > _currentQuestions.length) adjustedTargetIdx = _currentQuestions.length;
-
       _currentQuestions.insert(adjustedTargetIdx, item);
     });
   }

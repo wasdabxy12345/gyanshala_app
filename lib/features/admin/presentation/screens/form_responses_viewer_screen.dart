@@ -10,17 +10,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:universal_html/html.dart' as html;
 
-class FormResponsesOverviewScreen extends StatefulWidget {
+class FormResponsesViewScreen extends StatefulWidget {
   final String formId;
   final String formTitle;
 
-  const FormResponsesOverviewScreen({super.key, required this.formId, required this.formTitle});
+  const FormResponsesViewScreen({super.key, required this.formId, required this.formTitle});
 
   @override
-  State<FormResponsesOverviewScreen> createState() => _FormResponsesOverviewScreenState();
+  State<FormResponsesViewScreen> createState() => _FormResponsesViewScreenState();
 }
 
-class _FormResponsesOverviewScreenState extends State<FormResponsesOverviewScreen> {
+class _FormResponsesViewScreenState extends State<FormResponsesViewScreen> {
   List<Map<String, dynamic>> _columns = [];
   List<Map<String, dynamic>> _rows = [];
   bool _isLoading = true;

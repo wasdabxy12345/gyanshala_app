@@ -4,18 +4,18 @@ import 'package:gyanshala_app/features/students/controller/student_controller.da
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class DailyMarkingView extends ConsumerStatefulWidget {
+class AttendanceTakingView extends ConsumerStatefulWidget {
   final DateTime date;
   final String searchQuery;
   final Function(DateTime) onDateChanged;
 
-  const DailyMarkingView({super.key, required this.date, required this.searchQuery, required this.onDateChanged});
+  const AttendanceTakingView({super.key, required this.date, required this.searchQuery, required this.onDateChanged});
 
   @override
-  ConsumerState<DailyMarkingView> createState() => _DailyMarkingViewState();
+  ConsumerState<AttendanceTakingView> createState() => _DailyMarkingViewState();
 }
 
-class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
+class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
   Map<String, String> statusMap = {};
   List<DateTime> _holidays = [];
   bool _isLoading = false;
@@ -49,7 +49,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
   }
 
   @override
-  void didUpdateWidget(DailyMarkingView oldWidget) {
+  void didUpdateWidget(AttendanceTakingView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.date != widget.date) {
       _fetchTodayAttendance();
@@ -104,7 +104,7 @@ class _DailyMarkingViewState extends ConsumerState<DailyMarkingView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.event_busy, size: 80, color: Colors.yellow.shade200),
+          Icon(Icons.event_busy, size: 80, color: Colors.amber),
           const SizedBox(height: 16),
           const Text(
             "Holiday / Sunday",

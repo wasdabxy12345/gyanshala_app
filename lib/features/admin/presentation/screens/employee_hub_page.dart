@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
-import 'package:gyanshala_app/features/admin/presentation/tabs/employee_attendance_records_tab.dart';
+import 'package:gyanshala_app/features/admin/presentation/tabs/employee_attendance_tab.dart';
 import 'package:gyanshala_app/features/admin/presentation/tabs/employees_list_tab.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -25,7 +25,10 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
   String _searchQuery = "";
   bool _isExporting = false;
 
-  DateTimeRange _selectedRange = DateTimeRange(start: DateTime.now().subtract(const Duration(days: 7)), end: DateTime.now());
+  DateTimeRange _selectedRange = DateTimeRange(
+    start: DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1)),
+    end: DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1)).add(const Duration(days: 6)),
+  );
 
   final GlobalKey<EmployeeListTabState> _employeeListKey = GlobalKey<EmployeeListTabState>();
 
@@ -232,7 +235,7 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
                   Tab(text: "Employee List"),
                 ],
               ),
-              const Padding(padding: EdgeInsets.all(4.0)),
+              const Padding(padding: EdgeInsets.all(3)),
             ],
           ),
         ),
@@ -241,7 +244,7 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
         controller: _tabController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          EmployeeAttendanceRecordsTab(
+          EmployeeAttendanceTab(
             range: _selectedRange,
             searchQuery: _searchQuery,
             onRangeChanged: (r) => setState(() => _selectedRange = r),
