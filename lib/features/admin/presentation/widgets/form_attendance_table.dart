@@ -1,8 +1,14 @@
+import 'dart:io';
+
+import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:universal_html/html.dart' as html;
 
 class FormAttendanceTable extends ConsumerStatefulWidget {
   final String formId;
@@ -21,18 +27,122 @@ class FormAttendanceTable extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<FormAttendanceTable> createState() => _FormAttendanceTableState();
+  ConsumerState<FormAttendanceTable> createState() => FormAttendanceTableState();
 }
 
-class _FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
+class FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _getFormAttendanceData();
+  }
+
+  Future<void> exportExcel() async {
+    try {
+      final data = await _getFormAttendanceData();
+
+      final employees =
+          ((data['employees'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
+              .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
+              .toList();
+
+      final dates = _getDatesInRange(widget.startDate, widget.endDate);
+
+      final excel = Excel.createExcel();
+      final sheet = excel['Attendance'];
+
+      final headers = ['Employee', ...dates.map((d) => DateFormat('dd-MM-yyyy').format(d))];
+
+      sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
+
+      for (final employee in employees) {
+        final attMap = (employee['attendance_map'] as dynamic ?? {}) is Map
+            ? Map<String, dynamic>.from(employee['attendance_map'] as Map)
+            : <String, dynamic>{};
+
+        final row = <CellValue>[TextCellValue(employee['full_name'] ?? '')];
+
+        for (final d in dates) {
+          final key = DateFormat('yyyy-MM-dd').format(d);
+
+          String value;
+
+          if (_isHoliday(d)) {
+            value = 'Holiday';
+          } else if (attMap[key] != null) {
+            value = 'Present';
+          } else if (DateTime(
+            d.year,
+            d.month,
+            d.day,
+          ).isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))) {
+            value = 'Absent';
+          } else {
+            value = 'Pending';
+          }
+
+          row.add(TextCellValue(value));
+        }
+
+        sheet.appendRow(row);
+      }
+
+      final bytes = excel.encode();
+
+      if (bytes == null) {
+        throw Exception('Failed to generate excel');
+      }
+
+      final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
+      final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
+
+      final fileName = '${widget.formTitle} Attendance [$startRange to $endRange].xlsx';
+
+      if (kIsWeb) {
+        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        final url = html.Url.createObjectUrlFromBlob(blob);
+
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..download = fileName
+          ..style.display = 'none';
+
+        html.document.body?.children.add(anchor);
+
+        anchor.click();
+
+        anchor.remove();
+
+        html.Url.revokeObjectUrl(url);
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+
+        final file = File('${dir.path}/$fileName');
+
+        await file.writeAsBytes(bytes);
+
+        await OpenFilex.open(file.path);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
+    }
+  }
+
   Future<Map<String, dynamic>> _getFormAttendanceData() async {
     final supabase = ref.read(supabaseClientProvider);
 
-    final employees =
-        ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', ['shikshaMitra', 'seniorMentor']))
-                as List<dynamic>)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+    final employees = ((await supabase.from('profiles').select('id, first_name, last_name')) as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
 
     final formAttendanceRecords =
         ((await supabase
@@ -72,6 +182,23 @@ class _FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
     return {'employees': employeeData, 'records': formAttendanceRecords};
   }
 
+  Future<void> refresh() async {
+    _future = _getFormAttendanceData();
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FormAttendanceTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
+      _future = _getFormAttendanceData();
+    }
+  }
+
   bool _isHoliday(DateTime date) {
     return date.weekday == DateTime.sunday;
   }
@@ -91,7 +218,7 @@ class _FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
-      future: _getFormAttendanceData(),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

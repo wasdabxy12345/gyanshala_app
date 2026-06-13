@@ -387,8 +387,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                     hasFilter: _selectedQualificationFilters != null,
                                   ),
                                   const Padding(
-                                    // FIX #2: Increased padding to match dynamic header expansion safely
-                                    padding: EdgeInsets.only(left: 16, right: 24, top: 12, bottom: 12),
+                                    padding: EdgeInsets.only(left: 13, right: 13, top: 13, bottom: 13),
                                     child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],

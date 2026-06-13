@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/admin/presentation/screens/form_attendance_tab.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
+import 'package:gyanshala_app/features/admin/presentation/tabs/detailed_form_responses_tab.dart';
+import 'package:gyanshala_app/features/admin/presentation/tabs/form_attendance_tab.dart';
 
 class FormResponseHub extends ConsumerStatefulWidget {
   final String formId;
@@ -14,8 +16,9 @@ class FormResponseHub extends ConsumerStatefulWidget {
 
 class _FormResponseHubState extends ConsumerState<FormResponseHub> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final String _searchQuery = ""; // Changed to final since it is currently fixed empty string state
-
+  final String _searchQuery = "";
+  final _formAttendanceKey = GlobalKey<FormAttendanceTabState>();
+  final _detailResponsesKey = GlobalKey<DetailedFormResponsesTabState>();
   late DateTimeRange _selectedRange;
 
   @override
@@ -48,6 +51,19 @@ class _FormResponseHubState extends ConsumerState<FormResponseHub> with SingleTi
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.formTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Refresh",
+            onPressed: () {
+              if (_tabController.index == 0) {
+                _formAttendanceKey.currentState?.refresh();
+              } else {
+                _detailResponsesKey.currentState?.refresh();
+              }
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Column(
@@ -68,6 +84,7 @@ class _FormResponseHubState extends ConsumerState<FormResponseHub> with SingleTi
         physics: const NeverScrollableScrollPhysics(),
         children: [
           FormAttendanceTab(
+            key: _formAttendanceKey,
             formId: widget.formId,
             formTitle: widget.formTitle,
             searchQuery: _searchQuery,
@@ -78,8 +95,21 @@ class _FormResponseHubState extends ConsumerState<FormResponseHub> with SingleTi
               });
             },
           ),
-          const Center(child: Text("Detailed Form Responses Content View Here")),
+          DetailedFormResponsesTab(key: _detailResponsesKey, formId: widget.formId, formTitle: widget.formTitle),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          if (_tabController.index == 0) {
+            _formAttendanceKey.currentState?.exportExcel();
+          } else if (_tabController.index == 1) {
+            _detailResponsesKey.currentState?.exportExcel();
+          }
+        },
+        icon: const Icon(Icons.download),
+        label: const Text("Export Excel"),
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
       ),
     );
   }
