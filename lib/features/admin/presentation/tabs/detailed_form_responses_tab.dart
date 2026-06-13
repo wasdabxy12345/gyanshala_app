@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
@@ -12,9 +13,7 @@ import 'package:universal_html/html.dart' as html;
 class DetailedFormResponsesTab extends StatefulWidget {
   final String formId;
   final String formTitle;
-
   const DetailedFormResponsesTab({super.key, required this.formId, required this.formTitle});
-
   @override
   State<DetailedFormResponsesTab> createState() => DetailedFormResponsesTabState();
 }
@@ -24,8 +23,13 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   List<Map<String, dynamic>> _rawRows = [];
   List<Map<String, dynamic>> _filteredRows = [];
   bool _isLoading = true;
+
   int _sortColumnIndex = 1;
   bool _isAscending = false;
+
+  final ScrollController _horizontalController = ScrollController();
+  final ScrollController _verticalController = ScrollController();
+
   final Map<int, Set<String>> _selectedColumnFilters = {};
 
   Future<void> refresh() => _fetchTableData();
@@ -35,6 +39,13 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   void initState() {
     super.initState();
     _fetchTableData();
+  }
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    _verticalController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchTableData() async {
@@ -84,6 +95,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
     _filteredRows.sort((a, b) {
       String valA = _getCellValueString(a, _sortColumnIndex);
       String valB = _getCellValueString(b, _sortColumnIndex);
+
       if (_sortColumnIndex == 1) {
         final dateA = DateTime.tryParse(a['submitted_at']?.toString() ?? '') ?? DateTime(0);
         final dateB = DateTime.tryParse(b['submitted_at']?.toString() ?? '') ?? DateTime(0);
@@ -130,6 +142,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
           ? "${(lat as num).toStringAsFixed(5)}, ${(lon as num).toStringAsFixed(5)}"
           : "No GPS Data";
     }
+
     final questionIdx = index - 3;
     if (questionIdx >= 0 && questionIdx < _columns.length) {
       final String questionId = _columns[questionIdx]['id'].toString();
@@ -157,6 +170,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
+
     Set<String> currentSelection = _selectedColumnFilters[columnIndex] != null
         ? Set.from(_selectedColumnFilters[columnIndex]!)
         : Set.from(allValues);
@@ -246,6 +260,12 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_horizontalController.hasClients) {
+        debugPrint('Horizontal extent: ${_horizontalController.position.maxScrollExtent}');
+      }
+    });
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -256,12 +276,19 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
     final bool hasActiveFilters = _selectedColumnFilters.isNotEmpty;
 
+    final List<String> headerTitles = [
+      "Employee Name",
+      "Submission Date",
+      "GPS Location",
+      ..._columns.map((q) => (q['question'] ?? '').toString()),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasActiveFilters)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 3.0),
+            padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 3.0),
             child: Row(
               children: [
                 Text(
@@ -271,7 +298,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: _clearAllFilters,
-                  icon: const Icon(Icons.filter_alt_off, size: 16),
+                  icon: const Icon(Icons.filter_alt_off, size: 13),
                   label: const Text('Clear Active Filters'),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
                 ),
@@ -280,17 +307,56 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
           ),
         Expanded(
           child: _filteredRows.isEmpty
-              ? const Center(child: Text("No responses match the active filters."))
-              : SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: _buildTable()),
+              ? const Center(child: Text("Nothing found matching applied filters"))
+              : ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad}),
+                  child: ScrollbarTheme(
+                    data: ScrollbarThemeData(
+                      thumbVisibility: WidgetStateProperty.all(true),
+                      trackVisibility: WidgetStateProperty.all(true),
+                      thickness: WidgetStateProperty.all(12),
+                      thumbColor: WidgetStateProperty.all(Colors.grey.shade600),
+                    ),
+                    child: Scrollbar(
+                      controller: _verticalController,
+                      thumbVisibility: true,
+                      trackVisibility: true,
+                      scrollbarOrientation: ScrollbarOrientation.right,
+                      notificationPredicate: (notification) {
+                        return notification.metrics.axis == Axis.vertical;
+                      },
+                      child: Scrollbar(
+                        controller: _horizontalController,
+                        thumbVisibility: true,
+                        trackVisibility: true,
+                        scrollbarOrientation: ScrollbarOrientation.bottom,
+                        notificationPredicate: (notification) {
+                          return notification.metrics.axis == Axis.horizontal;
+                        },
+                        child: SingleChildScrollView(
+                          controller: _verticalController,
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            controller: _horizontalController,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                              child: _buildTable(headerTitles),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
         ),
       ],
     );
   }
 
-  Widget _buildTable() {
+  Widget _buildTable(List<String> headerTitles) {
     return Container(
       padding: const EdgeInsets.all(13),
       child: Table(
@@ -300,16 +366,9 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
         children: [
           TableRow(
             decoration: const BoxDecoration(color: Color(0xFFE6F7FF)),
-            children: [
-              _buildSortableHeaderCell("Employee Name", 0),
-              _buildSortableHeaderCell("Submission Date", 1),
-              _buildSortableHeaderCell("GPS Location", 2),
-              ..._columns.asMap().entries.map((entry) {
-                final int dynamicIdx = entry.key + 3;
-                final String title = entry.value['question'] ?? '';
-                return _buildSortableHeaderCell(title, dynamicIdx);
-              }),
-            ],
+            children: List.generate(headerTitles.length, (index) {
+              return _buildSortableHeaderCell(headerTitles[index], index);
+            }),
           ),
           ..._filteredRows.map((row) {
             final profile = row['profiles'] as Map<String, dynamic>?;
