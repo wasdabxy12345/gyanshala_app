@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/students/presentation/views/attendance_records_view.dart';
 import 'package:gyanshala_app/features/students/presentation/views/attendance_taking_view.dart';
 
@@ -21,7 +22,7 @@ class _StudentAttendanceParentTabState extends State<StudentAttendanceParentTab>
       child: Column(
         children: [
           const TabBar(
-            labelColor: Colors.blue,
+            labelColor: AppTheme.primaryBlue,
             tabs: [
               Tab(text: "Mark Today"),
               Tab(text: "Past Records"),
@@ -29,6 +30,7 @@ class _StudentAttendanceParentTabState extends State<StudentAttendanceParentTab>
           ),
           Expanded(
             child: TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 AttendanceTakingView(
                   date: _selectedDate,

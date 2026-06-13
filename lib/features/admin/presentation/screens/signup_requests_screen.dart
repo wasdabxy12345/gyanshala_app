@@ -40,7 +40,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     _filteredRequests.sort((a, b) {
       String valA = "";
       String valB = "";
-
       switch (_sortColumnIndex) {
         case 0:
           valA = "${a['first_name'] ?? ''} ${a['last_name'] ?? ''}";
@@ -71,7 +70,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           valB = b['qualification']?.toString() ?? "";
           break;
       }
-
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
       return _isAscending ? compare : -compare;
     });
@@ -79,7 +77,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
   void _applyAllFilters() {
     final query = _searchController.text.toLowerCase().trim();
-
     final result = _rawRequests.where((req) {
       final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
       final phone = req['phone']?.toString() ?? "";
@@ -105,10 +102,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
       if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
       if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
-
       return true;
     }).toList();
-
     setState(() {
       _filteredRequests = result;
       _applySorting();
@@ -147,7 +142,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
-
     Set<String> currentSelection;
     if (columnIndex == 0)
       currentSelection = _selectedNameFilters != null ? Set.from(_selectedNameFilters!) : Set.from(allValues);
@@ -163,10 +157,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
     else
       currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
-
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
-
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -278,14 +270,11 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
   Widget _buildGridContent(String statusFilter) {
     final supabase = ref.watch(supabaseClientProvider);
-
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: supabase.from('signup_requests').stream(primaryKey: ['id']).eq('status', statusFilter),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
         _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
-
         final query = _searchController.text.toLowerCase().trim();
         _filteredRequests = _rawRequests.where((req) {
           final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
@@ -297,15 +286,12 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
           if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
             return false;
-
           return query.isEmpty ||
               fullName.toLowerCase().contains(query) ||
               (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
               (req['qualification']?.toString().toLowerCase().contains(query) ?? false);
         }).toList();
-
         _applySorting();
-
         return Column(
           children: [
             Expanded(
@@ -465,7 +451,6 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
-
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -474,7 +459,6 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -521,9 +505,7 @@ class _SortableHeader extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
-
   const _DataCell({required this.text, this.isBold = false});
-
   @override
   Widget build(BuildContext context) {
     return Padding(

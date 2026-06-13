@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class AuthShell extends StatelessWidget {
   const AuthShell({super.key, required this.title, required this.subtitle, required this.formChild, required this.footer});
@@ -47,12 +48,9 @@ class _FormPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-        side: const BorderSide(color: Color(0xFFD7E7FC)),
-      ),
+      shape: RoundedRectangleBorder(side: const BorderSide(color: AppTheme.lightBlue)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        padding: const EdgeInsets.fromLTRB(25, 28, 25, 25),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

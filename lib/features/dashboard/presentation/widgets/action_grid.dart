@@ -31,13 +31,12 @@ class ActionGrid extends StatelessWidget {
         } else if (title == "Fill Forms") {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const AvailableFormsScreen()));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("working on it: $title")));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("not yet implemented")));
         }
       },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Column(

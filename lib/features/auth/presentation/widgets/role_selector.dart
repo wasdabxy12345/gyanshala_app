@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/models/user_role.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class RoleSelector extends StatelessWidget {
-  const RoleSelector({
-    super.key,
-    required this.selectedRole,
-    required this.onRoleSelected,
-  });
+  const RoleSelector({super.key, required this.selectedRole, required this.onRoleSelected});
 
   final UserRole selectedRole;
   final ValueChanged<UserRole> onRoleSelected;
@@ -24,17 +21,9 @@ class RoleSelector extends StatelessWidget {
           onSelected: (_) => onRoleSelected(role),
           selectedColor: Theme.of(context).colorScheme.primary,
           backgroundColor: const Color(0xFFEAF3FF),
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1B2A41),
-            fontWeight: FontWeight.w600,
-          ),
+          labelStyle: TextStyle(color: isSelected ? Colors.white : const Color(0xFF1B2A41), fontWeight: FontWeight.w600),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : const Color(0xFFBFD8F5),
-            ),
+            side: BorderSide(color: isSelected ? Theme.of(context).colorScheme.primary : AppTheme.lightBlue),
           ),
           showCheckmark: false,
         );

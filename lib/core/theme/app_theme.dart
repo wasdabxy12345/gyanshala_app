@@ -31,19 +31,15 @@ class AppTheme {
         filled: true,
         fillColor: lightBlue.withValues(alpha: 0.35),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: accentBlue, width: 1.3),
-        ),
+        border: OutlineInputBorder(),
+        focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: accentBlue, width: 1.3)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          minimumSize: const Size(90, 39),
+          minimumSize: const Size(90, 37),
           padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 13),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),

@@ -106,7 +106,6 @@ class _AdminActionTile extends StatelessWidget {
       elevation: 2,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

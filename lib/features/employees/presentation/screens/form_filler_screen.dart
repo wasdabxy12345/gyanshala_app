@@ -320,11 +320,10 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                       itemCount: _questions.length,
                       itemBuilder: (context, index) {
                         return Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.all(13),
                           child: Card(
                             elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: Padding(padding: const EdgeInsets.all(20.0), child: _buildDynamicField(_questions[index])),
+                            child: Padding(padding: const EdgeInsets.all(13), child: _buildDynamicField(_questions[index])),
                           ),
                         );
                       },
@@ -401,8 +400,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                   onPressed: () => setState(() => _searchQueries.remove(qId)),
                 )
               : null,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 13),
           filled: true,
           fillColor: Colors.grey.shade50,
         ),
@@ -529,7 +527,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                                       color: state.value == opt ? AppTheme.lightBlue : Colors.white,
                                       margin: const EdgeInsets.only(bottom: 8),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
                                         side: BorderSide(color: state.value == opt ? AppTheme.primaryBlue : Colors.grey.shade300),
                                       ),
                                       child: RadioListTile<String>(
@@ -646,7 +643,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                                     color: isChecked ? const Color(0xFFE6F7FF) : Colors.white,
                                     margin: const EdgeInsets.only(bottom: 8),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
                                       side: BorderSide(color: isChecked ? AppTheme.primaryBlue : Colors.grey.shade300),
                                     ),
                                     child: CheckboxListTile(
@@ -712,7 +708,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
             Icon(Icons.location_off, color: Colors.red, size: 28),
@@ -766,11 +761,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            icon: const Icon(Icons.location_searching, size: 16, color: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
+            icon: const Icon(Icons.location_searching, size: 13, color: Colors.white),
             label: const Text("Turn On GPS", style: TextStyle(color: Colors.white)),
             onPressed: () async {
               Navigator.pop(context);

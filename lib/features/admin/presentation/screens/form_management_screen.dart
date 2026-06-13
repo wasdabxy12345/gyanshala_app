@@ -50,7 +50,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
           builder: (dialogContext) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+                Icon(Icons.warning, color: Colors.redAccent, size: 28),
                 SizedBox(width: 8),
                 Text("Delete?", style: TextStyle(fontWeight: FontWeight.bold)),
               ],
@@ -190,7 +190,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.amber),
+                            icon: const Icon(Icons.edit, color: Colors.blue),
                             tooltip: "Edit Form Template",
                             onPressed: () {
                               Navigator.push(

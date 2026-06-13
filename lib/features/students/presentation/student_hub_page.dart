@@ -21,13 +21,13 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
         appBar: AppBar(
           title: const Text("Students"),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(110),
+            preferredSize: const Size.fromHeight(100),
             child: Column(
               children: [
                 const TabBar(
                   tabs: [
-                    Tab(icon: Icon(Icons.how_to_reg), text: "Attendance"),
-                    Tab(icon: Icon(Icons.people_outline), text: "Student List"),
+                    Tab(text: "Attendance"),
+                    Tab(text: "Student List"),
                   ],
                 ),
                 Padding(
@@ -48,6 +48,7 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
           ),
         ),
         body: TabBarView(
+          physics: const NeverScrollableScrollPhysics(),
           children: [
             StudentAttendanceParentTab(searchQuery: _searchQuery),
             StudentListTab(searchQuery: _searchQuery),

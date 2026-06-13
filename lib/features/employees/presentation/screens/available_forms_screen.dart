@@ -43,7 +43,7 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Assigned Evaluations")),
+      appBar: AppBar(title: const Text("Forms")),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryBlue))
           : _availableForms.isEmpty
@@ -59,16 +59,10 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
                   margin: const EdgeInsets.only(bottom: 13),
                   elevation: 1,
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x1A9C27B0),
-                      child: Icon(Icons.assignment, color: Colors.purple),
-                    ),
                     title: Text(
                       form['title'] ?? '[no title]',
                       style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryBlue),
                     ),
-                    subtitle: const Text("Tap to open and fill responses"),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                     onTap: () {
                       Navigator.push(
                         context,

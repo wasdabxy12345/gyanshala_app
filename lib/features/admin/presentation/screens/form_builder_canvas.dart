@@ -932,7 +932,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                         builder: (context, candidateData, rejectedData) {
                           final isOverSection = candidateData.isNotEmpty;
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 16.0),
+                            margin: const EdgeInsets.only(bottom: 13),
                             elevation: isOverSection ? 4 : 1,
                             shape: RoundedRectangleBorder(
                               side: BorderSide(

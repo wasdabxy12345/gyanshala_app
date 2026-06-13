@@ -151,10 +151,9 @@ class AttendanceRecordsView extends StatelessWidget {
       style: TextButton.styleFrom(
         backgroundColor: Colors.blue.shade50,
         foregroundColor: Colors.blue.shade700,
-        padding: EdgeInsets.zero, // Removes default internal padding blocking centering
-        minimumSize: const Size(0, 36), // Sets a stable box height
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap, // Disables extended invisible borders
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 37),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       onPressed: action,
       child: Text(

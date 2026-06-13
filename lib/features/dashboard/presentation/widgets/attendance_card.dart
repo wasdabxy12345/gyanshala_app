@@ -18,7 +18,6 @@ class AttendanceCard extends ConsumerWidget {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: isLoading ? Colors.grey.shade300 : (isCheckedIn ? Colors.green : Colors.blue)),
       ),
       color: isLoading
@@ -61,7 +60,6 @@ class AttendanceCard extends ConsumerWidget {
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: Colors.grey.shade300,
                     padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: isLoading
                       ? const SizedBox(

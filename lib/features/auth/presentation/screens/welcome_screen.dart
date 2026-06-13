@@ -543,7 +543,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
       child: Column(

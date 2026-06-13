@@ -175,10 +175,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
-                      color: isAtSchool ? Colors.green : Colors.red,
-                    ),
+                    leading: Icon(isCheckIn ? Icons.login : Icons.logout, color: isAtSchool ? Colors.green : Colors.red),
                     title: Row(
                       children: [
                         Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -212,7 +209,6 @@ class AttendanceDetailsPage extends ConsumerWidget {
             padding: const EdgeInsets.all(13.0),
             child: Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(13.0),
                 child: useWideLayout
@@ -412,7 +408,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
         onTap: () {
           if (_mapType == type) return;
           setState(() {
@@ -425,18 +420,15 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
+          decoration: BoxDecoration(color: isSelected ? AppTheme.primaryBlue : Colors.transparent),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.black87),
-              const SizedBox(width: 4),
+              Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black),
+              const SizedBox(width: 3),
               Text(
                 label,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black87),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black),
               ),
             ],
           ),
@@ -450,7 +442,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Container(
-          decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: Colors.grey.shade200),
           padding: const EdgeInsets.all(2),
           child: Row(
             mainAxisSize: MainAxisSize.min,

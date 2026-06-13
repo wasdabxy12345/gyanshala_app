@@ -603,7 +603,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         padding: const EdgeInsets.all(6),
                         child: Material(
                           elevation: 13,
-                          borderRadius: BorderRadius.circular(8),
                           child: Column(
                             children: [
                               Padding(
@@ -805,10 +804,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           const SizedBox(height: 13),
                           Expanded(
                             child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
                               clipBehavior: Clip.antiAlias,
                               child: buildUnifiedMapCanvas(),
                             ),
@@ -902,15 +898,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
           onTap: () => onTypeChanged(type),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
-            ),
+            decoration: BoxDecoration(color: isSelected ? AppTheme.primaryBlue : Colors.transparent),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -931,7 +923,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Container(
-          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: Colors.grey.shade300),
           padding: const EdgeInsets.all(2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1129,13 +1121,9 @@ class _SortableHeader extends StatelessWidget {
           ),
           InkWell(
             onTap: onFilter,
-            borderRadius: BorderRadius.circular(6),
             child: Container(
               padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: hasFilter ? AppTheme.primaryBlue.withAlpha(30) : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-              ),
+              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withAlpha(30) : Colors.transparent),
               child: Icon(Icons.filter_alt, size: 13, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),
