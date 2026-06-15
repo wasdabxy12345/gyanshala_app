@@ -440,13 +440,8 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             TextFormField(
               key: ValueKey('text_field_$qId'),
               initialValue: _formAnswers[qId],
-              maxLines: 4,
-              decoration: const InputDecoration(
-                hintText: "Type your answer here...",
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Color(0xFFFAFAFA),
-              ),
+              maxLines: 3,
+              decoration: const InputDecoration(hintText: "Type your answer here...", border: OutlineInputBorder(), filled: true),
               validator: (val) => isRequired && (val == null || val.trim().isEmpty) ? 'This field is required' : null,
               onSaved: (val) => _formAnswers[qId] = val?.trim(),
             ),
@@ -492,7 +487,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
               children: [
                 fieldLabel,
                 _buildSearchField(qId, "Search options..."),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Expanded(
                   child: SingleChildScrollView(
                     key: ValueKey('scroll_options_$qId'),
@@ -534,7 +529,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                         ),
                         if (isOtherSelected)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
                             child: TextFormField(
                               key: ValueKey('radio_other_input_$qId'),
                               initialValue: _formAnswers[otherTextKey],
@@ -556,7 +551,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                 ),
                 if (state.hasError)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 4),
+                    padding: const EdgeInsets.only(top: 8, left: 3),
                     child: Text(state.errorText ?? '', style: const TextStyle(color: Colors.red, fontSize: 13)),
                   ),
               ],

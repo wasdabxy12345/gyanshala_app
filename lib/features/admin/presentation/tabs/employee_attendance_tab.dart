@@ -7,9 +7,7 @@ class EmployeeAttendanceTab extends StatelessWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
-
   const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
-
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -17,7 +15,6 @@ class EmployeeAttendanceTab extends StatelessWidget {
       firstDate: DateTime(2025),
       lastDate: isStart ? range.end : DateTime.now(),
     );
-
     if (picked != null) {
       if (isStart) {
         onRangeChanged(DateTimeRange(start: picked, end: range.end));
@@ -30,7 +27,6 @@ class EmployeeAttendanceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-
     return Column(
       children: [
         Padding(

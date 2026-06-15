@@ -4,11 +4,8 @@ import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 
-/// A tab widget that displays a highly functional, filterable, and sortable
-/// list of employees using Riverpod for global state access and Supabase for realtime data.
 class EmployeeListTab extends ConsumerStatefulWidget {
-  final String searchQuery; // Global search string passed down from the parent widget
-
+  final String searchQuery;
   const EmployeeListTab({super.key, required this.searchQuery});
 
   @override
@@ -16,20 +13,9 @@ class EmployeeListTab extends ConsumerStatefulWidget {
 }
 
 class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
-  // ==========================================
-  // STATE PROPERTIES
-  // ==========================================
-
-  /// Holds the distinct database IDs of rows currently marked as selected.
   final Set<String> _selectedEmployeeIds = {};
-
-  /// Indexes for tracking columns:
-  /// 0: First Name, 1: Last Name, 2: Phone, 3: Role, 4: Cluster, 5: Village, 6: School
   int _sortColumnIndex = 0;
   bool _isAscending = true;
-
-  /// Multi-select categorical filters for specific columns.
-  /// A `null` value implies no restrictions are active for that specific column.
   Set<String>? _selectedFirstNameFilters;
   Set<String>? _selectedLastNameFilters;
   Set<String>? _selectedPhoneFilters;
@@ -37,33 +23,22 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
-
-  /// Cache layers preserving data manipulation pipelines.
-  List<Map<String, dynamic>> _rawEmployees = []; // Master records fetched from the database
-  List<Map<String, dynamic>> _filteredEmployees = []; // Mutations after search queries and categorical filters
-
-  // Public Getters exposing internal state matrices
+  List<Map<String, dynamic>> _rawEmployees = [];
+  List<Map<String, dynamic>> _filteredEmployees = [];
   List<Map<String, dynamic>> get filteredEmployees => _filteredEmployees;
   Set<String> get selectedEmployeeIds => _selectedEmployeeIds;
-
-  // ==========================================
-  // SORTING LOGIC
-  // ==========================================
-
-  /// Triggers a state mutation to sort data based on the targeted column index.
   void _onSort(int columnIndex) {
     setState(() {
       if (_sortColumnIndex == columnIndex) {
-        _isAscending = !_isAscending; // Toggle ordering direction if same column is re-selected
+        _isAscending = !_isAscending;
       } else {
         _sortColumnIndex = columnIndex;
-        _isAscending = true; // Default to ascending sequence on structural shift
+        _isAscending = true;
       }
       _applySorting();
     });
   }
 
-  /// Evaluates and sorts [_filteredEmployees] in-place depending on current criteria.
   void _applySorting() {
     _filteredEmployees.sort((a, b) {
       String valA = "";
@@ -80,7 +55,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           valA = a['phone']?.toString() ?? "";
           break;
         case 3:
-          // Roles utilize specialized domain parsing logic based on explicit enum mappings
           valA = UserRole.fromString(a['role']).label;
           valB = UserRole.fromString(b['role']).label;
           int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
@@ -95,8 +69,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           valA = a['school']?.toString() ?? "";
           break;
       }
-
-      // Universal column key resolution fallback logic (ignoring specialized roles extraction index)
       if (_sortColumnIndex != 3) {
         valB = b[_getDatabaseKeyFromColumnIndex(_sortColumnIndex)]?.toString() ?? "";
       }
@@ -106,7 +78,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     });
   }
 
-  /// Maps presentation column indexes directly to standard Supabase DB collection schema string tags.
   String _getDatabaseKeyFromColumnIndex(int index) {
     switch (index) {
       case 0:
@@ -126,22 +97,16 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     }
   }
 
-  // ==========================================
-  // FILTERING LOGIC
-  // ==========================================
-
-  /// Re-evaluates search queries and user selections across all records.
   void _applyAllFilters() {
     final query = widget.searchQuery.toLowerCase().trim();
     final result = _rawRequestsFilterPass(_rawEmployees, query);
 
     setState(() {
       _filteredEmployees = result;
-      _applySorting(); // Maintain data integrity configurations on content changes
+      _applySorting();
     });
   }
 
-  /// Evaluates every record against standard text string searches and selected filters.
   List<Map<String, dynamic>> _rawRequestsFilterPass(List<Map<String, dynamic>> source, String searchStr) {
     return source.where((emp) {
       final firstName = emp['first_name']?.toString() ?? "";
@@ -152,8 +117,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       final cluster = emp['cluster']?.toString() ?? "";
       final village = emp['village']?.toString() ?? "";
       final school = emp['school']?.toString() ?? "";
-
-      // Evaluation 1: Global String Match check across metadata parameters
       final matchesSearch =
           searchStr.isEmpty ||
           fullName.toLowerCase().contains(searchStr) ||
@@ -164,8 +127,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           school.toLowerCase().contains(searchStr);
 
       if (!matchesSearch) return false;
-
-      // Evaluation 2: Multi-select discrete filtering criteria assertions
       if (_selectedFirstNameFilters != null && !_selectedFirstNameFilters!.contains(firstName)) return false;
       if (_selectedLastNameFilters != null && !_selectedLastNameFilters!.contains(lastName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
@@ -178,7 +139,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     }).toList();
   }
 
-  /// Extracts unique historical variants present across raw datasets to populate targeted contextual checklist configurations.
   List<String> _getUniqueValuesForColumn(int columnIndex) {
     final Set<String> values = {};
     for (final emp in _rawEmployees) {
@@ -209,12 +169,9 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     return values.toList()..sort();
   }
 
-  /// Displays an interactive popup dialog filled with distinct criteria checkboxes, allowing granular multi-filtering.
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
     Set<String> currentSelection;
-
-    // Isolate targeting instances parsing configurations
     if (columnIndex == 0)
       currentSelection = _selectedFirstNameFilters != null ? Set.from(_selectedFirstNameFilters!) : Set.from(allValues);
     else if (columnIndex == 1)
@@ -243,7 +200,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
             height: 450,
             child: Column(
               children: [
-                // In-dialog search input box for looking through long filter lists
                 TextField(
                   controller: dialogSearchController,
                   decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
@@ -260,7 +216,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Mass operations Master Checkbox control
                 CheckboxListTile(
                   dense: true,
                   value: currentSelection.length == allValues.length,
@@ -272,7 +227,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   },
                 ),
                 const Divider(),
-                // Individual element checklist mapping loop blocks
                 Expanded(
                   child: ListView(
                     children: filteredValues.map((value) {
@@ -302,7 +256,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
               onPressed: () {
                 setState(() {
                   final isAllSelected = currentSelection.length == allValues.length;
-                  // If all options are selected, clear the filter constraint (null means no filter)
                   if (columnIndex == 0) _selectedFirstNameFilters = isAllSelected ? null : Set.from(currentSelection);
                   if (columnIndex == 1) _selectedLastNameFilters = isAllSelected ? null : Set.from(currentSelection);
                   if (columnIndex == 2) _selectedPhoneFilters = isAllSelected ? null : Set.from(currentSelection);
@@ -322,7 +275,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     );
   }
 
-  /// Resets all category filter matrices back to default parameters.
   void _clearAllFilters() {
     setState(() {
       _selectedFirstNameFilters = null;
@@ -336,31 +288,19 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
     });
   }
 
-  // ==========================================
-  // BUILD ARCHITECTURE LAYERS
-  // ==========================================
-
   @override
   Widget build(BuildContext context) {
-    // Read the database client provider via Riverpod framework hooks.
     final supabase = ref.watch(supabaseClientProvider);
 
     return Scaffold(
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        // Connects to a realtime query stream looking specifically at targeted roles in the profiles database.
         stream: supabase.from('profiles').stream(primaryKey: ['id']).inFilter('role', ['shikshaMitra', 'seniorMentor']),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-          // Populate local cache collections with raw stream results
           _rawEmployees = List<Map<String, dynamic>>.from(snapshot.data!);
-
-          // Process and synchronize the display records instantly when underlying streams update
           final query = widget.searchQuery.toLowerCase().trim();
           _filteredEmployees = _rawRequestsFilterPass(_rawEmployees, query);
           _applySorting();
-
-          // Performance flags evaluating component display conditions
           bool hasActiveFilters = [
             _selectedFirstNameFilters,
             _selectedLastNameFilters,
@@ -375,9 +315,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
           return Column(
             children: [
-              // ------------------------------------------
-              // CONTROL HEADER BAR: Batch Operations & Status
-              // ------------------------------------------
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
                 child: Row(
@@ -420,10 +357,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   ],
                 ),
               ),
-
-              // ------------------------------------------
-              // DATA TABLE AREA
-              // ------------------------------------------
               Expanded(
                 child: _filteredEmployees.isEmpty
                     ? const Center(child: Text('No employees found matching configuration.'))
@@ -436,14 +369,14 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                             child: Table(
                               defaultColumnWidth: const FixedColumnWidth(135),
                               columnWidths: const {
-                                0: FixedColumnWidth(50), // Checkbox column
-                                1: FixedColumnWidth(140), // First Name
-                                2: FixedColumnWidth(140), // Last Name
-                                3: FixedColumnWidth(110), // Phone
-                                4: FixedColumnWidth(120), // Role
-                                5: FixedColumnWidth(100), // Cluster
-                                6: FixedColumnWidth(130), // Village
-                                7: FixedColumnWidth(320), // School
+                                0: FixedColumnWidth(50),
+                                1: FixedColumnWidth(140),
+                                2: FixedColumnWidth(140),
+                                3: FixedColumnWidth(110),
+                                4: FixedColumnWidth(120),
+                                5: FixedColumnWidth(100),
+                                6: FixedColumnWidth(130),
+                                7: FixedColumnWidth(320),
                               },
                               border: TableBorder(
                                 verticalInside: BorderSide(color: Colors.grey.shade300),
@@ -453,7 +386,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                 right: BorderSide(color: Colors.grey.shade300),
                               ),
                               children: [
-                                // Master Header Row Definition Block
                                 TableRow(
                                   decoration: BoxDecoration(color: Colors.grey.shade200),
                                   children: [
@@ -533,8 +465,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                     ),
                                   ],
                                 ),
-
-                                // Dynamic Record Mapping Segment loops
                                 ..._filteredEmployees.map((emp) {
                                   final empId = emp['id'].toString();
                                   final isRowSelected = _selectedEmployeeIds.contains(empId);
@@ -583,11 +513,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   }
 }
 
-// ==========================================
-// COMPONENT WIDGETS
-// ==========================================
-
-/// Reusable layout element for header cells that supports both tap-to-sort and tap-to-filter mechanics.
 class _SortableHeader extends StatelessWidget {
   final String label;
   final VoidCallback onSort;
@@ -611,7 +536,6 @@ class _SortableHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Row(
         children: [
-          // Sort trigger field interaction zone
           Expanded(
             child: InkWell(
               onTap: onSort,
@@ -635,7 +559,6 @@ class _SortableHeader extends StatelessWidget {
               ),
             ),
           ),
-          // Filter trigger field interaction zone
           InkWell(
             onTap: onFilter,
             child: Container(
@@ -650,7 +573,6 @@ class _SortableHeader extends StatelessWidget {
   }
 }
 
-/// Standardized cell format variant managing text-overflow clips and consistent content alignment properties.
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;

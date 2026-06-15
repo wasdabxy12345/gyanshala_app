@@ -12,9 +12,8 @@ class ShikshaMitraDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
-        title: const Text("GS + UNM Portal"),
+        title: const Text("Gyanshala app"),
         centerTitle: true,
         actions: [
           IconButton(

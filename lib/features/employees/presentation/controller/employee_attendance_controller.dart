@@ -24,17 +24,19 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       state = const AsyncData(false);
       return;
     }
-
     try {
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final List<dynamic> data = await _client
+      final now = DateTime.now().toUtc();
+      final start = DateTime.utc(now.year, now.month, now.day);
+      final end = start.add(const Duration(days: 1));
+
+      final data = await _client
           .from('employee_attendance')
           .select('status')
           .eq('user_id', userId)
-          .gte('recorded_at', '${todayStr}T00:00:00+00:00')
+          .gte('recorded_at', start.toIso8601String())
+          .lt('recorded_at', end.toIso8601String())
           .order('recorded_at', ascending: false)
           .limit(1);
-
       if (data.isNotEmpty) {
         final String latestStatus = data.first['status'] as String;
         state = AsyncData(latestStatus == 'check_in');
@@ -51,37 +53,30 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     if (state.isLoading) return;
     final bool currentCheckStatus = state.value ?? false;
     state = const AsyncLoading<bool>();
-
     try {
       final Position? position = await LocationService.getCurrentPosition();
       if (position == null) {
         throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
       }
-
       final dynamic response = await _client.rpc(
         'get_school_at_location',
         params: {'lat': position.latitude, 'lon': position.longitude},
       );
-
       String? detectedSchoolId = response?.toString();
       if (detectedSchoolId == null || detectedSchoolId.trim().isEmpty) {
         detectedSchoolId = null;
       }
-
       final userId = _client.auth.currentUser?.id;
       if (userId == null) {
         throw Exception("User is not authenticated.");
       }
-
       await _client.from('employee_attendance').insert({
         'user_id': userId,
         'latitude': position.latitude,
         'longitude': position.longitude,
         'status': !currentCheckStatus ? 'check_in' : 'check_out',
         'school_id': detectedSchoolId,
-        'recorded_at': DateTime.now().toIso8601String(),
       });
-
       state = AsyncData(!currentCheckStatus);
       dev.log("Success: ${!currentCheckStatus ? 'Checked In' : 'Checked Out'} at $detectedSchoolId");
     } catch (e, stack) {

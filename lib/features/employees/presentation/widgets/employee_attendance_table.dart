@@ -9,9 +9,7 @@ class EmployeeAttendanceTable extends ConsumerStatefulWidget {
   final String searchQuery;
   final DateTime startDate;
   final DateTime endDate;
-
   const EmployeeAttendanceTable({super.key, required this.searchQuery, required this.startDate, required this.endDate});
-
   @override
   ConsumerState<EmployeeAttendanceTable> createState() => _EmployeeAttendanceTableState();
 }
@@ -19,25 +17,22 @@ class EmployeeAttendanceTable extends ConsumerStatefulWidget {
 class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable> {
   Future<Map<String, dynamic>> _getEmployeeAttendanceData() async {
     final supabase = ref.read(supabaseClientProvider);
-
     final employees =
         ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', ['shikshaMitra', 'seniorMentor']))
                 as List<dynamic>)
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
 
+    final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
+
     final attendanceRecords =
-        ((await supabase
-                    .from('employee_attendance')
-                    .select('id, user_id, status, recorded_at, school_id, schools(name)')
-                    .gte('recorded_at', widget.startDate.toUtc().toIso8601String())
-                    .lte('recorded_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String()))
-                as List<dynamic>)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
+        (await supabase
+                .from('employee_attendance')
+                .select('id, user_id, status, recorded_at, school_id, schools(name)')
+                .gte('recorded_at', utcRange.start.toIso8601String())
+                .lte('recorded_at', utcRange.end.toIso8601String()))
+            as List<dynamic>;
     Map<String, Map<String, dynamic>> employeeData = {};
-
     for (final employee in employees) {
       employeeData[employee['id']] = {
         'user_id': employee['id'],
@@ -45,15 +40,13 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         'attendance_map': <String, dynamic>{},
       };
     }
-
     for (final record in attendanceRecords) {
       final userId = record['user_id'];
       final status = record['status'];
-      final recordedAt = DateTime.parse(record['recorded_at']).toUtc();
+      final recordedAt = DateTime.parse(record['recorded_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
       final schoolData = record['schools'];
       final schoolName = schoolData != null ? schoolData['name'] : "Off-site";
-
       if (employeeData.containsKey(userId)) {
         final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
         if (status == 'check_in' || !currentMap.containsKey(dateKey)) {
@@ -61,7 +54,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         }
       }
     }
-
     if (kDebugMode) {
       print("Fetched ${attendanceRecords.length} records for range: ${widget.startDate} to ${widget.endDate}");
     }
@@ -86,14 +78,12 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
 
   DataRow _buildFooter(List<Map<String, dynamic>> employees, List<DateTime> dates, int totalWorkingDays) {
     double grandTotalPresent = 0;
-
     return DataRow(
       color: WidgetStateProperty.all(Colors.blueGrey[50]),
       cells: [
         const DataCell(Text("TOTAL", style: TextStyle(fontWeight: FontWeight.bold))),
         ...dates.map((d) {
           if (_isHoliday(d)) return const DataCell(Center(child: Text("-")));
-
           final key = DateFormat('yyyy-MM-dd').format(d);
           int count = employees.where((m) {
             final attMap = (m['attendance_map'] as dynamic ?? {}) is Map
@@ -113,9 +103,8 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
           Center(
             child: Text(
               totalWorkingDays == 0
-                  ? "0.0\n0%"
-                  : "${(grandTotalPresent / totalWorkingDays).toStringAsFixed(1)}\n"
-                        "${((grandTotalPresent / (employees.length * totalWorkingDays)) * 100).toStringAsFixed(0)}%",
+                  ? "0.0 (0%)"
+                  : "${(grandTotalPresent / totalWorkingDays).toStringAsFixed(1)} (${((grandTotalPresent / (employees.length * totalWorkingDays)) * 100).toStringAsFixed(0)}%)",
               style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
@@ -133,25 +122,20 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Text("No attendance data found"));
         }
-
         final employees =
             ((snapshot.data!['employees'] as Map<String, dynamic>).values
                     .map((e) => Map<String, dynamic>.from(e as Map))
                     .toList())
                 .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
                 .toList();
-
         if (employees.isEmpty) {
           return const Center(child: Text("No employees found"));
         }
-
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
         final workingDaysCount = dates.where((d) => !_isHoliday(d)).length;
-
         return Column(
           children: [
             Expanded(
@@ -169,10 +153,10 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                       ...dates.map(
                         (d) => DataColumn(
                           label: SizedBox(
-                            width: 35,
+                            width: 37,
                             child: Center(
                               child: Text(
-                                "${DateFormat('MM/dd').format(d)}\n${DateFormat('E').format(d)}",
+                                "${DateFormat('dd/MM').format(d)}\n${DateFormat('E').format(d)}",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: _isHoliday(d) ? Colors.grey : Colors.black),
                               ),
@@ -180,7 +164,7 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                           ),
                         ),
                       ),
-                      DataColumn(label: Text('Total\n($workingDaysCount)')),
+                      DataColumn(label: Text('Total: $workingDaysCount')),
                     ],
                     rows: [
                       ...employees.map((employee) {
@@ -189,52 +173,45 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                             : <String, dynamic>{};
                         int presentCount = 0;
                         final String targetUserId = employee['user_id'] ?? '';
-
                         return DataRow(
                           cells: [
                             DataCell(_buildNameCell(employee['full_name'] ?? 'Unknown')),
                             ...dates.map((d) {
-                              final key = DateFormat('yyyy-MM-dd').format(d.toUtc());
+                              final key = DateFormat('yyyy-MM-dd').format(d);
                               final record = attMap[key];
                               final holiday = _isHoliday(d);
                               final isPresent = record != null && record['status'] == 'present';
                               final location = record != null ? record['location'] : "";
-
                               if (!holiday && isPresent) {
                                 presentCount++;
                               }
-
                               return DataCell(
-                                Tooltip(
-                                  message: isPresent ? "Location: $location" : "No record",
-                                  child: InkWell(
-                                    onTap: isPresent && targetUserId.isNotEmpty
-                                        ? () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    AttendanceDetailsPage(userId: targetUserId, dateString: key),
-                                              ),
-                                            );
-                                          }
-                                        : null,
-                                    child: Container(
-                                      width: 35,
-                                      height: double.infinity,
-                                      color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.amber : null),
-                                      alignment: Alignment.center,
-                                      child: holiday
-                                          ? const Text("-")
-                                          : Text(
-                                              isPresent ? 'P' : '-',
-                                              style: TextStyle(
-                                                color: isPresent
-                                                    ? (location == "off-site" ? Colors.amber : Colors.green)
-                                                    : Colors.red,
-                                              ),
+                                InkWell(
+                                  onTap: isPresent && targetUserId.isNotEmpty
+                                      ? () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => AttendanceDetailsPage(userId: targetUserId, dateString: key),
                                             ),
-                                    ),
+                                          );
+                                        }
+                                      : null,
+                                  child: Container(
+                                    width: 35,
+                                    height: double.infinity,
+                                    color: holiday ? Colors.grey[100] : (location == "off-site" ? Colors.amber : null),
+                                    alignment: Alignment.center,
+                                    child: holiday
+                                        ? const Text("-")
+                                        : Text(
+                                            isPresent ? 'P' : '-',
+                                            style: TextStyle(
+                                              color: isPresent
+                                                  ? (location == "off-site" ? Colors.amber : Colors.green)
+                                                  : Colors.red,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               );
@@ -242,7 +219,7 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                             DataCell(
                               Center(
                                 child: Text(
-                                  "$presentCount\n${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%",
+                                  "$presentCount (${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%)",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
@@ -261,5 +238,13 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         );
       },
     );
+  }
+
+  DateTimeRange toUtcRange(DateTimeRange range) {
+    final start = DateTime(range.start.year, range.start.month, range.start.day).toUtc();
+
+    final end = DateTime(range.end.year, range.end.month, range.end.day).add(const Duration(days: 1)).toUtc();
+
+    return DateTimeRange(start: start, end: end);
   }
 }

@@ -4,7 +4,6 @@ import 'package:gyanshala_app/features/employees/presentation/controller/employe
 
 class AttendanceCard extends ConsumerWidget {
   const AttendanceCard({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final attendanceState = ref.watch(employeeAttendanceProvider);
