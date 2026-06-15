@@ -7,7 +7,9 @@ class EmployeeAttendanceTab extends StatelessWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
+
   const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
+
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -33,6 +35,7 @@ class EmployeeAttendanceTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1),
           child: Row(
             children: [
+              // Left Section: Week Controls
               Expanded(
                 child: Row(
                   children: [
@@ -68,24 +71,27 @@ class EmployeeAttendanceTab extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // Center Section: Displaying Dates (FIXED: Removed layout-breaking Expanded)
               Center(
-                child: Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 13),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 37),
-                        _dateInkWell(context: context, date: range.start, isStart: true),
-                        const SizedBox(width: 13),
-                        Text("to"),
-                        const SizedBox(width: 13),
-                        _dateInkWell(context: context, date: range.end, isStart: false),
-                        const SizedBox(width: 37),
-                      ],
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(width: 8),
+                      _dateInkWell(context: context, date: range.start, isStart: true),
+                      const SizedBox(width: 13),
+                      const Text("to"),
+                      const SizedBox(width: 13),
+                      _dateInkWell(context: context, date: range.end, isStart: false),
+                      const SizedBox(width: 8),
+                    ],
                   ),
                 ),
               ),
+
+              // Right Section: Month Controls
               Expanded(
                 child: Row(
                   children: [
