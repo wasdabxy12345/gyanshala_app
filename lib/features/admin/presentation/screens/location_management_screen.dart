@@ -906,11 +906,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black87),
+                Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black),
                 const SizedBox(width: 3),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black87),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black),
                 ),
               ],
             ),

@@ -316,7 +316,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                     data: ScrollbarThemeData(
                       thumbVisibility: WidgetStateProperty.all(true),
                       trackVisibility: WidgetStateProperty.all(true),
-                      thickness: WidgetStateProperty.all(12),
+                      thickness: WidgetStateProperty.all(13),
                       thumbColor: WidgetStateProperty.all(Colors.grey.shade600),
                     ),
                     child: Scrollbar(
@@ -390,9 +390,9 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                 _buildDataCell(formattedDate, textColor: Colors.grey.shade700),
                 _buildDataCell(
                   lat != null && lon != null
-                      ? "${(lat as num).toStringAsFixed(5)},\n${(lon as num).toStringAsFixed(5)}"
+                      ? "${(lat as num).toStringAsFixed(5)}, ${(lon as num).toStringAsFixed(5)}"
                       : "No GPS Data",
-                  textColor: lat != null ? Colors.black87 : Colors.grey,
+                  textColor: lat != null ? Colors.black : Colors.grey,
                 ),
                 ..._columns.map((q) {
                   final String questionId = q['id'].toString();
@@ -422,7 +422,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
     final bool hasFilter = _selectedColumnFilters[columnIndex] != null;
 
     return Container(
-      constraints: const BoxConstraints(minWidth: 130, maxWidth: 500),
+      constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -437,11 +437,14 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
-                      child: Text(
-                        text,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 2,
+                      child: Tooltip(
+                        message: text,
+                        child: Text(
+                          text,
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 2),
@@ -473,7 +476,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
   Widget _buildDataCell(String text, {bool isBold = false, Color? textColor}) {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(13),
       child: Text(
         text,
         style: TextStyle(

@@ -1068,14 +1068,14 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
   Widget _buildToolButton({required IconData icon, required String label, required String type}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
       child: ElevatedButton.icon(
-        icon: Icon(icon, size: 16, color: AppTheme.primaryBlue),
-        label: Text(label, style: const TextStyle(color: Colors.black87, fontSize: 12)),
+        icon: Icon(icon, size: 13, color: AppTheme.primaryBlue),
+        label: Text(label, style: const TextStyle(color: Colors.black, fontSize: 13)),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
           elevation: 0,
         ),
         onPressed: () => _showConfigureQuestionDialog(type: type),
