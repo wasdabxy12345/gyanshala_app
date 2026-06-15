@@ -421,8 +421,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
     const String otherChoiceString = "Other (Please specify)";
 
     final currentQuery = _searchQueries[qId]?.toLowerCase() ?? '';
-
-    // 1. Fixed Header Element: Contains the Question Text and Required Asterisk
     final fieldLabel = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Wrap(
@@ -492,12 +490,9 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // FIXED ITEMS AT THE TOP
                 fieldLabel,
                 _buildSearchField(qId, "Search options..."),
                 const SizedBox(height: 4),
-
-                // SCROLLABLE AREA FOR OPTIONS ONLY
                 Expanded(
                   child: SingleChildScrollView(
                     key: ValueKey('scroll_options_$qId'),
@@ -559,8 +554,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                     ),
                   ),
                 ),
-
-                // FIXED ERROR BOX AT THE BOTTOM
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),
@@ -615,14 +608,11 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // FIXED ITEMS AT THE TOP
                 fieldLabel,
                 _buildSearchField(qId, "Search and filter listings..."),
                 const SizedBox(height: 4),
                 const Text("Select all that apply:", style: TextStyle(color: Colors.grey, fontSize: 13)),
                 const SizedBox(height: 12),
-
-                // SCROLLABLE AREA FOR OPTIONS ONLY
                 Expanded(
                   child: SingleChildScrollView(
                     key: ValueKey('scroll_options_$qId'),
@@ -686,8 +676,6 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                     ),
                   ),
                 ),
-
-                // FIXED ERROR BOX AT THE BOTTOM
                 if (state.hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4),

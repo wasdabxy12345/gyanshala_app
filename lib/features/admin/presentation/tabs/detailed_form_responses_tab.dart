@@ -23,7 +23,8 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   List<Map<String, dynamic>> _rawRows = [];
   List<Map<String, dynamic>> _filteredRows = [];
   bool _isLoading = true;
-
+  DateTime? _fromDate;
+  DateTime? _toDate;
   int _sortColumnIndex = 1;
   bool _isAscending = false;
 
@@ -46,6 +47,12 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
     _horizontalController.dispose();
     _verticalController.dispose();
     super.dispose();
+  }
+
+  String formatISTDateTime(String utcTimestamp) {
+    final utcTime = DateTime.parse(utcTimestamp);
+    final localTime = utcTime.toLocal();
+    return DateFormat('dd MMM yyyy, hh:mm a').format(localTime);
   }
 
   Future<void> _fetchTableData() async {
@@ -110,6 +117,25 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   void _applyAllFilters() {
     setState(() {
       _filteredRows = _rawRows.where((row) {
+        if (_fromDate != null || _toDate != null) {
+          final submittedAt = DateTime.parse(row['submitted_at']);
+
+          if (_fromDate != null) {
+            final from = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day);
+
+            if (submittedAt.isBefore(from)) {
+              return false;
+            }
+          }
+
+          if (_toDate != null) {
+            final to = DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59);
+
+            if (submittedAt.isAfter(to)) {
+              return false;
+            }
+          }
+        }
         for (int i = 0; i < (_columns.length + 3); i++) {
           if (_selectedColumnFilters[i] != null) {
             final value = _getCellValueString(row, i);
@@ -132,8 +158,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
           : "User (${row['user_id'].toString().substring(0, 6)})";
     }
     if (index == 1) {
-      final DateTime parsedTime = DateTime.parse(row['submitted_at']);
-      return DateFormat('dd MMM yyyy, hh:mm a').format(parsedTime);
+      return formatISTDateTime(row['submitted_at'].toString());
     }
     if (index == 2) {
       final dynamic lat = row['latitude'];
@@ -376,8 +401,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                 ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
                 : "User (${row['user_id'].toString().substring(0, 6)})";
 
-            final DateTime parsedTime = DateTime.parse(row['submitted_at']);
-            final formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedTime);
+            final formattedDate = formatISTDateTime(row['submitted_at'].toString());
 
             final dynamic lat = row['latitude'];
             final dynamic lon = row['longitude'];
@@ -419,7 +443,8 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
   Widget _buildSortableHeaderCell(String text, int columnIndex) {
     final bool isSorted = _sortColumnIndex == columnIndex;
-    final bool hasFilter = _selectedColumnFilters[columnIndex] != null;
+    final bool hasFilter =
+        _selectedColumnFilters[columnIndex] != null || (columnIndex == 1 && (_fromDate != null || _toDate != null));
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 300),
@@ -459,7 +484,13 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
             ),
           ),
           InkWell(
-            onTap: () => _showFilterMenu(columnIndex, text),
+            onTap: () {
+              if (columnIndex == 1) {
+                _showDateFilterDialog();
+              } else {
+                _showFilterMenu(columnIndex, text);
+              }
+            },
             child: Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
@@ -504,7 +535,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
             ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
             : "User (${row['user_id'].toString().substring(0, 6)})";
 
-        final submittedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.parse(row['submitted_at']));
+        final submittedAt = formatISTDateTime(row['submitted_at'].toString());
 
         final lat = row['latitude'];
         final lon = row['longitude'];
@@ -569,5 +600,94 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Export failed: $e"), backgroundColor: Colors.red));
     }
+  }
+
+  Future<void> _showDateFilterDialog() async {
+    DateTime? tempFrom = _fromDate;
+    DateTime? tempTo = _toDate;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter Submission Date'),
+              content: SizedBox(
+                width: 350,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: Text(tempFrom == null ? 'Start Date' : DateFormat('dd MMM yyyy').format(tempFrom!)),
+                      trailing: const Icon(Icons.calendar_month),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(),
+                          initialDate: tempFrom ?? DateTime.now(),
+                        );
+
+                        if (picked != null) {
+                          setDialogState(() {
+                            tempFrom = picked;
+                          });
+                        }
+                      },
+                    ),
+                    ListTile(
+                      title: Text(tempTo == null ? 'End Date' : DateFormat('dd MMM yyyy').format(tempTo!)),
+                      trailing: const Icon(Icons.calendar_month),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(),
+                          initialDate: tempTo ?? DateTime.now(),
+                        );
+
+                        if (picked != null) {
+                          setDialogState(() {
+                            tempTo = picked;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _fromDate = null;
+                      _toDate = null;
+                      _applyAllFilters();
+                    });
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Clear'),
+                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _fromDate = tempFrom;
+                      _toDate = tempTo;
+                      _applyAllFilters();
+                    });
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
