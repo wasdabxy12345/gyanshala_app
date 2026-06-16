@@ -18,10 +18,26 @@ class EmployeeAttendanceTable extends ConsumerStatefulWidget {
 
 class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable> {
   late Future<Map<String, dynamic>> _attendanceFetchFuture;
+
+  final ScrollController _horizontalHeaderController = ScrollController();
+  final ScrollController _horizontalBodyController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _attendanceFetchFuture = _loadDataPipeline();
+    _horizontalBodyController.addListener(() {
+      if (_horizontalHeaderController.hasClients) {
+        _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _horizontalHeaderController.dispose();
+    _horizontalBodyController.dispose();
+    super.dispose();
   }
 
   @override
@@ -148,6 +164,7 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final todayNormalized = DateTime(now.year, now.month, now.day);
+
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
       builder: (context, snapshot) {
@@ -180,9 +197,9 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     border: TableBorder.all(color: Colors.grey[300]!),
-                    headingRowHeight: 70,
-                    columnSpacing: 12,
-                    horizontalMargin: 10,
+                    headingRowHeight: 50,
+                    columnSpacing: 13,
+                    horizontalMargin: 13,
                     columns: [
                       const DataColumn(label: Text('Employee')),
                       ...dates.map(
@@ -235,7 +252,7 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                                         }
                                       : null,
                                   child: Container(
-                                    width: 37,
+                                    width: double.infinity,
                                     height: double.infinity,
                                     color: holiday ? Colors.grey[100] : null,
                                     alignment: Alignment.center,
