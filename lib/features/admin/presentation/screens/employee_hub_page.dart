@@ -192,7 +192,6 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
   @override
   Widget build(BuildContext context) {
     final bool isEmployeeListTabActive = _tabController.index == 1;
-    final String labelText = _isExporting ? "Exporting..." : (isEmployeeListTabActive ? "Export Employees" : "Export Attendance");
     return Scaffold(
       appBar: AppBar(
         title: const Text("Employees"),
@@ -224,14 +223,11 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
           EmployeeListTab(key: _employeeListKey, searchQuery: _searchQuery),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _isExporting ? null : (isEmployeeListTabActive ? _exportEmployeeListToExcel : _exportAttendanceToExcel),
         backgroundColor: AppTheme.primaryBlue,
         foregroundColor: Colors.white,
-        icon: _isExporting
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Icon(Icons.file_download),
-        label: Text(labelText),
+        child: _isExporting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.file_download),
       ),
     );
   }
