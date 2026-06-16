@@ -195,6 +195,21 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
     return Scaffold(
       appBar: AppBar(
         title: const Text("Employees"),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: CircleAvatar(
+              foregroundColor: Colors.white,
+              backgroundColor: AppTheme.primaryBlue,
+              child: IconButton(
+                onPressed: _isExporting
+                    ? null
+                    : (isEmployeeListTabActive ? _exportEmployeeListToExcel : _exportAttendanceToExcel),
+                icon: _isExporting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.download),
+              ),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Column(
@@ -222,12 +237,6 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
           ),
           EmployeeListTab(key: _employeeListKey, searchQuery: _searchQuery),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _isExporting ? null : (isEmployeeListTabActive ? _exportEmployeeListToExcel : _exportAttendanceToExcel),
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-        child: _isExporting ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.file_download),
       ),
     );
   }

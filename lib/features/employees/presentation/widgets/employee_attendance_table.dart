@@ -173,12 +173,23 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         }
 
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
-        final workingDaysCount = dates.where((d) => !_isHoliday(d)).length;
+        // Only count standard working days that are in the past (exclude today and future)
+        final workingDaysCount = dates.where((d) {
+          final cellDateNormalized = DateTime(d.year, d.month, d.day);
+          return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
+        }).length;
 
         List<int> dailyTotals = [];
         double grandTotalPresent = 0;
         for (final d in dates) {
+          final cellDateNormalized = DateTime(d.year, d.month, d.day);
+          final bool isFutureOrToday =
+              cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
+
           if (_isHoliday(d)) {
+            dailyTotals.add(-1);
+          } else if (isFutureOrToday) {
+            // Treat today and future working days as empty dashes in total column computations
             dailyTotals.add(-1);
           } else {
             final key = DateFormat('yyyy-MM-dd').format(d);
@@ -369,7 +380,12 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                             int presentCount = 0;
 
                             for (final d in dates) {
-                              if (!_isHoliday(d)) {
+                              final cellDateNormalized = DateTime(d.year, d.month, d.day);
+                              final bool isFutureOrToday =
+                                  cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
+                                  cellDateNormalized.isAfter(todayNormalized);
+
+                              if (!_isHoliday(d) && !isFutureOrToday) {
                                 final key = DateFormat('yyyy-MM-dd').format(d);
                                 final record = attMap[key];
                                 final isPresent = record != null && record['status'] == 'present';

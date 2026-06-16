@@ -29,105 +29,121 @@ class EmployeeAttendanceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    Widget buildWeekControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: const Icon(Icons.arrow_left, size: 37),
+          onPressed: () {
+            final newEnd = range.start.subtract(const Duration(days: 1));
+            final newStart = newEnd.subtract(const Duration(days: 6));
+            onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
+          },
+          tooltip: 'Previous week',
+        ),
+        Expanded(
+          child: _quickBtn("This Week", () {
+            final start = now.subtract(Duration(days: now.weekday - 1));
+            final end = start.add(const Duration(days: 6));
+            onRangeChanged(DateTimeRange(start: start, end: end));
+          }),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: const Icon(Icons.arrow_right, size: 37),
+          onPressed: () {
+            final newStart = range.end.add(const Duration(days: 1));
+            final newEnd = newStart.add(const Duration(days: 6));
+            onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
+          },
+          tooltip: 'Next week',
+        ),
+      ],
+    );
+    Widget buildMonthControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: const Icon(Icons.arrow_left, size: 37),
+          onPressed: () {
+            final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
+            final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
+            onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
+          },
+          tooltip: 'Previous month',
+        ),
+        Expanded(
+          child: _quickBtn("This Month", () {
+            final start = DateTime(now.year, now.month, 1);
+            final end = DateTime(now.year, now.month + 1, 0);
+            onRangeChanged(DateTimeRange(start: start, end: end));
+          }),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: const Icon(Icons.arrow_right, size: 37),
+          onPressed: () {
+            final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
+            final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
+            onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
+          },
+          tooltip: 'Next month',
+        ),
+      ],
+    );
+    Widget buildDateSelectors() => Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 8),
+            _dateInkWell(context: context, date: range.start, isStart: true),
+            const SizedBox(width: 13),
+            const Text("to", style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(width: 13),
+            _dateInkWell(context: context, date: range.end, isStart: false),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1),
-          child: Row(
-            children: [
-              // Left Section: Week Controls
-              Expanded(
-                child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 2),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 600) {
+                return Column(
                   children: [
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_left, size: 37),
-                      onPressed: () {
-                        final newEnd = range.start.subtract(const Duration(days: 1));
-                        final newStart = newEnd.subtract(const Duration(days: 6));
-                        onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
-                      },
-                      tooltip: 'Previous week',
-                    ),
-                    Expanded(
-                      child: _quickBtn("This Week", () {
-                        final start = now.subtract(Duration(days: now.weekday - 1));
-                        final end = start.add(const Duration(days: 6));
-                        onRangeChanged(DateTimeRange(start: start, end: end));
-                      }),
-                    ),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_right, size: 37),
-                      onPressed: () {
-                        final newStart = range.end.add(const Duration(days: 1));
-                        final newEnd = newStart.add(const Duration(days: 6));
-                        onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
-                      },
-                      tooltip: 'Next week',
+                    buildDateSelectors(),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(child: buildWeekControls()),
+                        const SizedBox(width: 8),
+                        Expanded(child: buildMonthControls()),
+                      ],
                     ),
                   ],
-                ),
-              ),
-
-              // Center Section: Displaying Dates (FIXED: Removed layout-breaking Expanded)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(width: 8),
-                      _dateInkWell(context: context, date: range.start, isStart: true),
-                      const SizedBox(width: 13),
-                      const Text("to"),
-                      const SizedBox(width: 13),
-                      _dateInkWell(context: context, date: range.end, isStart: false),
-                      const SizedBox(width: 8),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Right Section: Month Controls
-              Expanded(
-                child: Row(
-                  children: [
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_left, size: 37),
-                      onPressed: () {
-                        final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
-                        final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
-                        onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
-                      },
-                      tooltip: 'Previous month',
-                    ),
-                    Expanded(
-                      child: _quickBtn("This Month", () {
-                        final start = DateTime(now.year, now.month, 1);
-                        final end = DateTime(now.year, now.month + 1, 0);
-                        onRangeChanged(DateTimeRange(start: start, end: end));
-                      }),
-                    ),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.arrow_right, size: 37),
-                      onPressed: () {
-                        final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
-                        final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
-                        onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
-                      },
-                      tooltip: 'Next month',
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: buildWeekControls()),
+                  buildDateSelectors(),
+                  Expanded(child: buildMonthControls()),
+                ],
+              );
+            },
           ),
         ),
         const Divider(),
