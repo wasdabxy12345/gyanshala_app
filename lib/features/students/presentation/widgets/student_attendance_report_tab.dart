@@ -43,11 +43,11 @@ class _StudentAttendanceReportTabState extends ConsumerState<StudentAttendanceRe
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(parts[0], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        Text(parts[0], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
         if (parts.length > 1)
           Text(
             parts.sublist(1).join(' '),
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
             overflow: TextOverflow.ellipsis,
           ),
       ],
@@ -69,7 +69,11 @@ class _StudentAttendanceReportTabState extends ConsumerState<StudentAttendanceRe
           grandTotalPresent += count;
           return DataCell(
             Center(
-              child: Text("$count", style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(
+                "$count\n${students.length == 0 ? 0 : ((count / students.length) * 100).toStringAsFixed(0)}%",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           );
         }),
@@ -118,26 +122,26 @@ class _StudentAttendanceReportTabState extends ConsumerState<StudentAttendanceRe
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     border: TableBorder.all(color: Colors.grey[300]!),
-                    headingRowHeight: 70,
-                    columnSpacing: 12,
-                    horizontalMargin: 10,
+                    headingRowHeight: 50,
+                    columnSpacing: 9,
+                    horizontalMargin: 9,
                     columns: [
-                      const DataColumn(label: Text('Student\nName')),
+                      const DataColumn(label: Text('Students')),
                       ...dates.map(
                         (d) => DataColumn(
                           label: SizedBox(
-                            width: 35,
+                            width: 37,
                             child: Center(
                               child: Text(
                                 "${DateFormat('MM/dd').format(d)}\n${DateFormat('E').format(d)}",
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 11, color: _isHoliday(d) ? Colors.grey : Colors.black),
+                                style: TextStyle(fontSize: 13, color: _isHoliday(d) ? Colors.grey : Colors.black),
                               ),
                             ),
                           ),
                         ),
                       ),
-                      DataColumn(label: Text('Total\n($workingDaysCount)')),
+                      DataColumn(label: Text('Total:\n$workingDaysCount')),
                     ],
                     rows: [
                       ...students.map((student) {
@@ -158,7 +162,7 @@ class _StudentAttendanceReportTabState extends ConsumerState<StudentAttendanceRe
 
                               return DataCell(
                                 Container(
-                                  width: 35,
+                                  width: 37,
                                   color: holiday ? Colors.grey[100] : null,
                                   alignment: Alignment.center,
                                   child: holiday
@@ -178,7 +182,7 @@ class _StudentAttendanceReportTabState extends ConsumerState<StudentAttendanceRe
                                 child: Text(
                                   "$presentCount\n${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%",
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                             ),

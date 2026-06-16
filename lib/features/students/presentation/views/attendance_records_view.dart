@@ -14,7 +14,7 @@ class AttendanceRecordsView extends StatelessWidget {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? range.start : range.end,
-      firstDate: DateTime(2024),
+      firstDate: DateTime(2025),
       lastDate: isStart ? range.end : DateTime.now(),
     );
 
@@ -34,10 +34,9 @@ class AttendanceRecordsView extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 13),
           child: Row(
             children: [
-              // --- WEEK CONTROLS ---
               Expanded(
                 flex: 7,
                 child: Row(
@@ -74,8 +73,6 @@ class AttendanceRecordsView extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // --- CENTER INTERACTIVE DATE RANGE ---
               Expanded(
                 flex: 10,
                 child: Padding(
@@ -97,8 +94,6 @@ class AttendanceRecordsView extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // --- MONTH CONTROLS ---
               Expanded(
                 flex: 7,
                 child: Row(
@@ -158,7 +153,7 @@ class AttendanceRecordsView extends StatelessWidget {
       onPressed: action,
       child: Text(
         label,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         textAlign: TextAlign.center,
       ),
     );

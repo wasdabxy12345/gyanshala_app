@@ -155,7 +155,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
                   final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
                   final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
                   final bool isAtSchool = matchingSchool != null;
-                  final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "Off-site";
+                  final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "off-site";
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(isCheckIn ? Icons.login : Icons.logout, color: isAtSchool ? Colors.green : Colors.red),
