@@ -185,7 +185,10 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
             int count = 0;
             for (final m in employees) {
               final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
-              if (attMap[key]?['status'] == 'present') count++;
+              final record = attMap[key];
+              final isPresent = record != null && record['status'] == 'present';
+              final location = record != null ? record['location'].toString().toLowerCase() : "";
+              if (isPresent && location != "off-site") count++;
             }
             dailyTotals.add(count);
             grandTotalPresent += count;
@@ -366,8 +369,14 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                             int presentCount = 0;
 
                             for (final d in dates) {
-                              if (!_isHoliday(d) && attMap[DateFormat('yyyy-MM-dd').format(d)]?['status'] == 'present') {
-                                presentCount++;
+                              if (!_isHoliday(d)) {
+                                final key = DateFormat('yyyy-MM-dd').format(d);
+                                final record = attMap[key];
+                                final isPresent = record != null && record['status'] == 'present';
+                                final location = record != null ? record['location'].toString().toLowerCase() : "";
+                                if (isPresent && location != "off-site") {
+                                  presentCount++;
+                                }
                               }
                             }
 
