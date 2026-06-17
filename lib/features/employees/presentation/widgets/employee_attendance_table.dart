@@ -88,6 +88,8 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
       employeeData[employee['id']] = {
         'user_id': employee['id'],
         'full_name': "${employee['first_name']} ${employee['last_name']}",
+        'first_name': employee['first_name'] ?? '',
+        'last_name': employee['last_name'] ?? '',
         'attendance_map': <String, dynamic>{},
       };
     }
@@ -118,13 +120,13 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
     return List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
   }
 
-  double _calculateRequiredWidth(String text, TextStyle style) {
+  Size calcTextSize(BuildContext context, String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
       text: TextSpan(text: text, style: style),
-      maxLines: 1,
       textDirection: painting.TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
     )..layout();
-    return textPainter.size.width;
+    return textPainter.size;
   }
 
   @override
@@ -132,9 +134,12 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
     final now = DateTime.now();
     final todayNormalized = DateTime(now.year, now.month, now.day);
 
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isMobile = screenWidth < 600;
+
     const double dateCellWidth = 50;
     const double totalColumnWidth = 50;
-    const double rowHeight = 31;
+    final double rowHeight = isMobile ? 42 : 31;
     const double headerHeight = 42;
 
     return FutureBuilder<Map<String, dynamic>>(
@@ -160,20 +165,26 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
         if (employees.isEmpty) {
           return const Center(child: Text("No employees found"));
         }
-        double maxNameWidth = 137;
+
+        double maxNameWidth = 0;
         const TextStyle nameStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
 
         for (final emp in employees) {
-          final String name = emp['full_name'] ?? 'Unknown';
-          final double textWidth = _calculateRequiredWidth(name, nameStyle);
-          final double totalNeeded = textWidth + 13;
+          final String textToMeasure = isMobile
+              ? ((emp['first_name']?.toString().length ?? 0) > (emp['last_name']?.toString().length ?? 0)
+                    ? (emp['first_name'] ?? '')
+                    : (emp['last_name'] ?? ''))
+              : (emp['full_name'] ?? 'Unknown');
+
+          final Size size = calcTextSize(context, textToMeasure, nameStyle);
+          final double totalNeeded = size.width + 26.0;
           if (totalNeeded > maxNameWidth) {
             maxNameWidth = totalNeeded;
           }
         }
+        print(maxNameWidth);
 
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
-        // Only count standard working days that are in the past (exclude today and future)
         final workingDaysCount = dates.where((d) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
@@ -189,7 +200,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
           if (_isHoliday(d)) {
             dailyTotals.add(-1);
           } else if (isFutureOrToday) {
-            // Treat today and future working days as empty dashes in total column computations
             dailyTotals.add(-1);
           } else {
             final key = DateFormat('yyyy-MM-dd').format(d);
@@ -227,7 +237,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                         style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
                       ),
                     ),
-
                     Expanded(
                       child: SingleChildScrollView(
                         controller: _horizontalHeaderController,
@@ -257,7 +266,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                         ),
                       ),
                     ),
-
                     Container(
                       width: totalColumnWidth,
                       alignment: Alignment.center,
@@ -283,7 +291,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                         width: maxNameWidth,
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
-                          // color: Colors.white,
                           border: Border(right: BorderSide(color: Colors.grey[300]!)),
                         ),
                         child: Column(
@@ -296,7 +303,17 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                                   decoration: BoxDecoration(
                                     border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
                                   ),
-                                  child: Text(emp['full_name'] ?? 'Unknown', maxLines: 1, style: nameStyle),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      isMobile
+                                          ? "${emp['first_name'] ?? ''}\n${emp['last_name'] ?? ''}"
+                                          : (emp['full_name'] ?? 'Unknown'),
+                                      maxLines: isMobile ? 2 : 1,
+                                      style: nameStyle,
+                                    ),
+                                  ),
                                 ),
                               )
                               .toList(),
@@ -371,7 +388,6 @@ class _EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTabl
                         width: totalColumnWidth,
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
-                          // color: Colors.white,
                           border: Border(left: BorderSide(color: Colors.grey[300]!)),
                         ),
                         child: Column(
