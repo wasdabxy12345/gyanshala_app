@@ -523,7 +523,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   Future<void> _exportToExcel() async {
     try {
       final excel = Excel.createExcel();
-      final Sheet sheet = excel['Responses'];
+      final Sheet sheet = excel['Sheet1'];
       final headers = ['Employee Name', 'Submission Date', 'GPS Location', ..._columns.map((q) => q['question'].toString())];
 
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());

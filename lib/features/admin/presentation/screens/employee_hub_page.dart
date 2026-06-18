@@ -9,8 +9,8 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/tabs/employee_attendance_tab.dart';
 import 'package:gyanshala_app/features/admin/presentation/tabs/employees_list_tab.dart';
 import 'package:intl/intl.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:universal_html/html.dart' as html;
 
 class EmployeeHubPage extends ConsumerStatefulWidget {
@@ -79,10 +79,7 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
         }
       }
       final excel = Excel.createExcel();
-      if (excel.sheets.containsKey('Sheet1')) {
-        excel.delete('Sheet1');
-      }
-      final Sheet sheet = excel['Attendance Report'];
+      final Sheet sheet = excel['Sheet1'];
       final headers = ['Employee Name', 'Phone', 'Role', 'Date & Time', 'Status', 'GPS Location'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
       for (final row in attendanceData) {
@@ -135,7 +132,7 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
       if (excel.sheets.containsKey('Sheet1')) {
         excel.delete('Sheet1');
       }
-      final Sheet sheet = excel['Employee Profiles'];
+      final Sheet sheet = excel['Sheet1'];
       final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Cluster', 'Village', 'School'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
       for (final emp in targetedEmployees) {
@@ -164,6 +161,7 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
     if (bytes == null) throw Exception('Failed to generate excel file payload package.');
     final dateSuffix = DateFormat('dd-MM-yyyy').format(DateTime.now());
     final String fileName = "${baseName}_$dateSuffix.xlsx";
+
     if (kIsWeb) {
       final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       final url = html.Url.createObjectUrlFromBlob(blob);
@@ -179,12 +177,48 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started.")));
       }
     } else {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      await OpenFilex.open(file.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Excel exported successfully: $fileName")));
+      try {
+        if (Platform.isAndroid) {
+          var status = await Permission.manageExternalStorage.status;
+          if (!status.isGranted) {
+            status = await Permission.manageExternalStorage.request();
+            if (!status.isGranted) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text("Storage permission required to save to Downloads folder."),
+                    backgroundColor: Colors.amber,
+                    action: SnackBarAction(label: "SETTINGS", textColor: Colors.white, onPressed: () => openAppSettings()),
+                  ),
+                );
+              }
+              return;
+            }
+          }
+        }
+        Directory? downloadsDir;
+        if (Platform.isAndroid) {
+          downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
+            downloadsDir = externalDirs != null && externalDirs.isNotEmpty
+                ? externalDirs.first
+                : await getApplicationDocumentsDirectory();
+          }
+        } else {
+          downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+        }
+        final file = File('${downloadsDir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Saved to Downloads: $fileName")));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("Failed to save file: $e"), backgroundColor: Colors.red));
+        }
       }
     }
   }

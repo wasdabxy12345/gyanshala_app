@@ -50,7 +50,7 @@ class HomeContent extends StatelessWidget {
                 const SizedBox(height: 24),
                 const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 12),
-                const ActionGrid(),
+                ActionGrid(),
               ],
             ),
           ),

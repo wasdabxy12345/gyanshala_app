@@ -31,7 +31,7 @@ echo ========================================================
 
 :: --- ANDROID PROCESS ---
 echo 📱 [Android] Compiling Android APK...
-call flutter build apk --release --no-pub
+call flutter build apk --release --no-pub --split-debug-info=build/app/outputs/symbols --no-shrink
 if %ERRORLEVEL% NEQ 0 (
   echo ❌ Android compilation failed. Exiting...
   pause

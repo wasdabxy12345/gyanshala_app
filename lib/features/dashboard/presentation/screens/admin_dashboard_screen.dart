@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
@@ -14,7 +15,7 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("GS + UNM Admin"),
+        title: const Text("Gyanshala app"),
         centerTitle: true,
         actions: [
           IconButton(
@@ -35,56 +36,56 @@ class AdminHomeContent extends StatelessWidget {
   const AdminHomeContent({super.key, required this.adminName});
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> tiles = [
-      {
-        "title": "Manage Signup Requests",
-        "icon": Icons.how_to_reg,
-        "color": Colors.red,
-        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupRequestsScreen())),
-      },
-      {
-        "title": "Employee List and Attendance",
-        "icon": Icons.groups,
-        "color": Colors.amber,
-        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EmployeeHubPage())),
-      },
-      {
-        "title": "Manage Locations",
-        "icon": Icons.map_outlined,
-        "color": Colors.green,
-        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LocationManagementScreen())),
-      },
-      {
-        "title": "Manage Forms",
-        "icon": Icons.description_outlined,
-        "color": Colors.blue,
-        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FormManagementScreen())),
-      },
+    final List<MenuItem> menuItems = [
+      const MenuItem(title: "Signup Requests", icon: Icons.how_to_reg, color: Colors.red, targetScreen: SignupRequestsScreen()),
+      const MenuItem(title: "Employees", icon: Icons.groups, color: Colors.amber, targetScreen: EmployeeHubPage()),
+      const MenuItem(title: "Locations", icon: Icons.map, color: Colors.green, targetScreen: LocationManagementScreen()),
+      const MenuItem(title: "Forms", icon: Icons.description, color: Colors.blue, targetScreen: FormManagementScreen()),
     ];
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(13),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Welcome, $adminName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            GridView.builder(
+            const SizedBox(height: 22),
+            GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: tiles.length,
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.1,
-              ),
-              itemBuilder: (context, index) {
-                final item = tiles[index];
-                return _AdminActionTile(title: item["title"], icon: item["icon"], color: item["color"], onTap: item["onTap"]);
-              },
+              crossAxisCount: MediaQuery.of(context).size.width < 600 ? 2 : 4,
+              crossAxisSpacing: 13,
+              mainAxisSpacing: 13,
+              childAspectRatio: 1.3,
+              children: menuItems.map((item) => _buildMenuCard(context, item)).toList(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(BuildContext context, MenuItem item) {
+    return InkWell(
+      onTap: () {
+        if (item.targetScreen != null) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => item.targetScreen!));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("not yet implemented")));
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(color: AppTheme.lightBlue),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              backgroundColor: item.color.withValues(alpha: 0.13),
+              child: Icon(item.icon, color: item.color),
+            ),
+            const SizedBox(height: 13),
+            Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -92,33 +93,11 @@ class AdminHomeContent extends StatelessWidget {
   }
 }
 
-class _AdminActionTile extends StatelessWidget {
+class MenuItem {
   final String title;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final Widget? targetScreen;
 
-  const _AdminActionTile({required this.title, required this.icon, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  const MenuItem({required this.title, required this.icon, required this.color, this.targetScreen});
 }

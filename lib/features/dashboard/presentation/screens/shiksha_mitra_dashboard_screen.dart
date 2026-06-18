@@ -24,35 +24,28 @@ class ShikshaMitraDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: HomeContent(shikshaMitraName: shikshaMitraName),
+      body: ShikshaMitraHomeContent(shikshaMitraName: shikshaMitraName),
     );
   }
 }
 
-class HomeContent extends StatelessWidget {
+class ShikshaMitraHomeContent extends StatelessWidget {
   final String shikshaMitraName;
-  const HomeContent({super.key, required this.shikshaMitraName});
+  const ShikshaMitraHomeContent({super.key, required this.shikshaMitraName});
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Welcome, $shikshaMitraName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-                const AttendanceCard(),
-                const SizedBox(height: 24),
-                const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                const ActionGrid(),
-              ],
-            ),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Welcome, $shikshaMitraName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 22),
+            const AttendanceCard(),
+            const SizedBox(height: 22),
+            ActionGrid(),
+          ],
         ),
       ),
     );

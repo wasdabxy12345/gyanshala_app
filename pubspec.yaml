@@ -15,7 +15,7 @@ flutter_native_splash:
     image: assets/splash/splash.png
     color: "#ffffff"
 
-version: 0.0.45+45
+version: 1.0.46+46
 
 environment:
   sdk: ^3.11.4
@@ -49,6 +49,7 @@ dependencies:
   flutter_native_splash: ^2.4.4
   webview_flutter: ^4.7.0
   universal_html: ^2.3.0
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:

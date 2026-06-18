@@ -1,18 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
-
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
     <application
             android:label="gyanshala_app"
             android:name="${applicationName}"
             android:icon="@mipmap/ic_launcher"
             android:usesCleartextTraffic="true">
-
         <activity
                 android:name=".MainActivity"
                 android:exported="true"
@@ -22,7 +19,6 @@
                 android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
                 android:hardwareAccelerated="true"
                 android:windowSoftInputMode="adjustResize">
-
             <meta-data
                     android:name="io.flutter.embedding.android.NormalTheme"
                     android:resource="@style/NormalTheme"/>
@@ -36,8 +32,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
-        <!-- Secure File Provider Configuration -->
         <provider
                 android:name="androidx.core.content.FileProvider"
                 android:authorities="${applicationId}.fileprovider"
@@ -47,19 +41,14 @@
                     android:name="android.support.FILE_PROVIDER_PATHS"
                     android:resource="@xml/file_paths"/>
         </provider>
-
         <meta-data
                 android:name="flutterEmbedding"
                 android:value="2"/>
-
         <meta-data
                 android:name="com.google.android.geo.API_KEY"
                 android:value="AIzaSyAWp-D51c0k4Df-HgN7BUD24nrR2pVc3Wg"/>
     </application>
-
-    <!-- Package Visibility Queries (Required for Android 11+) -->
     <queries>
-        <!-- For open_filex to locate the system package installer -->
         <intent>
             <action android:name="android.intent.action.INSTALL_PACKAGE"/>
             <data android:scheme="file" android:mimeType="application/vnd.android.package-archive"/>
