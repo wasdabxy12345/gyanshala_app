@@ -34,7 +34,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   final Map<int, Set<String>> _selectedColumnFilters = {};
 
   Future<void> refresh() => _fetchTableData();
-  Future<void> exportExcel() => _exportToExcel();
+  Future<void> exportExcel() => _exportExcel();
 
   @override
   void initState() {
@@ -520,7 +520,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
     );
   }
 
-  Future<void> _exportToExcel() async {
+  Future<void> _exportExcel() async {
     try {
       final excel = Excel.createExcel();
       final Sheet sheet = excel['Sheet1'];

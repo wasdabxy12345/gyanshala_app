@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide TextDirection;
+import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:intl/intl.dart';
@@ -16,7 +17,6 @@ class FormAttendanceTable extends ConsumerStatefulWidget {
   final String searchQuery;
   final DateTime startDate;
   final DateTime endDate;
-
   const FormAttendanceTable({
     super.key,
     required this.formId,
@@ -25,48 +25,104 @@ class FormAttendanceTable extends ConsumerStatefulWidget {
     required this.startDate,
     required this.endDate,
   });
-
   @override
   ConsumerState<FormAttendanceTable> createState() => FormAttendanceTableState();
 }
 
 class FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
   late Future<Map<String, dynamic>> _future;
-
+  final ScrollController _horizontalHeaderController = ScrollController();
+  final ScrollController _horizontalBodyController = ScrollController();
   @override
   void initState() {
     super.initState();
     _future = _getFormAttendanceData();
+    _horizontalBodyController.addListener(() {
+      if (_horizontalHeaderController.hasClients) {
+        _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _horizontalHeaderController.dispose();
+    _horizontalBodyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant FormAttendanceTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
+      setState(() {
+        _future = _getFormAttendanceData();
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>> _getFormAttendanceData() async {
+    final supabase = ref.read(supabaseClientProvider);
+    final employees = ((await supabase.from('profiles').select('id, first_name, last_name')) as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final formAttendanceRecords =
+        ((await supabase
+                    .from('form_responses')
+                    .select('id, form_id, user_id, submitted_at')
+                    .eq('form_id', widget.formId)
+                    .gte('submitted_at', widget.startDate.toUtc().toIso8601String())
+                    .lte('submitted_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String()))
+                as List<dynamic>)
+            .map((f) => Map<String, dynamic>.from(f as Map))
+            .toList();
+    Map<String, Map<String, dynamic>> employeeData = {};
+    for (final employee in employees) {
+      employeeData[employee['id']] = {
+        'user_id': employee['id'],
+        'full_name': "${employee['first_name']} ${employee['last_name']}",
+        'first_name': employee['first_name'] ?? '',
+        'last_name': employee['last_name'] ?? '',
+        'attendance_map': <String, dynamic>{},
+      };
+    }
+    for (final record in formAttendanceRecords) {
+      final userId = record['user_id'];
+      if (record['submitted_at'] == null || !employeeData.containsKey(userId)) continue;
+      final submittedAt = DateTime.parse(record['submitted_at']).toLocal();
+      final dateKey = DateFormat('yyyy-MM-dd').format(submittedAt);
+      final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
+      currentMap[dateKey] = {'status': 'filled'};
+    }
+    if (kDebugMode) {
+      print("Fetched ${formAttendanceRecords.length} records for range: ${widget.startDate} to ${widget.endDate}");
+    }
+    return {'employees': employeeData, 'records': formAttendanceRecords};
   }
 
   Future<void> exportExcel() async {
     try {
       final data = await _getFormAttendanceData();
-
       final employees =
           ((data['employees'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
               .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
               .toList();
 
       final dates = _getDatesInRange(widget.startDate, widget.endDate);
-
       final excel = Excel.createExcel();
-      final sheet = excel['Attendance'];
+      final sheet = excel['Sheet1'];
 
       final headers = ['Employee', ...dates.map((d) => DateFormat('dd-MM-yyyy').format(d))];
-
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
       for (final employee in employees) {
         final attMap = (employee['attendance_map'] as dynamic ?? {}) is Map
             ? Map<String, dynamic>.from(employee['attendance_map'] as Map)
             : <String, dynamic>{};
-
         final row = <CellValue>[TextCellValue(employee['full_name'] ?? '')];
 
         for (final d in dates) {
           final key = DateFormat('yyyy-MM-dd').format(d);
-
           String value;
 
           if (_isHoliday(d)) {
@@ -82,121 +138,52 @@ class FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
           } else {
             value = 'Pending';
           }
-
           row.add(TextCellValue(value));
         }
-
         sheet.appendRow(row);
       }
 
       final bytes = excel.encode();
-
-      if (bytes == null) {
-        throw Exception('Failed to generate excel');
-      }
+      if (bytes == null) throw Exception('Failed to generate excel');
 
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
-
       final fileName = '${widget.formTitle} Attendance [$startRange to $endRange].xlsx';
 
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-
         final url = html.Url.createObjectUrlFromBlob(blob);
-
         final anchor = html.AnchorElement()
           ..href = url
           ..download = fileName
           ..style.display = 'none';
-
         html.document.body?.children.add(anchor);
-
         anchor.click();
-
         anchor.remove();
-
         html.Url.revokeObjectUrl(url);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
+        }
       } else {
         final dir = await getApplicationDocumentsDirectory();
-
         final file = File('${dir.path}/$fileName');
-
         await file.writeAsBytes(bytes);
-
         await OpenFilex.open(file.path);
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
       }
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
     }
   }
 
-  Future<Map<String, dynamic>> _getFormAttendanceData() async {
-    final supabase = ref.read(supabaseClientProvider);
-
-    final employees = ((await supabase.from('profiles').select('id, first_name, last_name')) as List<dynamic>)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-
-    final formAttendanceRecords =
-        ((await supabase
-                    .from('form_responses')
-                    .select('id, form_id, user_id, submitted_at')
-                    .eq('form_id', widget.formId)
-                    .gte('submitted_at', widget.startDate.toUtc().toIso8601String())
-                    .lte('submitted_at', widget.endDate.toUtc().add(const Duration(days: 1)).toIso8601String()))
-                as List<dynamic>)
-            .map((f) => Map<String, dynamic>.from(f as Map))
-            .toList();
-
-    Map<String, Map<String, dynamic>> employeeData = {};
-
-    for (final employee in employees) {
-      employeeData[employee['id']] = {
-        'user_id': employee['id'],
-        'full_name': "${employee['first_name']} ${employee['last_name']}",
-        'attendance_map': <String, dynamic>{},
-      };
-    }
-
-    for (final record in formAttendanceRecords) {
-      final userId = record['user_id'];
-      if (record['submitted_at'] == null || !employeeData.containsKey(userId)) continue;
-
-      final submittedAt = DateTime.parse(record['submitted_at']).toLocal();
-      final dateKey = DateFormat('yyyy-MM-dd').format(submittedAt);
-
-      final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
-      currentMap[dateKey] = {'status': 'filled'};
-    }
-
-    if (kDebugMode) {
-      print("Fetched ${formAttendanceRecords.length} records for range: ${widget.startDate} to ${widget.endDate}");
-    }
-    return {'employees': employeeData, 'records': formAttendanceRecords};
-  }
-
   Future<void> refresh() async {
-    _future = _getFormAttendanceData();
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant FormAttendanceTable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
+    setState(() {
       _future = _getFormAttendanceData();
-    }
+    });
   }
 
   bool _isHoliday(DateTime date) {
@@ -207,112 +194,333 @@ class FormAttendanceTableState extends ConsumerState<FormAttendanceTable> {
     return List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
   }
 
-  Widget _buildNameCell(String fullName) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [Text(fullName)],
-    );
+  Size calcTextSize(BuildContext context, String text, TextStyle style) {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: painting.TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    return textPainter.size;
   }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isMobile = screenWidth < 600;
+    const double dateCellWidth = 50;
+    const double totalColumnWidth = 50;
+    final double rowHeight = isMobile ? 42 : 31;
+    const double headerHeight = 42;
     return FutureBuilder<Map<String, dynamic>>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (snapshot.hasError) {
           return Center(child: Text("Error loading records: ${snapshot.error}"));
         }
-
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(child: Text("No responses found for this form"));
         }
-
         final employees =
             ((snapshot.data!['employees'] as Map<String, dynamic>).values
                     .map((e) => Map<String, dynamic>.from(e as Map))
                     .toList())
                 .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
                 .toList();
-
         if (employees.isEmpty) {
           return const Center(child: Text("No employees found"));
         }
-
+        double maxNameWidth = 0;
+        const TextStyle nameStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
+        for (final emp in employees) {
+          final String textToMeasure = isMobile
+              ? ((emp['first_name']?.toString().length ?? 0) > (emp['last_name']?.toString().length ?? 0)
+                    ? (emp['first_name'] ?? '')
+                    : (emp['last_name'] ?? ''))
+              : (emp['full_name'] ?? 'Unknown');
+          final Size size = calcTextSize(context, textToMeasure, nameStyle);
+          final double totalNeeded = size.width + 26.0;
+          if (totalNeeded > maxNameWidth) {
+            maxNameWidth = totalNeeded;
+          }
+        }
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
-
-        return Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
+        final workingDaysCount = dates.where((d) {
+          final cellDateNormalized = DateTime(d.year, d.month, d.day);
+          return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
+        }).length;
+        List<int> dailyTotals = [];
+        double grandTotalPresent = 0;
+        for (final d in dates) {
+          final cellDateNormalized = DateTime(d.year, d.month, d.day);
+          final bool isFutureOrToday =
+              cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
+          if (_isHoliday(d) || isFutureOrToday) {
+            dailyTotals.add(-1);
+          } else {
+            final key = DateFormat('yyyy-MM-dd').format(d);
+            int count = 0;
+            for (final m in employees) {
+              final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
+              if (attMap[key] != null) count++;
+            }
+            dailyTotals.add(count);
+            grandTotalPresent += count;
+          }
+        }
+        return Container(
+          decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
+          child: Column(
+            children: [
+              Container(
+                height: headerHeight,
+                color: Colors.grey[200],
+                child: Row(
+                  children: [
+                    Container(
+                      width: maxNameWidth,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 13),
+                      decoration: BoxDecoration(
+                        border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      child: const Text(
+                        'Employee',
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _horizontalHeaderController,
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Row(
+                          children: dates
+                              .map(
+                                (d) => Container(
+                                  width: dateCellWidth,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                                  ),
+                                  child: Text(
+                                    "${DateFormat('dd/MM').format(d)}\n${DateFormat('E').format(d)}",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: _isHoliday(d) ? Colors.grey : Colors.black,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: totalColumnWidth,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      child: Text(
+                        'Total:\n$workingDaysCount',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+              Expanded(
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    border: TableBorder.all(color: Colors.grey),
-                    headingRowHeight: 70,
-                    columnSpacing: 13,
-                    horizontalMargin: 10,
-                    columns: [
-                      const DataColumn(label: Text('Employee')),
-                      ...dates.map(
-                        (d) => DataColumn(
-                          label: SizedBox(
-                            width: 45,
-                            child: Center(
-                              child: Text(
-                                "${DateFormat('MM/dd').format(d)}\n${DateFormat('E').format(d)}",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: _isHoliday(d) ? Colors.grey : Colors.black),
-                              ),
-                            ),
+                  scrollDirection: Axis.vertical,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: maxNameWidth,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                        ),
+                        child: Column(
+                          children: employees
+                              .map(
+                                (emp) => Container(
+                                  height: rowHeight,
+                                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                                  alignment: Alignment.centerLeft,
+                                  decoration: BoxDecoration(
+                                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                                  ),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      isMobile
+                                          ? "${emp['first_name'] ?? ''}\n${emp['last_name'] ?? ''}"
+                                          : (emp['full_name'] ?? 'Unknown'),
+                                      maxLines: isMobile ? 2 : 1,
+                                      style: nameStyle,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: _horizontalBodyController,
+                          scrollDirection: Axis.horizontal,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: employees.map((employee) {
+                              final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
+                              return Container(
+                                height: rowHeight,
+                                decoration: BoxDecoration(
+                                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                                ),
+                                child: Row(
+                                  children: dates.map((d) {
+                                    final key = DateFormat('yyyy-MM-dd').format(d);
+                                    final holiday = _isHoliday(d);
+                                    final isPresent = attMap[key] != null;
+                                    final cellDateNormalized = DateTime(d.year, d.month, d.day);
+                                    final bool isFutureOrToday =
+                                        cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
+                                        cellDateNormalized.isAfter(todayNormalized);
+                                    return Container(
+                                      width: dateCellWidth,
+                                      height: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: holiday ? Colors.grey[100] : null,
+                                        border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                                      ),
+                                      child: Center(
+                                        child: holiday
+                                            ? const Icon(Icons.remove, color: Colors.grey, size: 13)
+                                            : isPresent
+                                            ? const Icon(Icons.check, color: Colors.green, size: 37)
+                                            : isFutureOrToday
+                                            ? const SizedBox.shrink()
+                                            : const Icon(Icons.close, color: Colors.red, size: 17),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ),
                       ),
-                    ],
-                    rows: [
-                      ...employees.map((employee) {
-                        final attMap = (employee['attendance_map'] as dynamic ?? {}) is Map
-                            ? Map<String, dynamic>.from(employee['attendance_map'] as Map)
-                            : <String, dynamic>{};
-
-                        return DataRow(
-                          cells: [
-                            DataCell(_buildNameCell(employee['full_name'] ?? 'Unknown')),
-                            ...dates.map((d) {
-                              return DataCell(
-                                Container(
-                                  width: 45,
-                                  height: double.infinity,
-                                  color: _isHoliday(d) ? Colors.grey.shade200 : null,
-                                  alignment: Alignment.center,
-                                  child: _isHoliday(d)
-                                      ? const Text("-")
-                                      : attMap[DateFormat('yyyy-MM-dd').format(d)] != null
-                                      ? const Icon(Icons.check, color: Colors.green)
-                                      : DateTime(
-                                          d.year,
-                                          d.month,
-                                          d.day,
-                                        ).isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))
-                                      ? const Icon(Icons.close, color: Colors.red)
-                                      : const Icon(Icons.remove, color: Colors.amber),
-                                ),
-                              );
-                            }),
-                          ],
-                        );
-                      }),
+                      Container(
+                        width: totalColumnWidth,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                        ),
+                        child: Column(
+                          children: employees.map((employee) {
+                            final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
+                            int presentCount = 0;
+                            for (final d in dates) {
+                              final cellDateNormalized = DateTime(d.year, d.month, d.day);
+                              if (!_isHoliday(d) &&
+                                  !cellDateNormalized.isAtSameMomentAs(todayNormalized) &&
+                                  !cellDateNormalized.isAfter(todayNormalized)) {
+                                final key = DateFormat('yyyy-MM-dd').format(d);
+                                if (attMap[key] != null) presentCount++;
+                              }
+                            }
+                            return Container(
+                              height: rowHeight,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                              ),
+                              child: Text(
+                                "$presentCount\n(${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%)",
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: Colors.black),
+                                textAlign: TextAlign.center,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
+              Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+              Container(
+                height: rowHeight,
+                color: Colors.blueGrey[50],
+                child: Row(
+                  children: [
+                    Container(
+                      width: maxNameWidth,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 13),
+                      decoration: BoxDecoration(
+                        border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      child: const Text(
+                        "TOTAL",
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _horizontalHeaderController,
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Row(
+                          children: dailyTotals
+                              .map(
+                                (count) => Container(
+                                  width: dateCellWidth,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                                  ),
+                                  child: Text(
+                                    count == -1 ? "-" : "$count",
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: totalColumnWidth,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                      ),
+                      child: Text(
+                        workingDaysCount == 0 || employees.isEmpty
+                            ? "0.0\n(0%)"
+                            : "${(grandTotalPresent / workingDaysCount).toStringAsFixed(1)}\n(${((grandTotalPresent / (employees.length * workingDaysCount)) * 100).toStringAsFixed(0)}%)",
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

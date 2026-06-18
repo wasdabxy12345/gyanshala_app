@@ -3,25 +3,38 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/widgets/employee_attendance_table.dart';
 import 'package:intl/intl.dart';
 
-class EmployeeAttendanceTab extends StatelessWidget {
+class EmployeeAttendanceTab extends StatefulWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
 
   const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
 
+  @override
+  State<EmployeeAttendanceTab> createState() => EmployeeAttendanceTabState();
+}
+
+class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
+  // Key setup referencing the newly modified table state
+  final GlobalKey<EmployeeAttendanceTableState> _tableKey = GlobalKey<EmployeeAttendanceTableState>();
+
+  // Exposes internal route bridge execution pipeline up towards parent page
+  Future<void> exportCurrentTable() async {
+    await _tableKey.currentState?.exportExcel();
+  }
+
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isStart ? range.start : range.end,
+      initialDate: isStart ? widget.range.start : widget.range.end,
       firstDate: DateTime(2025),
-      lastDate: isStart ? range.end : DateTime.now(),
+      lastDate: isStart ? widget.range.end : DateTime.now(),
     );
     if (picked != null) {
       if (isStart) {
-        onRangeChanged(DateTimeRange(start: picked, end: range.end));
+        widget.onRangeChanged(DateTimeRange(start: picked, end: widget.range.end));
       } else {
-        onRangeChanged(DateTimeRange(start: range.start, end: picked));
+        widget.onRangeChanged(DateTimeRange(start: widget.range.start, end: picked));
       }
     }
   }
@@ -29,6 +42,7 @@ class EmployeeAttendanceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+
     Widget buildWeekControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -37,9 +51,9 @@ class EmployeeAttendanceTab extends StatelessWidget {
           constraints: const BoxConstraints(),
           icon: const Icon(Icons.arrow_left, size: 37),
           onPressed: () {
-            final newEnd = range.start.subtract(const Duration(days: 1));
+            final newEnd = widget.range.start.subtract(const Duration(days: 1));
             final newStart = newEnd.subtract(const Duration(days: 6));
-            onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
+            widget.onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
           },
           tooltip: 'Previous week',
         ),
@@ -47,7 +61,7 @@ class EmployeeAttendanceTab extends StatelessWidget {
           child: _quickBtn("This Week", () {
             final start = now.subtract(Duration(days: now.weekday - 1));
             final end = start.add(const Duration(days: 6));
-            onRangeChanged(DateTimeRange(start: start, end: end));
+            widget.onRangeChanged(DateTimeRange(start: start, end: end));
           }),
         ),
         IconButton(
@@ -55,14 +69,15 @@ class EmployeeAttendanceTab extends StatelessWidget {
           constraints: const BoxConstraints(),
           icon: const Icon(Icons.arrow_right, size: 37),
           onPressed: () {
-            final newStart = range.end.add(const Duration(days: 1));
+            final newStart = widget.range.end.add(const Duration(days: 1));
             final newEnd = newStart.add(const Duration(days: 6));
-            onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
+            widget.onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
           },
           tooltip: 'Next week',
         ),
       ],
     );
+
     Widget buildMonthControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -71,9 +86,9 @@ class EmployeeAttendanceTab extends StatelessWidget {
           constraints: const BoxConstraints(),
           icon: const Icon(Icons.arrow_left, size: 37),
           onPressed: () {
-            final newMonthEnd = DateTime(range.start.year, range.start.month, 0);
+            final newMonthEnd = DateTime(widget.range.start.year, widget.range.start.month, 0);
             final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
-            onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
+            widget.onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
           },
           tooltip: 'Previous month',
         ),
@@ -81,7 +96,7 @@ class EmployeeAttendanceTab extends StatelessWidget {
           child: _quickBtn("This Month", () {
             final start = DateTime(now.year, now.month, 1);
             final end = DateTime(now.year, now.month + 1, 0);
-            onRangeChanged(DateTimeRange(start: start, end: end));
+            widget.onRangeChanged(DateTimeRange(start: start, end: end));
           }),
         ),
         IconButton(
@@ -89,14 +104,15 @@ class EmployeeAttendanceTab extends StatelessWidget {
           constraints: const BoxConstraints(),
           icon: const Icon(Icons.arrow_right, size: 37),
           onPressed: () {
-            final newMonthStart = DateTime(range.end.year, range.end.month + 1, 1);
+            final newMonthStart = DateTime(widget.range.end.year, widget.range.end.month + 1, 1);
             final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
-            onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
+            widget.onRangeChanged(DateTimeRange(start: newMonthStart, end: newMonthEnd));
           },
           tooltip: 'Next month',
         ),
       ],
     );
+
     Widget buildDateSelectors() => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -104,11 +120,11 @@ class EmployeeAttendanceTab extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(width: 8),
-            _dateInkWell(context: context, date: range.start, isStart: true),
+            _dateInkWell(context: context, date: widget.range.start, isStart: true),
             const SizedBox(width: 13),
             const Text("to", style: TextStyle(fontWeight: FontWeight.w500)),
             const SizedBox(width: 13),
-            _dateInkWell(context: context, date: range.end, isStart: false),
+            _dateInkWell(context: context, date: widget.range.end, isStart: false),
             const SizedBox(width: 8),
           ],
         ),
@@ -148,7 +164,12 @@ class EmployeeAttendanceTab extends StatelessWidget {
         ),
         const Divider(),
         Expanded(
-          child: EmployeeAttendanceTable(searchQuery: searchQuery, startDate: range.start, endDate: range.end),
+          child: EmployeeAttendanceTable(
+            key: _tableKey, // Assigned Table Key Reference Hook
+            searchQuery: widget.searchQuery,
+            startDate: widget.range.start,
+            endDate: widget.range.end,
+          ),
         ),
       ],
     );
