@@ -123,6 +123,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final sheet = excel['Sheet1'];
       final headers = ['Employee', ...dates.map((d) => DateFormat('dd-MM-yyyy').format(d))];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
+
       for (final employee in employees) {
         final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
         final row = <CellValue>[TextCellValue(employee['full_name'] ?? '')];
@@ -149,8 +150,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         }
         sheet.appendRow(row);
       }
+
       final bytes = excel.encode();
-      if (bytes == null) throw Exception('Failed to generate excel file structure payload.');
+      if (bytes == null) throw Exception('Failed to generate excel file');
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
       final fileName = 'Employee_Attendance_[$startRange to $endRange].xlsx';
@@ -182,6 +184,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
         }
+
         final file = File('${downloadsDir.path}/$fileName');
         await file.writeAsBytes(bytes);
 
@@ -205,7 +208,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               ),
               action: SnackBarAction(
                 label: "OPEN",
-                // textColor: Colors.blueAccent,
                 onPressed: () async {
                   await OpenFilex.open(file.path);
                 },

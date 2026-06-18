@@ -38,78 +38,63 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   List<Map<String, dynamic>> get filteredEmployees => _filteredEmployees;
   Set<String> get selectedEmployeeIds => _selectedEmployeeIds;
 
-  // --- ADDED EXPORT METHOD INTEGRATED FROM HUB ---
   Future<void> exportExcel() async {
-    if (_filteredEmployees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No employee profiles available to export.")));
-      return;
-    }
-
-    final targetedEmployees = _selectedEmployeeIds.isNotEmpty
-        ? _filteredEmployees.where((e) => _selectedEmployeeIds.contains(e['id'].toString())).toList()
-        : _filteredEmployees;
-
-    final excel = Excel.createExcel();
-    if (excel.sheets.containsKey('Sheet1')) {
-      excel.delete('Sheet1');
-    }
-    final Sheet sheet = excel['Sheet1'];
-    final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Cluster', 'Village', 'School'];
-    sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
-
-    for (final emp in targetedEmployees) {
-      sheet.appendRow([
-        TextCellValue(emp['first_name']?.toString() ?? "-"),
-        TextCellValue(emp['last_name']?.toString() ?? "-"),
-        TextCellValue(emp['phone']?.toString() ?? "-"),
-        TextCellValue(UserRole.fromString(emp['role']).label),
-        TextCellValue(emp['cluster']?.toString() ?? "-"),
-        TextCellValue(emp['village']?.toString() ?? "-"),
-        TextCellValue(emp['school']?.toString() ?? "-"),
-      ]);
-    }
-
-    final bytes = excel.encode();
-    if (bytes == null) throw Exception('Failed to generate excel payload.');
-    final dateSuffix = DateFormat('dd-MM-yyyy').format(DateTime.now());
-    final String fileName = "Employee_List_$dateSuffix.xlsx";
-
-    if (kIsWeb) {
-      final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement()
-        ..href = url
-        ..download = fileName
-        ..style.display = 'none';
-      html.document.body?.children.add(anchor);
-      anchor.click();
-      anchor.remove();
-      html.Url.revokeObjectUrl(url);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started.")));
+    try {
+      if (_filteredEmployees.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No employee data found")));
+        return;
       }
-    } else {
-      if (Platform.isAndroid) {
+
+      final targetedEmployees = _selectedEmployeeIds.isNotEmpty
+          ? _filteredEmployees.where((e) => _selectedEmployeeIds.contains(e['id'].toString())).toList()
+          : _filteredEmployees;
+
+      final excel = Excel.createExcel();
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+      final Sheet sheet = excel['Sheet1'];
+      final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Cluster', 'Village', 'School'];
+      sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
+
+      for (final emp in targetedEmployees) {
+        sheet.appendRow([
+          TextCellValue(emp['first_name']?.toString() ?? "-"),
+          TextCellValue(emp['last_name']?.toString() ?? "-"),
+          TextCellValue(emp['phone']?.toString() ?? "-"),
+          TextCellValue(UserRole.fromString(emp['role']).label),
+          TextCellValue(emp['cluster']?.toString() ?? "-"),
+          TextCellValue(emp['village']?.toString() ?? "-"),
+          TextCellValue(emp['school']?.toString() ?? "-"),
+        ]);
+      }
+
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Failed to generate excel file');
+      final dateSuffix = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      final String fileName = "Employee_List_$dateSuffix.xlsx";
+
+      if (kIsWeb) {
+        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..download = fileName
+          ..style.display = 'none';
+        html.document.body?.children.add(anchor);
+        anchor.click();
+        anchor.remove();
+        html.Url.revokeObjectUrl(url);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started.")));
+        }
+      } else {
         var status = await Permission.manageExternalStorage.status;
         if (!status.isGranted) {
           status = await Permission.manageExternalStorage.request();
-          if (!status.isGranted) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text("Storage permission required to save output."),
-                  backgroundColor: Colors.amber,
-                  action: SnackBarAction(label: "SETTINGS", textColor: Colors.white, onPressed: () => openAppSettings()),
-                ),
-              );
-            }
-            return;
-          }
         }
-      }
 
-      Directory? downloadsDir;
-      if (Platform.isAndroid) {
+        Directory? downloadsDir;
         downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
@@ -117,16 +102,41 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
         }
-      } else {
-        downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-      }
 
-      final file = File('${downloadsDir.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      await OpenFilex.open(file.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Saved to Downloads: $fileName")));
+        final file = File('${downloadsDir.path}/$fileName');
+        await file.writeAsBytes(bytes);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    },
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(child: Text("Saved to Downloads: $fileName", softWrap: true)),
+                ],
+              ),
+              action: SnackBarAction(
+                label: "OPEN",
+                onPressed: () async {
+                  await OpenFilex.open(file.path);
+                },
+              ),
+            ),
+          );
+        }
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
     }
   }
 
