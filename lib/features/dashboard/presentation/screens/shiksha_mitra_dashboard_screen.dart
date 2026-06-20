@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 import '../widgets/action_grid.dart';
@@ -13,7 +14,7 @@ class ShikshaMitraDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gyanshala app"),
+        title: const Text("Gyan Shala UNM Foundation Shiksha Setu App"),
         centerTitle: true,
         actions: [
           IconButton(
@@ -24,22 +25,24 @@ class ShikshaMitraDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ShikshaMitraHomeContent(shikshaMitraName: shikshaMitraName),
+      body: ShikshaMitraHome(shikshaMitraName: shikshaMitraName),
     );
   }
 }
 
-class ShikshaMitraHomeContent extends StatelessWidget {
+class ShikshaMitraHome extends StatelessWidget {
   final String shikshaMitraName;
-  const ShikshaMitraHomeContent({super.key, required this.shikshaMitraName});
+  const ShikshaMitraHome({super.key, required this.shikshaMitraName});
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.symmetric(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const DashboardHeader(),
+            const SizedBox(height: 50),
             Text("Welcome, $shikshaMitraName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 22),
             const AttendanceCard(),

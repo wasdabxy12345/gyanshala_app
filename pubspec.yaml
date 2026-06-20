@@ -15,7 +15,7 @@ flutter_native_splash:
     image: assets/splash/splash.png
     color: "#ffffff"
 
-version: 1.0.48+48
+version: 1.0.49+49
 
 environment:
   sdk: ^3.11.4
@@ -63,3 +63,5 @@ flutter:
     - assets/splash/splash.png
     - assets/icon/logo.png
     - assets/images/shiksha_setu_logo.png
+    - assets/images/gyanshala_logo.jpg
+    - assets/images/unm_logo.jpg

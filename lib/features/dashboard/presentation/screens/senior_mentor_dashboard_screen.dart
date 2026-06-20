@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 import '../widgets/action_grid.dart';
@@ -12,9 +13,11 @@ class SeniorMentorDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
       appBar: AppBar(
-        title: const Text("GS + UNM Portal"),
+        title: const Text(
+          "Gyan Shala UNM Foundation Shiksha Setu App",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 37),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -36,24 +39,19 @@ class HomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Welcome, $seniorMentorName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-                const AttendanceCard(),
-                const SizedBox(height: 24),
-                const Text("Quick Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                ActionGrid(),
-              ],
-            ),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const DashboardHeader(),
+            const SizedBox(height: 50),
+            Text("Welcome, $seniorMentorName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 22),
+            const AttendanceCard(),
+            const SizedBox(height: 22),
+            ActionGrid(),
+          ],
         ),
       ),
     );

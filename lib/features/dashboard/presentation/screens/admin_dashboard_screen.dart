@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
+import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
@@ -15,7 +16,10 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gyanshala app"),
+        title: const Text(
+          "Gyan Shala UNM Foundation Shiksha Setu App",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 37),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -26,14 +30,14 @@ class AdminDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: AdminHomeContent(adminName: adminName),
+      body: AdminHome(adminName: adminName),
     );
   }
 }
 
-class AdminHomeContent extends StatelessWidget {
+class AdminHome extends StatelessWidget {
   final String adminName;
-  const AdminHomeContent({super.key, required this.adminName});
+  const AdminHome({super.key, required this.adminName});
   @override
   Widget build(BuildContext context) {
     final List<MenuItem> menuItems = [
@@ -45,12 +49,14 @@ class AdminHomeContent extends StatelessWidget {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.symmetric(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Welcome, $adminName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 22),
+            const DashboardHeader(),
+            const SizedBox(height: 50),
+            Text("Welcome, $adminName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+            const SizedBox(height: 13),
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
