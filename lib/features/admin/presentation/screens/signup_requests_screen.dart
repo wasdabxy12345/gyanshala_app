@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
 class SignupRequestsScreen extends ConsumerStatefulWidget {
   const SignupRequestsScreen({super.key});
@@ -12,8 +13,8 @@ class SignupRequestsScreen extends ConsumerStatefulWidget {
 class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
   final _searchController = TextEditingController();
-  int _sortColumnIndex = 0;
-  bool _isAscending = true;
+  int _sortColumnIndex = 7;
+  bool _isAscending = false;
   Set<String>? _selectedNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
@@ -21,10 +22,12 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
   Set<String>? _selectedQualificationFilters;
+  Set<String>? _selectedDateFilters;
+  Set<String>? _selectedTimeFilters;
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
   void _onSort(int columnIndex) {
-    if (columnIndex == 7) return;
+    if (columnIndex == 9) return;
     setState(() {
       if (_sortColumnIndex == columnIndex) {
         _isAscending = !_isAscending;
@@ -69,6 +72,14 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           valA = a['qualification']?.toString() ?? "";
           valB = b['qualification']?.toString() ?? "";
           break;
+        case 7:
+          final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
+          final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
+          return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+        case 8:
+          final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
+          final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
+          return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       }
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
       return _isAscending ? compare : -compare;
@@ -85,6 +96,13 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final village = req['village']?.toString() ?? "";
       final school = req['school']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
+      final signupDate = req['created_at'] != null
+          ? DateFormat('dd MMM yyyy').format(DateTime.parse(req['created_at']).toLocal())
+          : '';
+      final signupTime = req['created_at'] != null
+          ? DateFormat('hh:mm a').format(DateTime.parse(req['created_at']).toLocal())
+          : '';
+
       final matchesSearch =
           query.isEmpty ||
           fullName.toLowerCase().contains(query) ||
@@ -93,7 +111,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           cluster.toLowerCase().contains(query) ||
           village.toLowerCase().contains(query) ||
           school.toLowerCase().contains(query) ||
-          qualification.toLowerCase().contains(query);
+          qualification.toLowerCase().contains(query) ||
+          signupDate.toLowerCase().contains(query) ||
+          signupTime.toLowerCase().contains(query);
+
       if (!matchesSearch) return false;
       if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
@@ -102,6 +123,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
       if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
       if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
+      if (_selectedDateFilters != null && !_selectedDateFilters!.contains(signupDate)) return false;
+      if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
       return true;
     }).toList();
     setState(() {
@@ -135,6 +158,18 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 6:
           if (req['qualification'] != null) values.add(req['qualification'].toString());
           break;
+        case 7:
+          if (req['created_at'] != null) {
+            final date = DateTime.parse(req['created_at']).toLocal();
+            values.add(DateFormat('dd MMM yyyy').format(date));
+          }
+          break;
+        case 8:
+          if (req['created_at'] != null) {
+            final date = DateTime.parse(req['created_at']).toLocal();
+            values.add(DateFormat('hh:mm a').format(date));
+          }
+          break;
       }
     }
     return values.toList()..sort();
@@ -155,10 +190,16 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
     else if (columnIndex == 5)
       currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
-    else
+    else if (columnIndex == 6)
       currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
+    else if (columnIndex == 7)
+      currentSelection = _selectedDateFilters != null ? Set.from(_selectedDateFilters!) : Set.from(allValues);
+    else
+      currentSelection = _selectedTimeFilters != null ? Set.from(_selectedTimeFilters!) : Set.from(allValues);
+
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
+
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -214,14 +255,17 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  final isAllSelected = currentSelection.length == allValues.length;
-                  if (columnIndex == 0) _selectedNameFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 1) _selectedPhoneFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 2) _selectedRoleFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 3) _selectedClusterFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 4) _selectedVillageFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 5) _selectedSchoolFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 6) _selectedQualificationFilters = isAllSelected ? null : Set.from(currentSelection);
+                  final noFilter = currentSelection.isEmpty || currentSelection.length == allValues.length;
+
+                  if (columnIndex == 0) _selectedNameFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 1) _selectedPhoneFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 2) _selectedRoleFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 3) _selectedClusterFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 4) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 5) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 6) _selectedQualificationFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 7) _selectedDateFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 8) _selectedTimeFilters = noFilter ? null : Set.from(currentSelection);
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -263,7 +307,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             ],
           ),
         ),
-        body: TabBarView(children: [_buildGridContent('pending'), _buildGridContent('approved')]),
+        body: TabBarView(
+          physics: const NeverScrollableScrollPhysics(),
+          children: [_buildGridContent('pending'), _buildGridContent('approved')],
+        ),
       ),
     );
   }
@@ -276,8 +323,16 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
         final query = _searchController.text.toLowerCase().trim();
+
         _filteredRequests = _rawRequests.where((req) {
           final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+          final signupDate = req['created_at'] != null
+              ? DateFormat('dd MMM yyyy').format(DateTime.parse(req['created_at']).toLocal())
+              : '';
+          final signupTime = req['created_at'] != null
+              ? DateFormat('hh:mm a').format(DateTime.parse(req['created_at']).toLocal())
+              : '';
+
           if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
           if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(req['phone']?.toString())) return false;
           if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(req['role'])) return false;
@@ -286,6 +341,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
           if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
             return false;
+          if (_selectedDateFilters != null && !_selectedDateFilters!.contains(signupDate)) return false;
+
+          if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
           return query.isEmpty ||
               fullName.toLowerCase().contains(query) ||
               (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
@@ -296,7 +354,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           children: [
             Expanded(
               child: _filteredRequests.isEmpty
-                  ? const Center(child: Text("No records match your filters."))
+                  ? const Center(child: Text("No records match your filters"))
                   : SingleChildScrollView(
                       scrollDirection: Axis.vertical,
                       child: SingleChildScrollView(
@@ -372,6 +430,22 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                     isAscending: _isAscending,
                                     hasFilter: _selectedQualificationFilters != null,
                                   ),
+                                  _SortableHeader(
+                                    label: "Date",
+                                    onSort: () => _onSort(7),
+                                    onFilter: () => _showFilterMenu(7, "Date"),
+                                    isSorted: _sortColumnIndex == 7,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedDateFilters != null,
+                                  ),
+                                  _SortableHeader(
+                                    label: "Time",
+                                    onSort: () => _onSort(8),
+                                    onFilter: () => _showFilterMenu(8, "Time"),
+                                    isSorted: _sortColumnIndex == 8,
+                                    isAscending: _isAscending,
+                                    hasFilter: _selectedTimeFilters != null,
+                                  ),
                                   const Padding(
                                     padding: EdgeInsets.only(left: 13, right: 13, top: 13, bottom: 13),
                                     child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -380,6 +454,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                               ),
                               ..._filteredRequests.map((req) {
                                 final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                                final createdAt = DateTime.parse(req['created_at']).toLocal();
                                 return TableRow(
                                   children: [
                                     _DataCell(text: currentName, isBold: true),
@@ -389,6 +464,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                     _DataCell(text: req['village']?.toString() ?? "-"),
                                     _DataCell(text: req['school']?.toString() ?? "-"),
                                     _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                    _DataCell(text: DateFormat('dd MMM yyyy').format(createdAt)),
+
+                                    _DataCell(text: DateFormat('hh:mm a').format(createdAt)),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                       child: statusFilter == 'pending'
