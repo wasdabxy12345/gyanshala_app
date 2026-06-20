@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class DashboardHeader extends StatelessWidget {
@@ -9,9 +10,9 @@ class DashboardHeader extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        final double logoHeight = (constraints.maxWidth * 0.13).clamp(37, 88);
-        final spacing = width * 0.03;
-        final horizontalPadding = width * 0.03;
+        final double logoHeight = (width * 0.13).clamp(37, 77);
+        final double spacing = 0;
+        final double horizontalPadding = width * (kIsWeb ? 0.3 : 0.03);
 
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
