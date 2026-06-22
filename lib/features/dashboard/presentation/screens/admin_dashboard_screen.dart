@@ -42,9 +42,14 @@ class AdminHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<MenuItem> menuItems = [
       const MenuItem(title: "Signup Requests", icon: Icons.how_to_reg, color: Colors.red, targetScreen: SignupRequestsScreen()),
-      const MenuItem(title: "Employees", icon: Icons.groups, color: Colors.amber, targetScreen: EmployeeHubPage()),
+      const MenuItem(title: "Employee Hub", icon: Icons.groups, color: Colors.amber, targetScreen: EmployeeHubPage()),
       const MenuItem(title: "Locations", icon: Icons.map, color: Colors.green, targetScreen: LocationManagementScreen()),
-      const MenuItem(title: "Forms", icon: Icons.description, color: Colors.blue, targetScreen: FormManagementScreen()),
+      const MenuItem(
+        title: "Monitoring and Evaluation Tools",
+        icon: Icons.description,
+        color: Colors.blue,
+        targetScreen: FormManagementScreen(),
+      ),
     ];
 
     return SingleChildScrollView(

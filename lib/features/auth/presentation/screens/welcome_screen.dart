@@ -9,14 +9,13 @@ import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/otp_verification_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'otp_verification_screen.dart';
 
 enum ApprovalState { loading, pending, approved, denied, none }
 
@@ -33,6 +32,7 @@ class WelcomeScreen extends ConsumerStatefulWidget {
 class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   ApprovalState _state = ApprovalState.loading;
   String? _pendingId;
+  String? _rejectionReason;
   String _appVersion = "Loading...";
 
   @override
@@ -88,13 +88,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   Future<void> _checkStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getString('pending_id');
-
+    print('pending_id = $id');
     if (!mounted) return;
 
     if (id == null || id.isEmpty) {
       setState(() {
         _state = ApprovalState.none;
         _pendingId = null;
+        _rejectionReason = null;
       });
       return;
     }
@@ -105,14 +106,16 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     });
 
     try {
-      final status = await ref.read(authRepositoryProvider).getSignupStatus(id).timeout(const Duration(seconds: 10));
+      final response = await ref.read(authRepositoryProvider).getSignupStatus(id).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
       setState(() {
+        final status = response['status'];
+        _rejectionReason = response['rejection_reason'];
         if (status == 'approved') {
           _state = ApprovalState.approved;
-        } else if (status == 'denied' || status == 'not_found') {
+        } else if (status == 'denied' || status == 'removed' || status == 'not_found') {
           _state = ApprovalState.denied;
         } else {
           _state = ApprovalState.pending;
@@ -120,7 +123,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _state = ApprovalState.none);
+        setState(() {
+          _state = ApprovalState.none;
+          _rejectionReason = null;
+        });
       }
     }
   }
@@ -527,7 +533,11 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         bgColor = Colors.red.shade50;
         borderColor = Colors.red.shade200;
         icon = Icons.error_outline;
-        message = "Your signup request was declined.";
+        if (_rejectionReason != null && _rejectionReason!.isNotEmpty) {
+          message = "Your signup request was declined.\nReason: $_rejectionReason";
+        } else {
+          message = "Your signup request was declined.";
+        }
         action = TextButton(
           onPressed: () {
             _dismissSnackBar();

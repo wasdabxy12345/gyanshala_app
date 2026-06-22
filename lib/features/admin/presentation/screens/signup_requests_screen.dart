@@ -30,9 +30,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   @override
   void initState() {
     super.initState();
-
     final startOfWeek = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
-
     _selectedDateRange = DateTimeRange(start: startOfWeek, end: startOfWeek.add(const Duration(days: 6)));
   }
 
@@ -83,9 +81,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           valB = b['qualification']?.toString() ?? "";
           break;
         case 7:
-          final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
-          final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
-          return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
         case 8:
           final dateA = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
           final dateB = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
@@ -280,11 +275,20 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Future<void> _updateStatus(String id, String name, String status) async {
+  // UPDATED: Now supports updating action_reason to Supabase
+  Future<void> _updateStatus(String id, String name, String status, {String? reason}) async {
     setState(() => _isLoading = true);
     try {
       final supabase = ref.read(supabaseClientProvider);
-      await supabase.from('signup_requests').update({'status': status}).eq('id', id);
+
+      final Map<String, dynamic> updatePayload = {'status': status};
+      if (reason != null && reason.trim().isNotEmpty) {
+        updatePayload['action_reason'] = reason.trim();
+        updatePayload['actioned_at'] = DateTime.now().toIso8601String();
+      }
+
+      await supabase.from('signup_requests').update(updatePayload).eq('id', id);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('User $name marked as $status')));
       }
@@ -293,6 +297,58 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ADDED: Prompt confirmation dialog with a reason text box
+  Future<String?> _showRejectDialog(String name, String actionTitle) async {
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('$actionTitle Request'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to reject the signup request for $name?'),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for Rejection',
+                  hintText: 'Provide context or why it was rejected...',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Please enter a reason for the rejection';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, reasonController.text);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Confirm Reject'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickStartDate() async {
@@ -340,42 +396,32 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           onPressed: () {
             final newEnd = _selectedDateRange.start.subtract(const Duration(days: 1));
             final newStart = newEnd.subtract(const Duration(days: 6));
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
             });
-
             _applyAllFilters();
           },
         ),
-
         Expanded(
           child: _quickBtn("This Week", () {
             final start = now.subtract(Duration(days: now.weekday - 1));
-
             final end = start.add(const Duration(days: 6));
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: start, end: end);
             });
-
             _applyAllFilters();
           }),
         ),
-
         IconButton(
           icon: const Icon(Icons.arrow_right, size: 37),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
             final newStart = _selectedDateRange.end.add(const Duration(days: 1));
-
             final newEnd = newStart.add(const Duration(days: 6));
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
             });
-
             _applyAllFilters();
           },
         ),
@@ -391,44 +437,33 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           constraints: const BoxConstraints(),
           onPressed: () {
             final newMonthEnd = DateTime(_selectedDateRange.start.year, _selectedDateRange.start.month, 0);
-
             final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
             });
-
             _applyAllFilters();
           },
         ),
-
         Expanded(
           child: _quickBtn("This Month", () {
             final start = DateTime(now.year, now.month, 1);
-
             final end = DateTime(now.year, now.month + 1, 0);
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: start, end: end);
             });
-
             _applyAllFilters();
           }),
         ),
-
         IconButton(
           icon: const Icon(Icons.arrow_right, size: 37),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
             final newMonthStart = DateTime(_selectedDateRange.end.year, _selectedDateRange.end.month + 1, 1);
-
             final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
-
             setState(() {
               _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
             });
-
             _applyAllFilters();
           },
         ),
@@ -470,7 +505,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
               ],
             );
           }
-
           return Row(
             children: [
               Expanded(child: buildWeekControls()),
@@ -489,7 +523,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     return Column(
       children: [
         _buildDateControls(),
-
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: supabase.from('signup_requests').stream(primaryKey: ['id']).eq('status', statusFilter),
@@ -512,6 +545,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
                 if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
                   return false;
+
                 final createdAt = req['created_at'] != null ? DateTime.parse(req['created_at']).toLocal() : null;
                 if (createdAt != null) {
                   if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) {
@@ -524,10 +558,11 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                     (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
                     (req['qualification']?.toString().toLowerCase().contains(query) ?? false);
               }).toList();
+
               _applySorting();
               final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
-
               final defaultEnd = defaultStart.add(const Duration(days: 6));
+
               return Column(
                 children: [
                   Expanded(
@@ -537,159 +572,233 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                             scrollDirection: Axis.vertical,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(),
-                                child: Table(
-                                  defaultColumnWidth: const IntrinsicColumnWidth(),
-                                  border: TableBorder(
-                                    verticalInside: BorderSide(color: Colors.grey.shade300),
-                                    horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
-                                    bottom: BorderSide(color: Colors.grey.shade300),
-                                    left: BorderSide(color: Colors.grey.shade300),
-                                    right: BorderSide(color: Colors.grey.shade300),
+                              child: Table(
+                                defaultColumnWidth: const IntrinsicColumnWidth(),
+                                border: TableBorder(
+                                  verticalInside: BorderSide(color: Colors.grey.shade300),
+                                  horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                                  bottom: BorderSide(color: Colors.grey.shade300),
+                                  left: BorderSide(color: Colors.grey.shade300),
+                                  right: BorderSide(color: Colors.grey.shade300),
+                                ),
+                                children: [
+                                  TableRow(
+                                    decoration: BoxDecoration(color: Colors.grey.shade200),
+                                    children: [
+                                      _SortableHeader(
+                                        label: "Full Name",
+                                        onSort: () => _onSort(0),
+                                        onFilter: () => _showFilterMenu(0, "Name"),
+                                        isSorted: _sortColumnIndex == 0,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedNameFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Phone",
+                                        onSort: () => _onSort(1),
+                                        onFilter: () => _showFilterMenu(1, "Phone"),
+                                        isSorted: _sortColumnIndex == 1,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedPhoneFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Role",
+                                        onSort: () => _onSort(2),
+                                        onFilter: () => _showFilterMenu(2, "Role"),
+                                        isSorted: _sortColumnIndex == 2,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedRoleFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Cluster",
+                                        onSort: () => _onSort(3),
+                                        onFilter: () => _showFilterMenu(3, "Cluster"),
+                                        isSorted: _sortColumnIndex == 3,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedClusterFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Village",
+                                        onSort: () => _onSort(4),
+                                        onFilter: () => _showFilterMenu(4, "Village"),
+                                        isSorted: _sortColumnIndex == 4,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedVillageFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "School",
+                                        onSort: () => _onSort(5),
+                                        onFilter: () => _showFilterMenu(5, "School"),
+                                        isSorted: _sortColumnIndex == 5,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedSchoolFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Qualification",
+                                        onSort: () => _onSort(6),
+                                        onFilter: () => _showFilterMenu(6, "Qualification"),
+                                        isSorted: _sortColumnIndex == 6,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedQualificationFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Date",
+                                        onSort: () => _onSort(7),
+                                        onFilter: () => _pickStartDate(),
+                                        isSorted: _sortColumnIndex == 7,
+                                        isAscending: _isAscending,
+                                        hasFilter:
+                                            _selectedDateRange.start != defaultStart || _selectedDateRange.end != defaultEnd,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Time",
+                                        onSort: () => _onSort(8),
+                                        onFilter: () => _showFilterMenu(8, "Time"),
+                                        isSorted: _sortColumnIndex == 8,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedTimeFilters != null,
+                                      ),
+                                      const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
                                   ),
-                                  children: [
-                                    TableRow(
-                                      decoration: BoxDecoration(color: Colors.grey.shade200),
+                                  ..._filteredRequests.map((req) {
+                                    final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                                    final createdAt = DateTime.parse(req['created_at']).toLocal();
+                                    return TableRow(
                                       children: [
-                                        _SortableHeader(
-                                          label: "Full Name",
-                                          onSort: () => _onSort(0),
-                                          onFilter: () => _showFilterMenu(0, "Name"),
-                                          isSorted: _sortColumnIndex == 0,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedNameFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Phone",
-                                          onSort: () => _onSort(1),
-                                          onFilter: () => _showFilterMenu(1, "Phone"),
-                                          isSorted: _sortColumnIndex == 1,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedPhoneFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Role",
-                                          onSort: () => _onSort(2),
-                                          onFilter: () => _showFilterMenu(2, "Role"),
-                                          isSorted: _sortColumnIndex == 2,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedRoleFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Cluster",
-                                          onSort: () => _onSort(3),
-                                          onFilter: () => _showFilterMenu(3, "Cluster"),
-                                          isSorted: _sortColumnIndex == 3,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedClusterFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Village",
-                                          onSort: () => _onSort(4),
-                                          onFilter: () => _showFilterMenu(4, "Village"),
-                                          isSorted: _sortColumnIndex == 4,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedVillageFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "School",
-                                          onSort: () => _onSort(5),
-                                          onFilter: () => _showFilterMenu(5, "School"),
-                                          isSorted: _sortColumnIndex == 5,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedSchoolFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Qualification",
-                                          onSort: () => _onSort(6),
-                                          onFilter: () => _showFilterMenu(6, "Qualification"),
-                                          isSorted: _sortColumnIndex == 6,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedQualificationFilters != null,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Date",
-                                          onSort: () => _onSort(7),
-                                          onFilter: () => _pickStartDate(),
-                                          isSorted: _sortColumnIndex == 7,
-                                          isAscending: _isAscending,
-                                          hasFilter:
-                                              _selectedDateRange.start != defaultStart || _selectedDateRange.end != defaultEnd,
-                                        ),
-                                        _SortableHeader(
-                                          label: "Time",
-                                          onSort: () => _onSort(8),
-                                          onFilter: () => _showFilterMenu(8, "Time"),
-                                          isSorted: _sortColumnIndex == 8,
-                                          isAscending: _isAscending,
-                                          hasFilter: _selectedTimeFilters != null,
-                                        ),
-                                        const Padding(
-                                          padding: EdgeInsets.symmetric(),
-                                          child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ),
-                                    ..._filteredRequests.map((req) {
-                                      final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                                      final createdAt = DateTime.parse(req['created_at']).toLocal();
-                                      return TableRow(
-                                        children: [
-                                          _DataCell(text: currentName, isBold: true),
-                                          _DataCell(text: req['phone']?.toString() ?? "-"),
-                                          _DataCell(text: req['role']?.toString() ?? "-"),
-                                          _DataCell(text: req['cluster']?.toString() ?? "-"),
-                                          _DataCell(text: req['village']?.toString() ?? "-"),
-                                          _DataCell(text: req['school']?.toString() ?? "-"),
-                                          _DataCell(text: req['qualification']?.toString() ?? "-"),
-                                          _DataCell(text: DateFormat('dd MMM yyyy').format(createdAt)),
-
-                                          _DataCell(text: DateFormat('hh:mm a').format(createdAt)),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            child: statusFilter == 'pending'
-                                                ? Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      SizedBox(
-                                                        height: 32,
-                                                        width: 75,
-                                                        child: ElevatedButton(
-                                                          onPressed: _isLoading
-                                                              ? null
-                                                              : () => _updateStatus(req['id'], req['first_name'], 'approved'),
-                                                          style: ElevatedButton.styleFrom(
-                                                            backgroundColor: Colors.green,
-                                                            foregroundColor: Colors.white,
-                                                            padding: EdgeInsets.zero,
-                                                          ),
-                                                          child: const Text(
-                                                            "Approve",
-                                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                                          ),
+                                        _DataCell(text: currentName, isBold: true),
+                                        _DataCell(text: req['phone']?.toString() ?? "-"),
+                                        _DataCell(text: req['role']?.toString() ?? "-"),
+                                        _DataCell(text: req['cluster']?.toString() ?? "-"),
+                                        _DataCell(text: req['village']?.toString() ?? "-"),
+                                        _DataCell(text: req['school']?.toString() ?? "-"),
+                                        _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                        _DataCell(text: DateFormat('dd MMM yyyy').format(createdAt)),
+                                        _DataCell(text: DateFormat('hh:mm a').format(createdAt)),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          child: statusFilter == 'pending'
+                                              ? Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () => _updateStatus(req['id'], req['first_name'] ?? '', 'approved'),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.green,
+                                                          foregroundColor: Colors.white,
+                                                          padding: EdgeInsets.zero,
+                                                        ),
+                                                        child: const Text(
+                                                          "Approve",
+                                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                                         ),
                                                       ),
-                                                    ],
-                                                  )
-                                                : SizedBox(
-                                                    height: 32,
-                                                    width: 90,
-                                                    child: TextButton.icon(
-                                                      onPressed: _isLoading
-                                                          ? null
-                                                          : () => _updateStatus(req['id'], req['first_name'], 'pending'),
-                                                      icon: const Icon(Icons.refresh, size: 14),
-                                                      label: const Text("Reset", style: TextStyle(fontSize: 12)),
-                                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
                                                     ),
-                                                  ),
-                                          ),
-                                        ],
-                                      );
-                                    }),
-                                  ],
-                                ),
+                                                    const SizedBox(width: 6),
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        // UPDATED: Now pops open text dialog before updating Supabase status to 'removed'
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () async {
+                                                                final reason = await _showRejectDialog(
+                                                                  req['first_name'] ?? 'User',
+                                                                  'Reject',
+                                                                );
+                                                                if (reason != null) {
+                                                                  _updateStatus(
+                                                                    req['id'],
+                                                                    req['first_name'] ?? '',
+                                                                    'removed',
+                                                                    reason: reason,
+                                                                  );
+                                                                }
+                                                              },
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.red,
+                                                          foregroundColor: Colors.white,
+                                                          padding: EdgeInsets.zero,
+                                                        ),
+                                                        child: const Text(
+                                                          "Reject",
+                                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                )
+                                              : Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 80,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () =>
+                                                                  _updateStatus(req['id'], req['first_name'] ?? '', 'suspended'),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.orange,
+                                                          foregroundColor: Colors.white,
+                                                          padding: EdgeInsets.zero,
+                                                        ),
+                                                        child: const Text(
+                                                          "Suspend",
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        // UPDATED: Standardized the "Remove" option to also use the new reason workflow
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () async {
+                                                                final reason = await _showRejectDialog(
+                                                                  req['first_name'] ?? 'User',
+                                                                  'Remove',
+                                                                );
+                                                                if (reason != null) {
+                                                                  _updateStatus(
+                                                                    req['id'],
+                                                                    req['first_name'] ?? '',
+                                                                    'removed',
+                                                                    reason: reason,
+                                                                  );
+                                                                }
+                                                              },
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor: Colors.red,
+                                                          foregroundColor: Colors.white,
+                                                          padding: EdgeInsets.zero,
+                                                        ),
+                                                        child: const Text(
+                                                          "Remove",
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
+                                ],
                               ),
                             ),
                           ),
@@ -747,14 +856,13 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   String _formatDateWithMonth(DateTime date) {
     final dayName = DateFormat('EEE').format(date);
     final formatted = DateFormat('dd-MM-yyyy').format(date);
-
     return '$formatted ($dayName)';
   }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Signup Request Management"),
@@ -762,12 +870,13 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             tabs: [
               Tab(text: "Pending"),
               Tab(text: "Approved"),
+              Tab(text: "Suspended"),
             ],
           ),
         ),
         body: TabBarView(
           physics: const NeverScrollableScrollPhysics(),
-          children: [_buildTable('pending'), _buildTable('approved')],
+          children: [_buildTable('pending'), _buildTable('approved'), _buildTable('suspended')],
         ),
       ),
     );
@@ -789,6 +898,7 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -808,7 +918,6 @@ class _SortableHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(),
                   Icon(
                     isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
                     size: 13,
@@ -836,6 +945,7 @@ class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
   const _DataCell({required this.text, this.isBold = false});
+
   @override
   Widget build(BuildContext context) {
     return Padding(

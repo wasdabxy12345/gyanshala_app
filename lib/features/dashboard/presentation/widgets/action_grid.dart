@@ -8,7 +8,12 @@ class ActionGrid extends StatelessWidget {
 
   final List<MenuItem> menuItems = [
     const MenuItem(title: "Students", icon: Icons.group, color: Colors.red, targetScreen: StudentHubPage()),
-    const MenuItem(title: "Forms", icon: Icons.assignment_turned_in, color: Colors.amber, targetScreen: AvailableFormsScreen()),
+    const MenuItem(
+      title: "Monitoring and Evaluation Tools",
+      icon: Icons.assignment_turned_in,
+      color: Colors.amber,
+      targetScreen: AvailableFormsScreen(),
+    ),
     const MenuItem(title: "Test Data", icon: Icons.bar_chart, color: Colors.green),
     const MenuItem(title: "Monthly Reports", icon: Icons.description, color: Colors.blue),
   ];

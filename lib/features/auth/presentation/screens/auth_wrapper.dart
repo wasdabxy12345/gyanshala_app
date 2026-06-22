@@ -16,8 +16,7 @@ class AuthWrapper extends ConsumerWidget {
 
         return const WelcomeScreen();
       },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, st) => const WelcomeScreen(),
     );
   }

@@ -33,6 +33,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   bool _isLoading = false;
   int _timerSeconds = 0;
   Timer? _timer;
+
   void _startTimer() {
     setState(() => _timerSeconds = 60);
     _timer?.cancel();

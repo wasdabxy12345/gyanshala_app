@@ -14,7 +14,25 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<UserModel> login({required String identifier, required String password}) async {
     final response = await _supabase.auth.signInWithPassword(phone: identifier, password: password);
 
-    if (response.user == null) throw Exception("Login failed");
+    if (response.user == null) {
+      throw Exception("Login failed");
+    }
+
+    final request = await _supabase.from('signup_requests').select('status, action_reason').eq('id', response.user!.id).single();
+
+    final status = request['status']?.toString().toLowerCase();
+
+    if (status == 'suspended') {
+      await _supabase.auth.signOut();
+
+      throw Exception('Your account has been suspended.\n\nReason: ${request['action_reason'] ?? 'Not specified'}');
+    }
+
+    if (status == 'removed') {
+      await _supabase.auth.signOut();
+
+      throw Exception('Your account has been removed.');
+    }
 
     final profileData = await _supabase.from('profiles').select().eq('id', response.user!.id).single();
 
@@ -36,7 +54,8 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    await _auth.signUp(
+    // 1. Fire up standard GoTrue onboarding creation request
+    final authResponse = await _auth.signUp(
       phone: phone,
       password: password,
       data: {
@@ -51,16 +70,44 @@ class AuthRepositoryImpl implements AuthRepository {
         'school': school,
       },
     );
+
+    if (authResponse.user == null) {
+      throw Exception("Signup registration sequence failed.");
+    }
+
+    // 2. Insert into signup_requests. The database trigger intercepts duplicates
+    // and converts this to an update/reset if the user was previously rejected.
+    await _supabase.from('signup_requests').insert({
+      'id': authResponse.user!.id,
+      'phone': phone,
+      'first_name': firstName.trim(),
+      'last_name': lastName.trim(),
+      'role': role,
+      'status': 'pending',
+      'push_token': pushToken,
+      'qualification': qualification,
+      'village': village,
+      'cluster': cluster,
+      'school': school,
+    });
   }
 
   @override
   Future<void> sendOtp({required String identifier, bool requireApprovedSignup = true}) async {
     final phone = _normalizePhone(identifier);
-
-    final status = await getSignupStatus(identifier);
+    final signupData = await getSignupStatus(identifier);
+    final status = signupData['status'];
 
     if (status == 'pending') {
       throw Exception('Your account is still $status. OTP cannot be sent.');
+    }
+
+    if (status == 'suspended') {
+      throw Exception('Your account has been suspended.');
+    }
+
+    if (status == 'removed') {
+      throw Exception('Your account has been removed');
     }
 
     try {
@@ -138,12 +185,21 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<String> getSignupStatus(String identifier) async {
+  Future<Map<String, String?>> getSignupStatus(String identifier) async {
     final phone = _normalizePhone(identifier);
-    final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status');
 
-    if (rows.isEmpty) return 'not_found';
-    return (rows.first['status'] as String).toLowerCase();
+    // 💡 Request both 'status' and 'action_reason' columns from Supabase
+    final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status, action_reason');
+
+    if (rows.isEmpty) {
+      return {'status': 'not_found', 'rejection_reason': null};
+    }
+
+    final firstRow = rows.first;
+    return {
+      'status': (firstRow['status'] as String?)?.toLowerCase(),
+      'rejection_reason': firstRow['action_reason'] as String?, // Make sure this matches your Supabase column name exactly
+    };
   }
 
   String _normalizePhone(String value) {
