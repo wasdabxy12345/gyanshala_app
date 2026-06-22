@@ -38,7 +38,7 @@ class FormAttendanceTabState extends State<FormAttendanceTab> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? widget.range.start : widget.range.end,
-      firstDate: DateTime(2025),
+      firstDate: DateTime(1970),
       lastDate: isStart ? widget.range.end : DateTime.now(),
     );
 

@@ -22,10 +22,20 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
   Set<String>? _selectedQualificationFilters;
-  Set<String>? _selectedDateFilters;
+  late DateTimeRange _selectedDateRange;
   Set<String>? _selectedTimeFilters;
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    final startOfWeek = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
+
+    _selectedDateRange = DateTimeRange(start: startOfWeek, end: startOfWeek.add(const Duration(days: 6)));
+  }
+
   void _onSort(int columnIndex) {
     if (columnIndex == 9) return;
     setState(() {
@@ -96,9 +106,12 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final village = req['village']?.toString() ?? "";
       final school = req['school']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
-      final signupDate = req['created_at'] != null
-          ? DateFormat('dd MMM yyyy').format(DateTime.parse(req['created_at']).toLocal())
-          : '';
+      final createdAt = req['created_at'] != null ? DateTime.parse(req['created_at']).toLocal() : null;
+      if (createdAt != null) {
+        if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) {
+          return false;
+        }
+      }
       final signupTime = req['created_at'] != null
           ? DateFormat('hh:mm a').format(DateTime.parse(req['created_at']).toLocal())
           : '';
@@ -112,7 +125,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           village.toLowerCase().contains(query) ||
           school.toLowerCase().contains(query) ||
           qualification.toLowerCase().contains(query) ||
-          signupDate.toLowerCase().contains(query) ||
           signupTime.toLowerCase().contains(query);
 
       if (!matchesSearch) return false;
@@ -123,7 +135,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
       if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
       if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
-      if (_selectedDateFilters != null && !_selectedDateFilters!.contains(signupDate)) return false;
       if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
       return true;
     }).toList();
@@ -158,12 +169,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 6:
           if (req['qualification'] != null) values.add(req['qualification'].toString());
           break;
-        case 7:
-          if (req['created_at'] != null) {
-            final date = DateTime.parse(req['created_at']).toLocal();
-            values.add(DateFormat('dd MMM yyyy').format(date));
-          }
-          break;
         case 8:
           if (req['created_at'] != null) {
             final date = DateTime.parse(req['created_at']).toLocal();
@@ -192,8 +197,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
     else if (columnIndex == 6)
       currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
-    else if (columnIndex == 7)
-      currentSelection = _selectedDateFilters != null ? Set.from(_selectedDateFilters!) : Set.from(allValues);
     else
       currentSelection = _selectedTimeFilters != null ? Set.from(_selectedTimeFilters!) : Set.from(allValues);
 
@@ -264,7 +267,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                   if (columnIndex == 4) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 5) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 6) _selectedQualificationFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 7) _selectedDateFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 8) _selectedTimeFilters = noFilter ? null : Set.from(currentSelection);
                   _applyAllFilters();
                 });
@@ -293,6 +295,462 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     }
   }
 
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateRange.start,
+      firstDate: DateTime(1970),
+      lastDate: _selectedDateRange.end,
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDateRange = DateTimeRange(start: picked, end: _selectedDateRange.end);
+      });
+      _applyAllFilters();
+    }
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateRange.end,
+      firstDate: _selectedDateRange.start,
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDateRange = DateTimeRange(start: _selectedDateRange.start, end: picked);
+      });
+      _applyAllFilters();
+    }
+  }
+
+  Widget _buildDateControls() {
+    final now = DateTime.now();
+
+    Widget buildWeekControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_left, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () {
+            final newEnd = _selectedDateRange.start.subtract(const Duration(days: 1));
+            final newStart = newEnd.subtract(const Duration(days: 6));
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
+            });
+
+            _applyAllFilters();
+          },
+        ),
+
+        Expanded(
+          child: _quickBtn("This Week", () {
+            final start = now.subtract(Duration(days: now.weekday - 1));
+
+            final end = start.add(const Duration(days: 6));
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: start, end: end);
+            });
+
+            _applyAllFilters();
+          }),
+        ),
+
+        IconButton(
+          icon: const Icon(Icons.arrow_right, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () {
+            final newStart = _selectedDateRange.end.add(const Duration(days: 1));
+
+            final newEnd = newStart.add(const Duration(days: 6));
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
+            });
+
+            _applyAllFilters();
+          },
+        ),
+      ],
+    );
+
+    Widget buildMonthControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_left, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () {
+            final newMonthEnd = DateTime(_selectedDateRange.start.year, _selectedDateRange.start.month, 0);
+
+            final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
+            });
+
+            _applyAllFilters();
+          },
+        ),
+
+        Expanded(
+          child: _quickBtn("This Month", () {
+            final start = DateTime(now.year, now.month, 1);
+
+            final end = DateTime(now.year, now.month + 1, 0);
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: start, end: end);
+            });
+
+            _applyAllFilters();
+          }),
+        ),
+
+        IconButton(
+          icon: const Icon(Icons.arrow_right, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () {
+            final newMonthStart = DateTime(_selectedDateRange.end.year, _selectedDateRange.end.month + 1, 1);
+
+            final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
+
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
+            });
+
+            _applyAllFilters();
+          },
+        ),
+      ],
+    );
+
+    Widget buildDateSelectors() => Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dateInkWell(date: _selectedDateRange.start, isStart: true),
+            const SizedBox(width: 13),
+            const Text("to", style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(width: 13),
+            _dateInkWell(date: _selectedDateRange.end, isStart: false),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 600) {
+            return Column(
+              children: [
+                buildDateSelectors(),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: buildWeekControls()),
+                    const SizedBox(width: 8),
+                    Expanded(child: buildMonthControls()),
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: buildWeekControls()),
+              buildDateSelectors(),
+              Expanded(child: buildMonthControls()),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTable(String statusFilter) {
+    final supabase = ref.watch(supabaseClientProvider);
+
+    return Column(
+      children: [
+        _buildDateControls(),
+
+        Expanded(
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: supabase.from('signup_requests').stream(primaryKey: ['id']).eq('status', statusFilter),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
+              final query = _searchController.text.toLowerCase().trim();
+
+              _filteredRequests = _rawRequests.where((req) {
+                final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                final signupTime = req['created_at'] != null
+                    ? DateFormat('hh:mm a').format(DateTime.parse(req['created_at']).toLocal())
+                    : '';
+
+                if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+                if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(req['phone']?.toString())) return false;
+                if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(req['role'])) return false;
+                if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(req['cluster'])) return false;
+                if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(req['village'])) return false;
+                if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
+                if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
+                  return false;
+                final createdAt = req['created_at'] != null ? DateTime.parse(req['created_at']).toLocal() : null;
+                if (createdAt != null) {
+                  if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) {
+                    return false;
+                  }
+                }
+                if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
+                return query.isEmpty ||
+                    fullName.toLowerCase().contains(query) ||
+                    (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
+                    (req['qualification']?.toString().toLowerCase().contains(query) ?? false);
+              }).toList();
+              _applySorting();
+              final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
+
+              final defaultEnd = defaultStart.add(const Duration(days: 6));
+              return Column(
+                children: [
+                  Expanded(
+                    child: _filteredRequests.isEmpty
+                        ? const Center(child: Text("No records match your filters"))
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(),
+                                child: Table(
+                                  defaultColumnWidth: const IntrinsicColumnWidth(),
+                                  border: TableBorder(
+                                    verticalInside: BorderSide(color: Colors.grey.shade300),
+                                    horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                                    bottom: BorderSide(color: Colors.grey.shade300),
+                                    left: BorderSide(color: Colors.grey.shade300),
+                                    right: BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  children: [
+                                    TableRow(
+                                      decoration: BoxDecoration(color: Colors.grey.shade200),
+                                      children: [
+                                        _SortableHeader(
+                                          label: "Full Name",
+                                          onSort: () => _onSort(0),
+                                          onFilter: () => _showFilterMenu(0, "Name"),
+                                          isSorted: _sortColumnIndex == 0,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedNameFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Phone",
+                                          onSort: () => _onSort(1),
+                                          onFilter: () => _showFilterMenu(1, "Phone"),
+                                          isSorted: _sortColumnIndex == 1,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedPhoneFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Role",
+                                          onSort: () => _onSort(2),
+                                          onFilter: () => _showFilterMenu(2, "Role"),
+                                          isSorted: _sortColumnIndex == 2,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedRoleFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Cluster",
+                                          onSort: () => _onSort(3),
+                                          onFilter: () => _showFilterMenu(3, "Cluster"),
+                                          isSorted: _sortColumnIndex == 3,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedClusterFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Village",
+                                          onSort: () => _onSort(4),
+                                          onFilter: () => _showFilterMenu(4, "Village"),
+                                          isSorted: _sortColumnIndex == 4,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedVillageFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "School",
+                                          onSort: () => _onSort(5),
+                                          onFilter: () => _showFilterMenu(5, "School"),
+                                          isSorted: _sortColumnIndex == 5,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedSchoolFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Qualification",
+                                          onSort: () => _onSort(6),
+                                          onFilter: () => _showFilterMenu(6, "Qualification"),
+                                          isSorted: _sortColumnIndex == 6,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedQualificationFilters != null,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Date",
+                                          onSort: () => _onSort(7),
+                                          onFilter: () => _pickStartDate(),
+                                          isSorted: _sortColumnIndex == 7,
+                                          isAscending: _isAscending,
+                                          hasFilter:
+                                              _selectedDateRange.start != defaultStart || _selectedDateRange.end != defaultEnd,
+                                        ),
+                                        _SortableHeader(
+                                          label: "Time",
+                                          onSort: () => _onSort(8),
+                                          onFilter: () => _showFilterMenu(8, "Time"),
+                                          isSorted: _sortColumnIndex == 8,
+                                          isAscending: _isAscending,
+                                          hasFilter: _selectedTimeFilters != null,
+                                        ),
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(),
+                                          child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ),
+                                    ..._filteredRequests.map((req) {
+                                      final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                                      final createdAt = DateTime.parse(req['created_at']).toLocal();
+                                      return TableRow(
+                                        children: [
+                                          _DataCell(text: currentName, isBold: true),
+                                          _DataCell(text: req['phone']?.toString() ?? "-"),
+                                          _DataCell(text: req['role']?.toString() ?? "-"),
+                                          _DataCell(text: req['cluster']?.toString() ?? "-"),
+                                          _DataCell(text: req['village']?.toString() ?? "-"),
+                                          _DataCell(text: req['school']?.toString() ?? "-"),
+                                          _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                          _DataCell(text: DateFormat('dd MMM yyyy').format(createdAt)),
+
+                                          _DataCell(text: DateFormat('hh:mm a').format(createdAt)),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            child: statusFilter == 'pending'
+                                                ? Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      SizedBox(
+                                                        height: 32,
+                                                        width: 75,
+                                                        child: ElevatedButton(
+                                                          onPressed: _isLoading
+                                                              ? null
+                                                              : () => _updateStatus(req['id'], req['first_name'], 'approved'),
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: Colors.green,
+                                                            foregroundColor: Colors.white,
+                                                            padding: EdgeInsets.zero,
+                                                          ),
+                                                          child: const Text(
+                                                            "Approve",
+                                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  )
+                                                : SizedBox(
+                                                    height: 32,
+                                                    width: 90,
+                                                    child: TextButton.icon(
+                                                      onPressed: _isLoading
+                                                          ? null
+                                                          : () => _updateStatus(req['id'], req['first_name'], 'pending'),
+                                                      icon: const Icon(Icons.refresh, size: 14),
+                                                      label: const Text("Reset", style: TextStyle(fontSize: 12)),
+                                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                                    ),
+                                                  ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _quickBtn(String label, VoidCallback action) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 37),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: action,
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _dateInkWell({required DateTime date, required bool isStart}) {
+    return InkWell(
+      onTap: () {
+        if (isStart) {
+          _pickStartDate();
+        } else {
+          _pickEndDate();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 13),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppTheme.primaryBlue),
+          color: Colors.white,
+        ),
+        child: Text(
+          _formatDateWithMonth(date),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+        ),
+      ),
+    );
+  }
+
+  String _formatDateWithMonth(DateTime date) {
+    final dayName = DateFormat('EEE').format(date);
+    final formatted = DateFormat('dd-MM-yyyy').format(date);
+
+    return '$formatted ($dayName)';
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -309,215 +767,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
         body: TabBarView(
           physics: const NeverScrollableScrollPhysics(),
-          children: [_buildGridContent('pending'), _buildGridContent('approved')],
+          children: [_buildTable('pending'), _buildTable('approved')],
         ),
       ),
-    );
-  }
-
-  Widget _buildGridContent(String statusFilter) {
-    final supabase = ref.watch(supabaseClientProvider);
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: supabase.from('signup_requests').stream(primaryKey: ['id']).eq('status', statusFilter),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
-        final query = _searchController.text.toLowerCase().trim();
-
-        _filteredRequests = _rawRequests.where((req) {
-          final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-          final signupDate = req['created_at'] != null
-              ? DateFormat('dd MMM yyyy').format(DateTime.parse(req['created_at']).toLocal())
-              : '';
-          final signupTime = req['created_at'] != null
-              ? DateFormat('hh:mm a').format(DateTime.parse(req['created_at']).toLocal())
-              : '';
-
-          if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
-          if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(req['phone']?.toString())) return false;
-          if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(req['role'])) return false;
-          if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(req['cluster'])) return false;
-          if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(req['village'])) return false;
-          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(req['school'])) return false;
-          if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(req['qualification']))
-            return false;
-          if (_selectedDateFilters != null && !_selectedDateFilters!.contains(signupDate)) return false;
-
-          if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
-          return query.isEmpty ||
-              fullName.toLowerCase().contains(query) ||
-              (req['phone']?.toString().toLowerCase().contains(query) ?? false) ||
-              (req['qualification']?.toString().toLowerCase().contains(query) ?? false);
-        }).toList();
-        _applySorting();
-        return Column(
-          children: [
-            Expanded(
-              child: _filteredRequests.isEmpty
-                  ? const Center(child: Text("No records match your filters"))
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Table(
-                            defaultColumnWidth: const IntrinsicColumnWidth(),
-                            border: TableBorder(
-                              verticalInside: BorderSide(color: Colors.grey.shade300),
-                              horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
-                              bottom: BorderSide(color: Colors.grey.shade300),
-                              left: BorderSide(color: Colors.grey.shade300),
-                              right: BorderSide(color: Colors.grey.shade300),
-                            ),
-                            children: [
-                              TableRow(
-                                decoration: BoxDecoration(color: Colors.grey.shade200),
-                                children: [
-                                  _SortableHeader(
-                                    label: "Full Name",
-                                    onSort: () => _onSort(0),
-                                    onFilter: () => _showFilterMenu(0, "Name"),
-                                    isSorted: _sortColumnIndex == 0,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedNameFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Phone",
-                                    onSort: () => _onSort(1),
-                                    onFilter: () => _showFilterMenu(1, "Phone"),
-                                    isSorted: _sortColumnIndex == 1,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedPhoneFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Role",
-                                    onSort: () => _onSort(2),
-                                    onFilter: () => _showFilterMenu(2, "Role"),
-                                    isSorted: _sortColumnIndex == 2,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedRoleFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Cluster",
-                                    onSort: () => _onSort(3),
-                                    onFilter: () => _showFilterMenu(3, "Cluster"),
-                                    isSorted: _sortColumnIndex == 3,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedClusterFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Village",
-                                    onSort: () => _onSort(4),
-                                    onFilter: () => _showFilterMenu(4, "Village"),
-                                    isSorted: _sortColumnIndex == 4,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedVillageFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "School",
-                                    onSort: () => _onSort(5),
-                                    onFilter: () => _showFilterMenu(5, "School"),
-                                    isSorted: _sortColumnIndex == 5,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedSchoolFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Qualification",
-                                    onSort: () => _onSort(6),
-                                    onFilter: () => _showFilterMenu(6, "Qualification"),
-                                    isSorted: _sortColumnIndex == 6,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedQualificationFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Date",
-                                    onSort: () => _onSort(7),
-                                    onFilter: () => _showFilterMenu(7, "Date"),
-                                    isSorted: _sortColumnIndex == 7,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedDateFilters != null,
-                                  ),
-                                  _SortableHeader(
-                                    label: "Time",
-                                    onSort: () => _onSort(8),
-                                    onFilter: () => _showFilterMenu(8, "Time"),
-                                    isSorted: _sortColumnIndex == 8,
-                                    isAscending: _isAscending,
-                                    hasFilter: _selectedTimeFilters != null,
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 13, right: 13, top: 13, bottom: 13),
-                                    child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                              ..._filteredRequests.map((req) {
-                                final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                                final createdAt = DateTime.parse(req['created_at']).toLocal();
-                                return TableRow(
-                                  children: [
-                                    _DataCell(text: currentName, isBold: true),
-                                    _DataCell(text: req['phone']?.toString() ?? "-"),
-                                    _DataCell(text: req['role']?.toString() ?? "-"),
-                                    _DataCell(text: req['cluster']?.toString() ?? "-"),
-                                    _DataCell(text: req['village']?.toString() ?? "-"),
-                                    _DataCell(text: req['school']?.toString() ?? "-"),
-                                    _DataCell(text: req['qualification']?.toString() ?? "-"),
-                                    _DataCell(text: DateFormat('dd MMM yyyy').format(createdAt)),
-
-                                    _DataCell(text: DateFormat('hh:mm a').format(createdAt)),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      child: statusFilter == 'pending'
-                                          ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                SizedBox(
-                                                  height: 32,
-                                                  width: 75,
-                                                  child: ElevatedButton(
-                                                    onPressed: _isLoading
-                                                        ? null
-                                                        : () => _updateStatus(req['id'], req['first_name'], 'approved'),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: Colors.green,
-                                                      foregroundColor: Colors.white,
-                                                      padding: EdgeInsets.zero,
-                                                    ),
-                                                    child: const Text(
-                                                      "Approve",
-                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : SizedBox(
-                                              height: 32,
-                                              width: 90,
-                                              child: TextButton.icon(
-                                                onPressed: _isLoading
-                                                    ? null
-                                                    : () => _updateStatus(req['id'], req['first_name'], 'pending'),
-                                                icon: const Icon(Icons.refresh, size: 14),
-                                                label: const Text("Reset", style: TextStyle(fontSize: 12)),
-                                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                                              ),
-                                            ),
-                                    ),
-                                  ],
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
@@ -556,10 +808,10 @@ class _SortableHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 2),
+                  const SizedBox(),
                   Icon(
                     isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
-                    size: 14,
+                    size: 13,
                     color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
                 ],
@@ -570,8 +822,8 @@ class _SortableHeader extends StatelessWidget {
             onTap: onFilter,
             child: Container(
               padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent),
-              child: Icon(Icons.filter_alt, size: 16, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
+              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.13) : Colors.transparent),
+              child: Icon(Icons.filter_alt, size: 13, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),
         ],

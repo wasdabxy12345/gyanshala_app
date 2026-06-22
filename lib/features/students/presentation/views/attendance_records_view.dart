@@ -14,7 +14,7 @@ class AttendanceRecordsView extends StatelessWidget {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? range.start : range.end,
-      firstDate: DateTime(2025),
+      firstDate: DateTime(1970),
       lastDate: isStart ? range.end : DateTime.now(),
     );
 

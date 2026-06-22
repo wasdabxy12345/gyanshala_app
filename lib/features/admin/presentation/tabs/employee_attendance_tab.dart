@@ -15,10 +15,8 @@ class EmployeeAttendanceTab extends StatefulWidget {
 }
 
 class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
-  // Key setup referencing the newly modified table state
   final GlobalKey<EmployeeAttendanceTableState> _tableKey = GlobalKey<EmployeeAttendanceTableState>();
 
-  // Exposes internal route bridge execution pipeline up towards parent page
   Future<void> exportCurrentTable() async {
     await _tableKey.currentState?.exportExcel();
   }
@@ -27,7 +25,7 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStart ? widget.range.start : widget.range.end,
-      firstDate: DateTime(2025),
+      firstDate: DateTime(1970),
       lastDate: isStart ? widget.range.end : DateTime.now(),
     );
     if (picked != null) {
@@ -47,15 +45,14 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          icon: const Icon(Icons.arrow_left, size: 37),
           onPressed: () {
             final newEnd = widget.range.start.subtract(const Duration(days: 1));
             final newStart = newEnd.subtract(const Duration(days: 6));
             widget.onRangeChanged(DateTimeRange(start: newStart, end: newEnd));
           },
-          tooltip: 'Previous week',
+          icon: const Icon(Icons.arrow_left, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
         ),
         Expanded(
           child: _quickBtn("This Week", () {
