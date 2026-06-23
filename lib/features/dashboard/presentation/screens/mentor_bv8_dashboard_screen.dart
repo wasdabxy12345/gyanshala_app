@@ -6,9 +6,10 @@ import 'package:gyanshala_app/features/settings/presentation/views/settings_scre
 import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
-class SeniorMentorDashboardScreen extends ConsumerWidget {
-  final String seniorMentorName;
-  const SeniorMentorDashboardScreen({super.key, required this.seniorMentorName});
+// 💡 Completely renamed class to support Mentor (BV-8) schema structures
+class MentorBv8DashboardScreen extends ConsumerWidget {
+  final String mentorName;
+  const MentorBv8DashboardScreen({super.key, required this.mentorName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,14 +29,15 @@ class SeniorMentorDashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: HomeContent(seniorMentorName: seniorMentorName),
+      body: HomeContent(mentorName: mentorName),
     );
   }
 }
 
 class HomeContent extends StatelessWidget {
-  final String seniorMentorName;
-  const HomeContent({super.key, required this.seniorMentorName});
+  final String mentorName;
+  const HomeContent({super.key, required this.mentorName});
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -46,7 +48,7 @@ class HomeContent extends StatelessWidget {
           children: [
             const DashboardHeader(),
             const SizedBox(height: 50),
-            Text("Welcome, $seniorMentorName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text("Welcome, $mentorName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 22),
             const AttendanceCard(),
             const SizedBox(height: 22),

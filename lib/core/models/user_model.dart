@@ -29,7 +29,7 @@ class UserModel {
       phone: json['phone'] as String,
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
-      role: json['role'] as String? ?? 'Shiksha Mitra',
+      role: json['role'] as String? ?? 'Shiksha Mitra (3-8)',
       gender: json['gender'] as String?, // 💡 Mapped from database row string key
       qualification: json['qualification'] as String?,
       village: json['village'] as String?,

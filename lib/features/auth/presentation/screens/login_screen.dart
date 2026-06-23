@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
-import 'package:gyanshala_app/features/dashboard/presentation/screens/senior_mentor_dashboard_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_bv8_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/shiksha_mitra_dashboard_screen.dart';
 
 import '../../../../core/utils/validators.dart';
@@ -23,6 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+
   @override
   void dispose() {
     _identifierController.dispose();
@@ -41,14 +42,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       Widget nextScreen;
       final userRole = UserRole.fromString(user.role);
+
       switch (userRole) {
         case UserRole.admin:
           nextScreen = AdminDashboardScreen(adminName: name);
           break;
-        case UserRole.seniorMentor:
-          nextScreen = SeniorMentorDashboardScreen(seniorMentorName: name);
+        case UserRole.mentorBV8:
+          // 💡 Updated internal instantiation target name and argument hook
+          nextScreen = MentorBv8DashboardScreen(mentorName: name);
           break;
-        case UserRole.shikshaMitra:
+        case UserRole.shikshaMitra38:
+        case UserRole.shikshaMitra910:
           nextScreen = ShikshaMitraDashboardScreen(shikshaMitraName: name);
           break;
       }

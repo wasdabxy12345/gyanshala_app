@@ -31,8 +31,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.shikshaMitra;
-  // 💡 Added gender configuration tracker variables
+  // 💡 Updated starting default selection to match our new enum values
+  UserRole _selectedRole = UserRole.shikshaMitra38;
   String? _selectedGender;
 
   final List<LocationItem> _clusters = [];
@@ -105,7 +105,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             identifier: _phoneController.text.trim(),
             password: _passwordController.text,
             role: _selectedRole.name,
-            gender: _selectedGender, // 💡 Passed down gender string context parameter
+            gender: _selectedGender,
             pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
             cluster: clusterName,
@@ -147,7 +147,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isNotAdmin = _selectedRole == UserRole.shikshaMitra || _selectedRole == UserRole.seniorMentor;
+    // 💡 Updated check condition logic to match our updated non-admin options mapping
+    final isNotAdmin =
+        _selectedRole == UserRole.shikshaMitra38 ||
+        _selectedRole == UserRole.shikshaMitra910 ||
+        _selectedRole == UserRole.mentorBV8;
 
     return AuthShell(
       title: 'Signup',
@@ -182,7 +186,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             ),
             const SizedBox(height: 14),
 
-            // 💡 Added Gender Selector field block
             DropdownButtonFormField<String>(
               initialValue: _selectedGender,
               decoration: const InputDecoration(
@@ -225,7 +228,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               decoration: const InputDecoration(labelText: 'Confirm Password *', prefixIcon: Icon(Icons.lock_person_outlined)),
               validator: (value) => (value != _passwordController.text) ? 'Passwords do not match' : null,
             ),
-
             const SizedBox(height: 14),
 
             if (isNotAdmin) ...[

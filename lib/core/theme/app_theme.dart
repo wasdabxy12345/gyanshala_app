@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // String appName = "Gyan Shala UNM Foundation Shiksha Setu App";
   static const Color primaryBlue = Color(0xFF00afef);
   static const Color accentBlue = Color(0xFF0077C0);
   static const Color lightBlue = Color(0xFFF0F9FD);

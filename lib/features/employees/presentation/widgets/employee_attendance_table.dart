@@ -60,17 +60,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     try {
       final supabase = ref.read(supabaseClientProvider);
       final employeesRaw =
-          ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', [
-                    'shikshaMitra',
-                    'seniorMentor',
-                  ]))
+          ((await supabase.from('profiles').select('id, first_name, last_name').inFilter(
+                    'role',
+                    // 💡 Updated backend query array strings to fetch all our newly customized user roles cleanly
+                    ['shikshaMitra38', 'shikshaMitra910', 'mentorBV8'],
+                  ))
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
 
-      // 💡 Added latitude and longitude to the select statement
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
@@ -124,17 +124,14 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
 
-      // 💡 Defined custom request header columns
       final headers = ["User's Name", 'Latitude', 'Longitude', 'Status', 'Recorded At', 'School'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
-      // 💡 Flatten raw structural log records down to individual data rows
       for (final record in rawRecords) {
         final userId = record['user_id'];
         final employee = employeeMap[userId];
         final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
 
-        // Filter out search queries if matching filters apply locally
         if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) {
           continue;
         }
@@ -230,7 +227,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     }
   }
 
-  // Rest of code remains exactly the same for UI component painting...
   bool _isHoliday(DateTime date) => date.weekday == DateTime.sunday;
 
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
