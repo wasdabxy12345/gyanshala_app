@@ -9,6 +9,7 @@ abstract class AuthRepository {
     required String identifier,
     required String password,
     required String role,
+    String? gender, // 💡 Added optional gender param to contract
     String? pushToken,
     required String qualification,
     required String village,

@@ -89,6 +89,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
     required String role,
+    String? gender, // 💡 Implemented gender option
     String? qualification,
     String? village,
     String? cluster,
@@ -104,6 +105,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'first_name': firstName.trim(),
         'last_name': lastName.trim(),
         'role': role,
+        'gender': gender, // 💡 Appended to Auth raw app metadata map
         'status': 'pending',
         'push_token': pushToken,
         'qualification': qualification,
@@ -123,6 +125,7 @@ class AuthRepositoryImpl implements AuthRepository {
       'first_name': firstName.trim(),
       'last_name': lastName.trim(),
       'role': role,
+      'gender': gender, // 💡 Appended to DB tracking insert payload
       'status': 'pending',
       'push_token': pushToken,
       'qualification': qualification,

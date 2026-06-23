@@ -6,20 +6,21 @@ import 'package:intl/intl.dart';
 
 class SignupRequestsScreen extends ConsumerStatefulWidget {
   const SignupRequestsScreen({super.key});
+
   @override
-  ConsumerState<SignupRequestsScreen> createState() =>
-      _SignupRequestsScreenState();
+  ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
 }
 
 class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
   final _searchController = TextEditingController();
-  int _sortColumnIndex = 7;
+  int _sortColumnIndex = 8; // 💡 Incremented from 7 to 8 to match shifting date field index
   bool _isAscending = false;
 
   Set<String>? _selectedNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
+  Set<String>? _selectedGenderFilters; // 💡 Added new structural filter state tracker
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
@@ -33,16 +34,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   @override
   void initState() {
     super.initState();
-    final startOfWeek = DateTime.now().subtract(
-      Duration(days: DateTime.now().weekday - 1),
-    );
-    _selectedDateRange = DateTimeRange(
-      start: startOfWeek,
-      end: startOfWeek.add(const Duration(days: 6)),
-    );
+    final startOfWeek = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
+    _selectedDateRange = DateTimeRange(start: startOfWeek, end: startOfWeek.add(const Duration(days: 6)));
   }
 
-  /// Reusable confirmation dialog that asks for a mandatory reason
   Future<String?> _showActionReasonDialog({
     required String name,
     required String actionTitle,
@@ -83,20 +78,14 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 Navigator.pop(context, reasonController.text.trim());
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: confirmButtonColor,
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: confirmButtonColor, foregroundColor: Colors.white),
             child: Text('Confirm $actionTitle'),
           ),
         ],
@@ -114,38 +103,26 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     setState(() => _isLoading = true);
     final supabase = ref.read(supabaseClientProvider);
     final currentAdminId = supabase.auth.currentUser?.id;
-
     try {
       if (isProfileTable) {
-        // For Active & Suspended tabs, update ONLY the profiles table
         await supabase
             .from('profiles')
             .update({
-              'account_status': targetStatus, // e.g., 'suspended' or 'active'
+              'account_status': targetStatus,
               'action_reason': reason,
               'actioned_by': currentAdminId,
               'actioned_at': DateTime.now().toUtc().toIso8601String(),
             })
             .eq('id', id);
       } else {
-        // For Pending requests tab, update the signup_requests table
         await supabase
             .from('signup_requests')
-            .update({
-              'status': targetStatus, // e.g., 'approved' or 'removed'
-              'action_reason': reason,
-              'actioned_at': DateTime.now().toUtc().toIso8601String(),
-            })
+            .update({'status': targetStatus, 'action_reason': reason, 'actioned_at': DateTime.now().toUtc().toIso8601String()})
             .eq('id', id);
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Successfully updated status to $targetStatus')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully updated status to $targetStatus')));
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -157,34 +134,27 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
       final phone = req['phone']?.toString() ?? "";
       final role = req['role']?.toString() ?? "";
+      final gender = req['gender']?.toString() ?? ""; // 💡 Added database row runtime context reference extraction
       final cluster = req['cluster']?.toString() ?? "";
       final village = req['village']?.toString() ?? "";
       final school = req['school']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
+      final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
+      final createdAt = dateField != null ? DateTime.parse(dateField).toLocal() : null;
 
-      // Select appropriate timestamp depending on source row origin
-      final dateField = req.containsKey('account_status')
-          ? req['updated_at']
-          : req['created_at'];
-
-      final createdAt = dateField != null
-          ? DateTime.parse(dateField).toLocal()
-          : null;
       if (createdAt != null) {
-        if (createdAt.isBefore(_selectedDateRange.start) ||
-            createdAt.isAfter(_selectedDateRange.end)) {
+        if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) {
           return false;
         }
       }
-      final signupTime = dateField != null
-          ? DateFormat('hh:mm a').format(DateTime.parse(dateField).toLocal())
-          : '';
+      final signupTime = dateField != null ? DateFormat('hh:mm a').format(DateTime.parse(dateField).toLocal()) : '';
 
       final matchesSearch =
           query.isEmpty ||
           fullName.toLowerCase().contains(query) ||
           phone.toLowerCase().contains(query) ||
           role.toLowerCase().contains(query) ||
+          gender.toLowerCase().contains(query) || // 💡 Allowed fuzzy text search indexing over gender keys
           cluster.toLowerCase().contains(query) ||
           village.toLowerCase().contains(query) ||
           school.toLowerCase().contains(query) ||
@@ -192,32 +162,18 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           signupTime.toLowerCase().contains(query);
 
       if (!matchesSearch) return false;
-      if (_selectedNameFilters != null &&
-          !_selectedNameFilters!.contains(fullName))
-        return false;
-      if (_selectedPhoneFilters != null &&
-          !_selectedPhoneFilters!.contains(phone))
-        return false;
-      if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role))
-        return false;
-      if (_selectedClusterFilters != null &&
-          !_selectedClusterFilters!.contains(cluster))
-        return false;
-      if (_selectedVillageFilters != null &&
-          !_selectedVillageFilters!.contains(village))
-        return false;
-      if (_selectedSchoolFilters != null &&
-          !_selectedSchoolFilters!.contains(school))
-        return false;
-      if (_selectedQualificationFilters != null &&
-          !_selectedQualificationFilters!.contains(qualification))
-        return false;
-      if (_selectedTimeFilters != null &&
-          !_selectedTimeFilters!.contains(signupTime))
-        return false;
+      if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
+      if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
+      if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role)) return false;
+      if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender))
+        return false; // 💡 Added explicit dropdown filter logic
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
+      if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
+      if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
+      if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
+      if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
       return true;
     }).toList();
-
     setState(() {
       _filteredRequests = result;
       _applySorting();
@@ -241,30 +197,30 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           valA = a['role']?.toString() ?? "";
           valB = b['role']?.toString() ?? "";
           break;
-        case 3:
+        case 3: // 💡 Added case 3 logic variant to sort across alphabetical gender states
+          valA = a['gender']?.toString() ?? "";
+          valB = b['gender']?.toString() ?? "";
+          break;
+        case 4:
           valA = a['cluster']?.toString() ?? "";
           valB = b['cluster']?.toString() ?? "";
           break;
-        case 4:
+        case 5:
           valA = a['village']?.toString() ?? "";
           valB = b['village']?.toString() ?? "";
           break;
-        case 5:
+        case 6:
           valA = a['school']?.toString() ?? "";
           valB = b['school']?.toString() ?? "";
           break;
-        case 6:
+        case 7:
           valA = a['qualification']?.toString() ?? "";
           valB = b['qualification']?.toString() ?? "";
           break;
-        case 7:
         case 8:
-          final dateFieldA = a.containsKey('account_status')
-              ? a['updated_at']
-              : a['created_at'];
-          final dateFieldB = b.containsKey('account_status')
-              ? b['updated_at']
-              : b['created_at'];
+        case 9:
+          final dateFieldA = a.containsKey('account_status') ? a['updated_at'] : a['created_at'];
+          final dateFieldB = b.containsKey('account_status') ? b['updated_at'] : b['created_at'];
           final dateA = DateTime.tryParse(dateFieldA ?? '') ?? DateTime(1970);
           final dateB = DateTime.tryParse(dateFieldB ?? '') ?? DateTime(1970);
           return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
@@ -287,23 +243,23 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 2:
           if (req['role'] != null) values.add(req['role'].toString());
           break;
-        case 3:
-          if (req['cluster'] != null) values.add(req['cluster'].toString());
+        case 3: // 💡 Added extraction case parsing logic for gender values collection
+          if (req['gender'] != null) values.add(req['gender'].toString());
           break;
         case 4:
-          if (req['village'] != null) values.add(req['village'].toString());
+          if (req['cluster'] != null) values.add(req['cluster'].toString());
           break;
         case 5:
-          if (req['school'] != null) values.add(req['school'].toString());
+          if (req['village'] != null) values.add(req['village'].toString());
           break;
         case 6:
-          if (req['qualification'] != null)
-            values.add(req['qualification'].toString());
+          if (req['school'] != null) values.add(req['school'].toString());
           break;
-        case 8:
-          final dateField = req.containsKey('account_status')
-              ? req['updated_at']
-              : req['created_at'];
+        case 7:
+          if (req['qualification'] != null) values.add(req['qualification'].toString());
+          break;
+        case 9:
+          final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
           if (dateField != null) {
             final date = DateTime.parse(dateField).toLocal();
             values.add(DateFormat('hh:mm a').format(date));
@@ -315,7 +271,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   }
 
   void _onSort(int columnIndex) {
-    if (columnIndex == 9) return;
+    if (columnIndex == 10) return; // Action index block extended boundaries offset
     setState(() {
       if (_sortColumnIndex == columnIndex) {
         _isAscending = !_isAscending;
@@ -337,9 +293,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
-            final newEnd = _selectedDateRange.start.subtract(
-              const Duration(days: 1),
-            );
+            final newEnd = _selectedDateRange.start.subtract(const Duration(days: 1));
             final newStart = newEnd.subtract(const Duration(days: 6));
             setState(() {
               _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
@@ -362,9 +316,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
-            final newStart = _selectedDateRange.end.add(
-              const Duration(days: 1),
-            );
+            final newStart = _selectedDateRange.end.add(const Duration(days: 1));
             final newEnd = newStart.add(const Duration(days: 6));
             setState(() {
               _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
@@ -374,7 +326,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
       ],
     );
-
     Widget buildMonthControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -383,21 +334,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
-            final newMonthEnd = DateTime(
-              _selectedDateRange.start.year,
-              _selectedDateRange.start.month,
-              0,
-            );
-            final newMonthStart = DateTime(
-              newMonthEnd.year,
-              newMonthEnd.month,
-              1,
-            );
+            final newMonthEnd = DateTime(_selectedDateRange.start.year, _selectedDateRange.start.month, 0);
+            final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
             setState(() {
-              _selectedDateRange = DateTimeRange(
-                start: newMonthStart,
-                end: newMonthEnd,
-              );
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
             });
             _applyAllFilters();
           },
@@ -417,28 +357,16 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: () {
-            final newMonthStart = DateTime(
-              _selectedDateRange.end.year,
-              _selectedDateRange.end.month + 1,
-              1,
-            );
-            final newMonthEnd = DateTime(
-              newMonthStart.year,
-              newMonthStart.month + 1,
-              0,
-            );
+            final newMonthStart = DateTime(_selectedDateRange.end.year, _selectedDateRange.end.month + 1, 1);
+            final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
             setState(() {
-              _selectedDateRange = DateTimeRange(
-                start: newMonthStart,
-                end: newMonthEnd,
-              );
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
             });
             _applyAllFilters();
           },
         ),
       ],
     );
-
     Widget buildDateSelectors() => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -454,7 +382,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
       ),
     );
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
       child: LayoutBuilder(
@@ -515,11 +442,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
         child: Text(
           _formatDateWithMonth(date),
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryBlue,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
         ),
       ),
     );
@@ -534,10 +457,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
     if (picked != null) {
       setState(() {
-        _selectedDateRange = DateTimeRange(
-          start: picked,
-          end: _selectedDateRange.end,
-        );
+        _selectedDateRange = DateTimeRange(start: picked, end: _selectedDateRange.end);
       });
       _applyAllFilters();
     }
@@ -552,10 +472,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
     if (picked != null) {
       setState(() {
-        _selectedDateRange = DateTimeRange(
-          start: _selectedDateRange.start,
-          end: picked,
-        );
+        _selectedDateRange = DateTimeRange(start: _selectedDateRange.start, end: picked);
       });
       _applyAllFilters();
     }
@@ -571,41 +488,26 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     final allValues = _getUniqueValuesForColumn(columnIndex);
     Set<String> currentSelection;
     if (columnIndex == 0)
-      currentSelection = _selectedNameFilters != null
-          ? Set.from(_selectedNameFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedNameFilters != null ? Set.from(_selectedNameFilters!) : Set.from(allValues);
     else if (columnIndex == 1)
-      currentSelection = _selectedPhoneFilters != null
-          ? Set.from(_selectedPhoneFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedPhoneFilters != null ? Set.from(_selectedPhoneFilters!) : Set.from(allValues);
     else if (columnIndex == 2)
-      currentSelection = _selectedRoleFilters != null
-          ? Set.from(_selectedRoleFilters!)
-          : Set.from(allValues);
-    else if (columnIndex == 3)
-      currentSelection = _selectedClusterFilters != null
-          ? Set.from(_selectedClusterFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedRoleFilters != null ? Set.from(_selectedRoleFilters!) : Set.from(allValues);
+    else if (columnIndex == 3) // 💡 Handle initialization for gender filter assignment states
+      currentSelection = _selectedGenderFilters != null ? Set.from(_selectedGenderFilters!) : Set.from(allValues);
     else if (columnIndex == 4)
-      currentSelection = _selectedVillageFilters != null
-          ? Set.from(_selectedVillageFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
     else if (columnIndex == 5)
-      currentSelection = _selectedSchoolFilters != null
-          ? Set.from(_selectedSchoolFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
     else if (columnIndex == 6)
-      currentSelection = _selectedQualificationFilters != null
-          ? Set.from(_selectedQualificationFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
+    else if (columnIndex == 7)
+      currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
     else
-      currentSelection = _selectedTimeFilters != null
-          ? Set.from(_selectedTimeFilters!)
-          : Set.from(allValues);
+      currentSelection = _selectedTimeFilters != null ? Set.from(_selectedTimeFilters!) : Set.from(allValues);
 
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
-
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -618,18 +520,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
               children: [
                 TextField(
                   controller: dialogSearchController,
-                  decoration: const InputDecoration(
-                    hintText: "Search values...",
-                    prefixIcon: Icon(Icons.search),
-                  ),
+                  decoration: const InputDecoration(hintText: "Search values...", prefixIcon: Icon(Icons.search)),
                   onChanged: (value) {
                     setStateDialog(() {
-                      filteredValues = allValues
-                          .where(
-                            (e) =>
-                                e.toLowerCase().contains(value.toLowerCase()),
-                          )
-                          .toList();
+                      filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
                     });
                   },
                 ),
@@ -640,9 +534,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                   title: const Text("Select All"),
                   onChanged: (checked) {
                     setStateDialog(() {
-                      currentSelection = checked == true
-                          ? Set.from(allValues)
-                          : {};
+                      currentSelection = checked == true ? Set.from(allValues) : {};
                     });
                   },
                 ),
@@ -656,9 +548,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                         title: Text(value),
                         onChanged: (checked) {
                           setStateDialog(() {
-                            checked == true
-                                ? currentSelection.add(value)
-                                : currentSelection.remove(value);
+                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
                           });
                         },
                       );
@@ -669,48 +559,21 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  final noFilter =
-                      currentSelection.isEmpty ||
-                      currentSelection.length == allValues.length;
-                  if (columnIndex == 0)
-                    _selectedNameFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 1)
-                    _selectedPhoneFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 2)
-                    _selectedRoleFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
+                  final noFilter = currentSelection.isEmpty || currentSelection.length == allValues.length;
+                  if (columnIndex == 0) _selectedNameFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 1) _selectedPhoneFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 2) _selectedRoleFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 3)
-                    _selectedClusterFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 4)
-                    _selectedVillageFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 5)
-                    _selectedSchoolFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 6)
-                    _selectedQualificationFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
-                  if (columnIndex == 8)
-                    _selectedTimeFilters = noFilter
-                        ? null
-                        : Set.from(currentSelection);
+                    _selectedGenderFilters = noFilter ? null : Set.from(currentSelection); // 💡 Apply gender selection criteria
+                  if (columnIndex == 4) _selectedClusterFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 5) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 6) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 7) _selectedQualificationFilters = noFilter ? null : Set.from(currentSelection);
+                  if (columnIndex == 9) _selectedTimeFilters = noFilter ? null : Set.from(currentSelection);
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -723,82 +586,52 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Widget _buildTable({
-    required String statusFilter,
-    required bool isProfileTable,
-  }) {
+  Widget _buildTable({required String statusFilter, required bool isProfileTable}) {
     final supabase = ref.watch(supabaseClientProvider);
     final table = isProfileTable ? 'profiles' : 'signup_requests';
     final statusColumn = isProfileTable ? 'account_status' : 'status';
-
     return Column(
       children: [
         _buildDateControls(),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: supabase
-                .from(table)
-                .stream(primaryKey: ['id'])
-                .eq(statusColumn, statusFilter),
+            stream: supabase.from(table).stream(primaryKey: ['id']).eq(statusColumn, statusFilter),
             builder: (context, snapshot) {
-              if (!snapshot.hasData)
-                return const Center(child: CircularProgressIndicator());
-
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
-
-              // Schedule the filter and state updates to run safely AFTER the build frame completes
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _applyAllFilters();
                 }
               });
-
-              final defaultStart = DateTime.now().subtract(
-                Duration(days: DateTime.now().weekday - 1),
-              );
+              final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
               final defaultEnd = defaultStart.add(const Duration(days: 6));
-
               return Column(
                 children: [
                   Expanded(
                     child: _filteredRequests.isEmpty
-                        ? const Center(
-                            child: Text("No records match your filters"),
-                          )
+                        ? const Center(child: Text("No records match your filters"))
                         : SingleChildScrollView(
                             scrollDirection: Axis.vertical,
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Table(
-                                defaultColumnWidth:
-                                    const IntrinsicColumnWidth(),
+                                defaultColumnWidth: const IntrinsicColumnWidth(),
                                 border: TableBorder(
-                                  verticalInside: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  horizontalInside: BorderSide(
-                                    color: Colors.grey.shade300,
-                                    width: 1.0,
-                                  ),
-                                  bottom: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
+                                  verticalInside: BorderSide(color: Colors.grey.shade300),
+                                  horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                                  bottom: BorderSide(color: Colors.grey.shade300),
                                   left: BorderSide(color: Colors.grey.shade300),
-                                  right: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
+                                  right: BorderSide(color: Colors.grey.shade300),
                                 ),
                                 children: [
                                   TableRow(
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade200,
-                                    ),
+                                    decoration: BoxDecoration(color: Colors.grey.shade200),
                                     children: [
                                       _SortableHeader(
                                         label: "Full Name",
                                         onSort: () => _onSort(0),
-                                        onFilter: () =>
-                                            _showFilterMenu(0, "Name"),
+                                        onFilter: () => _showFilterMenu(0, "Name"),
                                         isSorted: _sortColumnIndex == 0,
                                         isAscending: _isAscending,
                                         hasFilter: _selectedNameFilters != null,
@@ -806,155 +639,104 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                       _SortableHeader(
                                         label: "Phone",
                                         onSort: () => _onSort(1),
-                                        onFilter: () =>
-                                            _showFilterMenu(1, "Phone"),
+                                        onFilter: () => _showFilterMenu(1, "Phone"),
                                         isSorted: _sortColumnIndex == 1,
                                         isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedPhoneFilters != null,
+                                        hasFilter: _selectedPhoneFilters != null,
                                       ),
                                       _SortableHeader(
                                         label: "Role",
                                         onSort: () => _onSort(2),
-                                        onFilter: () =>
-                                            _showFilterMenu(2, "Role"),
+                                        onFilter: () => _showFilterMenu(2, "Role"),
                                         isSorted: _sortColumnIndex == 2,
                                         isAscending: _isAscending,
                                         hasFilter: _selectedRoleFilters != null,
                                       ),
+                                      // 💡 Added Gender header column widget inside layout array
                                       _SortableHeader(
-                                        label: "Cluster",
+                                        label: "Gender",
                                         onSort: () => _onSort(3),
-                                        onFilter: () =>
-                                            _showFilterMenu(3, "Cluster"),
+                                        onFilter: () => _showFilterMenu(3, "Gender"),
                                         isSorted: _sortColumnIndex == 3,
                                         isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedClusterFilters != null,
+                                        hasFilter: _selectedGenderFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Cluster",
+                                        onSort: () => _onSort(4),
+                                        onFilter: () => _showFilterMenu(4, "Cluster"),
+                                        isSorted: _sortColumnIndex == 4,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedClusterFilters != null,
                                       ),
                                       _SortableHeader(
                                         label: "Village",
-                                        onSort: () => _onSort(4),
-                                        onFilter: () =>
-                                            _showFilterMenu(4, "Village"),
-                                        isSorted: _sortColumnIndex == 4,
+                                        onSort: () => _onSort(5),
+                                        onFilter: () => _showFilterMenu(5, "Village"),
+                                        isSorted: _sortColumnIndex == 5,
                                         isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedVillageFilters != null,
+                                        hasFilter: _selectedVillageFilters != null,
                                       ),
                                       _SortableHeader(
                                         label: "School",
-                                        onSort: () => _onSort(5),
-                                        onFilter: () =>
-                                            _showFilterMenu(5, "School"),
-                                        isSorted: _sortColumnIndex == 5,
+                                        onSort: () => _onSort(6),
+                                        onFilter: () => _showFilterMenu(6, "School"),
+                                        isSorted: _sortColumnIndex == 6,
                                         isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedSchoolFilters != null,
+                                        hasFilter: _selectedSchoolFilters != null,
                                       ),
                                       _SortableHeader(
                                         label: "Qualification",
-                                        onSort: () => _onSort(6),
-                                        onFilter: () =>
-                                            _showFilterMenu(6, "Qualification"),
-                                        isSorted: _sortColumnIndex == 6,
+                                        onSort: () => _onSort(7),
+                                        onFilter: () => _showFilterMenu(7, "Qualification"),
+                                        isSorted: _sortColumnIndex == 7,
                                         isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedQualificationFilters !=
-                                            null,
+                                        hasFilter: _selectedQualificationFilters != null,
                                       ),
                                       _SortableHeader(
                                         label: "Date",
-                                        onSort: () => _onSort(7),
+                                        onSort: () => _onSort(8),
                                         onFilter: () => _pickStartDate(),
-                                        isSorted: _sortColumnIndex == 7,
+                                        isSorted: _sortColumnIndex == 8,
                                         isAscending: _isAscending,
                                         hasFilter:
-                                            _selectedDateRange.start !=
-                                                defaultStart ||
-                                            _selectedDateRange.end !=
-                                                defaultEnd,
+                                            _selectedDateRange.start != defaultStart || _selectedDateRange.end != defaultEnd,
                                       ),
                                       _SortableHeader(
                                         label: "Time",
-                                        onSort: () => _onSort(8),
-                                        onFilter: () =>
-                                            _showFilterMenu(8, "Time"),
-                                        isSorted: _sortColumnIndex == 8,
+                                        onSort: () => _onSort(9),
+                                        onFilter: () => _showFilterMenu(9, "Time"),
+                                        isSorted: _sortColumnIndex == 9,
                                         isAscending: _isAscending,
                                         hasFilter: _selectedTimeFilters != null,
                                       ),
                                       const Padding(
                                         padding: EdgeInsets.all(12),
-                                        child: Text(
-                                          "Actions",
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                        child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
                                   ..._filteredRequests.map((req) {
-                                    final String currentName =
-                                        "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                                    final dateField = isProfileTable
-                                        ? req['updated_at']
-                                        : req['created_at'];
-                                    final parsedDate = DateTime.parse(
-                                      dateField,
-                                    ).toLocal();
-
+                                    final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                                    final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
+                                    final parsedDate = DateTime.parse(dateField).toLocal();
                                     return TableRow(
                                       children: [
+                                        _DataCell(text: currentName, isBold: true),
+                                        _DataCell(text: req['phone']?.toString() ?? "-"),
+                                        _DataCell(text: req['role']?.toString() ?? "-"),
                                         _DataCell(
-                                          text: currentName,
-                                          isBold: true,
-                                        ),
-                                        _DataCell(
-                                          text: req['phone']?.toString() ?? "-",
-                                        ),
-                                        _DataCell(
-                                          text: req['role']?.toString() ?? "-",
-                                        ),
-                                        _DataCell(
-                                          text:
-                                              req['cluster']?.toString() ?? "-",
-                                        ),
-                                        _DataCell(
-                                          text:
-                                              req['village']?.toString() ?? "-",
-                                        ),
-                                        _DataCell(
-                                          text:
-                                              req['school']?.toString() ?? "-",
-                                        ),
-                                        _DataCell(
-                                          text:
-                                              req['qualification']
-                                                  ?.toString() ??
-                                              "-",
-                                        ),
-                                        _DataCell(
-                                          text: DateFormat(
-                                            'dd MMM yyyy',
-                                          ).format(parsedDate),
-                                        ),
-                                        _DataCell(
-                                          text: DateFormat(
-                                            'hh:mm a',
-                                          ).format(parsedDate),
-                                        ),
+                                          text: req['gender']?.toString() ?? "-",
+                                        ), // 💡 Rendered runtime Gender payload value
+                                        _DataCell(text: req['cluster']?.toString() ?? "-"),
+                                        _DataCell(text: req['village']?.toString() ?? "-"),
+                                        _DataCell(text: req['school']?.toString() ?? "-"),
+                                        _DataCell(text: req['qualification']?.toString() ?? "-"),
+                                        _DataCell(text: DateFormat('dd MMM yyyy').format(parsedDate)),
+                                        _DataCell(text: DateFormat('hh:mm a').format(parsedDate)),
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          child: _buildActionButtons(
-                                            statusFilter,
-                                            req,
-                                            currentName,
-                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          child: _buildActionButtons(statusFilter, req, currentName),
                                         ),
                                       ],
                                     );
@@ -973,11 +755,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Widget _buildActionButtons(
-    String statusFilter,
-    Map<String, dynamic> req,
-    String currentName,
-  ) {
+  Widget _buildActionButtons(String statusFilter, Map<String, dynamic> req, String currentName) {
     if (statusFilter == 'pending') {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -988,21 +766,13 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
             child: ElevatedButton(
               onPressed: _isLoading
                   ? null
-                  : () => _handleAction(
-                      id: req['id'],
-                      currentStatus: 'pending',
-                      targetStatus: 'approved',
-                      isProfileTable: false,
-                    ),
+                  : () => _handleAction(id: req['id'], currentStatus: 'pending', targetStatus: 'approved', isProfileTable: false),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Approve",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Approve", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(width: 6),
@@ -1016,8 +786,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       final reason = await _showActionReasonDialog(
                         name: currentName,
                         actionTitle: 'Reject',
-                        explanationText:
-                            'Are you sure you want to reject the signup request for $currentName?',
+                        explanationText: 'Are you sure you want to reject the signup request for $currentName?',
                       );
                       if (reason != null) {
                         _handleAction(
@@ -1034,10 +803,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Reject",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Reject", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -1056,8 +822,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       final reason = await _showActionReasonDialog(
                         name: currentName,
                         actionTitle: 'Suspend',
-                        explanationText:
-                            'Provide a reason to temporarily suspend $currentName account access.',
+                        explanationText: 'Provide a reason to temporarily suspend $currentName account access.',
                         confirmButtonColor: Colors.orange,
                       );
                       if (reason != null) {
@@ -1075,10 +840,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Suspend",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Suspend", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(width: 6),
@@ -1092,8 +854,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       final reason = await _showActionReasonDialog(
                         name: currentName,
                         actionTitle: 'Remove',
-                        explanationText:
-                            'Are you completely sure you want to permanently remove $currentName?',
+                        explanationText: 'Are you completely sure you want to permanently remove $currentName?',
                       );
                       if (reason != null) {
                         _handleAction(
@@ -1110,10 +871,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Remove",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Remove", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -1132,8 +890,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       final reason = await _showActionReasonDialog(
                         name: currentName,
                         actionTitle: 'Unsuspend',
-                        explanationText:
-                            'Provide a reason to reinstate $currentName to active status.',
+                        explanationText: 'Provide a reason to reinstate $currentName to active status.',
                         confirmButtonColor: Colors.blue,
                       );
                       if (reason != null) {
@@ -1151,10 +908,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Unsuspend",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Unsuspend", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(width: 6),
@@ -1168,8 +922,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                       final reason = await _showActionReasonDialog(
                         name: currentName,
                         actionTitle: 'Remove',
-                        explanationText:
-                            'Permanently remove $currentName? This action is irreversible.',
+                        explanationText: 'Permanently remove $currentName? This action is irreversible.',
                       );
                       if (reason != null) {
                         _handleAction(
@@ -1186,10 +939,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
               ),
-              child: const Text(
-                "Remove",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
+              child: const Text("Remove", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -1232,6 +982,7 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
+
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -1261,11 +1012,7 @@ class _SortableHeader extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    isSorted
-                        ? (isAscending
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward)
-                        : Icons.unfold_more,
+                    isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
                     size: 13,
                     color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
@@ -1277,16 +1024,8 @@ class _SortableHeader extends StatelessWidget {
             onTap: onFilter,
             child: Container(
               padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: hasFilter
-                    ? AppTheme.primaryBlue.withAlpha(33)
-                    : Colors.transparent,
-              ),
-              child: Icon(
-                Icons.filter_alt,
-                size: 13,
-                color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700,
-              ),
+              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withAlpha(33) : Colors.transparent),
+              child: Icon(Icons.filter_alt, size: 13, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),
         ],
@@ -1298,7 +1037,9 @@ class _SortableHeader extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
+
   const _DataCell({required this.text, this.isBold = false});
+
   @override
   Widget build(BuildContext context) {
     return Padding(

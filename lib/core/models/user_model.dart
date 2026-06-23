@@ -4,6 +4,7 @@ class UserModel {
   final String? firstName;
   final String? lastName;
   final String role;
+  final String? gender; // 💡 Added gender property
   final String? qualification;
   final String? cluster;
   final String? village;
@@ -15,6 +16,7 @@ class UserModel {
     this.firstName,
     this.lastName,
     required this.role,
+    this.gender, // 💡 Added to constructor
     this.qualification,
     this.village,
     this.cluster,
@@ -28,6 +30,7 @@ class UserModel {
       firstName: json['first_name'] as String?,
       lastName: json['last_name'] as String?,
       role: json['role'] as String? ?? 'Shiksha Mitra',
+      gender: json['gender'] as String?, // 💡 Mapped from database row string key
       qualification: json['qualification'] as String?,
       village: json['village'] as String?,
       cluster: json['cluster'] as String?,

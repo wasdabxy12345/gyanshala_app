@@ -32,6 +32,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _qualificationController = TextEditingController();
 
   UserRole _selectedRole = UserRole.shikshaMitra;
+  // 💡 Added gender configuration tracker variables
+  String? _selectedGender;
 
   final List<LocationItem> _clusters = [];
   final List<LocationItem> _villages = [];
@@ -103,6 +105,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             identifier: _phoneController.text.trim(),
             password: _passwordController.text,
             role: _selectedRole.name,
+            gender: _selectedGender, // 💡 Passed down gender string context parameter
             pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
             cluster: clusterName,
@@ -176,6 +179,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+
+            // 💡 Added Gender Selector field block
+            DropdownButtonFormField<String>(
+              initialValue: _selectedGender,
+              decoration: const InputDecoration(
+                labelText: 'Gender *',
+                prefixIcon: Icon(Icons.wc_outlined),
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Male', child: Text('Male')),
+                DropdownMenuItem(value: 'Female', child: Text('Female')),
+                DropdownMenuItem(value: 'Other', child: Text('Other')),
+              ],
+              onChanged: (value) => setState(() => _selectedGender = value),
+              validator: (value) => (value == null || value.isEmpty) ? 'Gender Selection Required' : null,
             ),
             const SizedBox(height: 14),
 

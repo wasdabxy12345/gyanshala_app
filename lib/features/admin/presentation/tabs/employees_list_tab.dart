@@ -29,6 +29,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   Set<String>? _selectedLastNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
+  Set<String>? _selectedGenderFilters; // 💡 Added new gender state filter tracker
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
@@ -54,7 +55,8 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         excel.delete('Sheet1');
       }
       final Sheet sheet = excel['Sheet1'];
-      final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Cluster', 'Village', 'School'];
+      // 💡 Added 'Gender' label header row mapping segment
+      final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Gender', 'Cluster', 'Village', 'School'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
       for (final emp in targetedEmployees) {
@@ -63,6 +65,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           TextCellValue(emp['last_name']?.toString() ?? "-"),
           TextCellValue(emp['phone']?.toString() ?? "-"),
           TextCellValue(UserRole.fromString(emp['role']).label),
+          TextCellValue(emp['gender']?.toString() ?? "-"), // 💡 Export new gender context value
           TextCellValue(emp['cluster']?.toString() ?? "-"),
           TextCellValue(emp['village']?.toString() ?? "-"),
           TextCellValue(emp['school']?.toString() ?? "-"),
@@ -172,13 +175,16 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           valB = UserRole.fromString(b['role']).label;
           int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
           return _isAscending ? compare : -compare;
-        case 4:
-          valA = a['cluster']?.toString() ?? "";
+        case 4: // 💡 Added sequential logic block sorting case targeting gender values
+          valA = a['gender']?.toString() ?? "";
           break;
         case 5:
-          valA = a['village']?.toString() ?? "";
+          valA = a['cluster']?.toString() ?? "";
           break;
         case 6:
+          valA = a['village']?.toString() ?? "";
+          break;
+        case 7:
           valA = a['school']?.toString() ?? "";
           break;
       }
@@ -199,11 +205,13 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         return 'last_name';
       case 2:
         return 'phone';
-      case 4:
-        return 'cluster';
+      case 4: // 💡 Adjusted matching key targets downstream to accommodate the sequence index shift
+        return 'gender';
       case 5:
-        return 'village';
+        return 'cluster';
       case 6:
+        return 'village';
+      case 7:
         return 'school';
       default:
         return '';
@@ -227,14 +235,17 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       final fullName = "$firstName $lastName";
       final phone = emp['phone']?.toString() ?? "";
       final roleLabel = UserRole.fromString(emp['role']).label;
+      final gender = emp['gender']?.toString() ?? ""; // 💡 Extracted runtime gender value
       final cluster = emp['cluster']?.toString() ?? "";
       final village = emp['village']?.toString() ?? "";
       final school = emp['school']?.toString() ?? "";
+
       final matchesSearch =
           searchStr.isEmpty ||
           fullName.toLowerCase().contains(searchStr) ||
           phone.toLowerCase().contains(searchStr) ||
           roleLabel.toLowerCase().contains(searchStr) ||
+          gender.toLowerCase().contains(searchStr) || // 💡 Extended fuzzy text search filters across global query bar
           cluster.toLowerCase().contains(searchStr) ||
           village.toLowerCase().contains(searchStr) ||
           school.toLowerCase().contains(searchStr);
@@ -244,6 +255,8 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       if (_selectedLastNameFilters != null && !_selectedLastNameFilters!.contains(lastName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
       if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(emp['role']?.toString())) return false;
+      if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender))
+        return false; // 💡 Apply unique gender dialog criteria check
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
       if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
       if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
@@ -268,13 +281,16 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         case 3:
           if (emp['role'] != null) values.add(emp['role'].toString());
           break;
-        case 4:
-          if (emp['cluster'] != null) values.add(emp['cluster'].toString());
+        case 4: // 💡 Added explicit values map extraction case for gender
+          if (emp['gender'] != null) values.add(emp['gender'].toString());
           break;
         case 5:
-          if (emp['village'] != null) values.add(emp['village'].toString());
+          if (emp['cluster'] != null) values.add(emp['cluster'].toString());
           break;
         case 6:
+          if (emp['village'] != null) values.add(emp['village'].toString());
+          break;
+        case 7:
           if (emp['school'] != null) values.add(emp['school'].toString());
           break;
       }
@@ -293,9 +309,11 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       currentSelection = _selectedPhoneFilters != null ? Set.from(_selectedPhoneFilters!) : Set.from(allValues);
     else if (columnIndex == 3)
       currentSelection = _selectedRoleFilters != null ? Set.from(_selectedRoleFilters!) : Set.from(allValues);
-    else if (columnIndex == 4)
-      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
+    else if (columnIndex == 4) // 💡 Populate initial internal state configuration list for gender options menu
+      currentSelection = _selectedGenderFilters != null ? Set.from(_selectedGenderFilters!) : Set.from(allValues);
     else if (columnIndex == 5)
+      currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
+    else if (columnIndex == 6)
       currentSelection = _selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues);
     else
       currentSelection = _selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues);
@@ -373,9 +391,11 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   if (columnIndex == 1) _selectedLastNameFilters = isAllSelected ? null : Set.from(currentSelection);
                   if (columnIndex == 2) _selectedPhoneFilters = isAllSelected ? null : Set.from(currentSelection);
                   if (columnIndex == 3) _selectedRoleFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 4) _selectedClusterFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 5) _selectedVillageFilters = isAllSelected ? null : Set.from(currentSelection);
-                  if (columnIndex == 6) _selectedSchoolFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 4)
+                    _selectedGenderFilters = isAllSelected ? null : Set.from(currentSelection); // 💡 Save dialog parameters state
+                  if (columnIndex == 5) _selectedClusterFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 6) _selectedVillageFilters = isAllSelected ? null : Set.from(currentSelection);
+                  if (columnIndex == 7) _selectedSchoolFilters = isAllSelected ? null : Set.from(currentSelection);
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -394,6 +414,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       _selectedLastNameFilters = null;
       _selectedPhoneFilters = null;
       _selectedRoleFilters = null;
+      _selectedGenderFilters = null; // 💡 Included gender state reset logic clearing hooks
       _selectedClusterFilters = null;
       _selectedVillageFilters = null;
       _selectedSchoolFilters = null;
@@ -419,6 +440,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
             _selectedLastNameFilters,
             _selectedPhoneFilters,
             _selectedRoleFilters,
+            _selectedGenderFilters, // 💡 Account for gender state condition evaluations
             _selectedClusterFilters,
             _selectedVillageFilters,
             _selectedSchoolFilters,
@@ -482,14 +504,17 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                             child: Table(
                               defaultColumnWidth: const FixedColumnWidth(135),
                               columnWidths: const {
-                                0: FixedColumnWidth(50),
-                                1: FixedColumnWidth(140),
-                                2: FixedColumnWidth(140),
-                                3: FixedColumnWidth(110),
-                                4: FixedColumnWidth(120),
-                                5: FixedColumnWidth(100),
-                                6: FixedColumnWidth(130),
-                                7: FixedColumnWidth(320),
+                                0: FixedColumnWidth(50), // Checkbox
+                                1: FixedColumnWidth(140), // First Name
+                                2: FixedColumnWidth(140), // Last Name
+                                3: FixedColumnWidth(110), // Phone
+                                4: FixedColumnWidth(120), // Role
+                                5: FixedColumnWidth(
+                                  100,
+                                ), // Gender (💡 Added explicit column sizing index spacing metrics mapping)
+                                6: FixedColumnWidth(120), // Cluster
+                                7: FixedColumnWidth(110), // Village
+                                8: FixedColumnWidth(130), // School
                               },
                               border: TableBorder(
                                 verticalInside: BorderSide(color: Colors.grey.shade300),
@@ -552,27 +577,36 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                       isAscending: _isAscending,
                                       hasFilter: _selectedRoleFilters != null,
                                     ),
+                                    // 💡 Inserted Gender Header into layout tracking tree
+                                    _SortableHeader(
+                                      label: "Gender",
+                                      onSort: () => _onSort(4),
+                                      onFilter: () => _showFilterMenu(4, "Gender"),
+                                      isSorted: _sortColumnIndex == 4,
+                                      isAscending: _isAscending,
+                                      hasFilter: _selectedGenderFilters != null,
+                                    ),
                                     _SortableHeader(
                                       label: "Cluster",
-                                      onSort: () => _onSort(4),
-                                      onFilter: () => _showFilterMenu(4, "Cluster"),
-                                      isSorted: _sortColumnIndex == 4,
+                                      onSort: () => _onSort(5),
+                                      onFilter: () => _showFilterMenu(5, "Cluster"),
+                                      isSorted: _sortColumnIndex == 5,
                                       isAscending: _isAscending,
                                       hasFilter: _selectedClusterFilters != null,
                                     ),
                                     _SortableHeader(
                                       label: "Village",
-                                      onSort: () => _onSort(5),
-                                      onFilter: () => _showFilterMenu(5, "Village"),
-                                      isSorted: _sortColumnIndex == 5,
+                                      onSort: () => _onSort(6),
+                                      onFilter: () => _showFilterMenu(6, "Village"),
+                                      isSorted: _sortColumnIndex == 6,
                                       isAscending: _isAscending,
                                       hasFilter: _selectedVillageFilters != null,
                                     ),
                                     _SortableHeader(
                                       label: "School",
-                                      onSort: () => _onSort(6),
-                                      onFilter: () => _showFilterMenu(6, "School"),
-                                      isSorted: _sortColumnIndex == 6,
+                                      onSort: () => _onSort(7),
+                                      onFilter: () => _showFilterMenu(7, "School"),
+                                      isSorted: _sortColumnIndex == 7,
                                       isAscending: _isAscending,
                                       hasFilter: _selectedSchoolFilters != null,
                                     ),
@@ -606,6 +640,9 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                       _DataCell(text: emp['last_name']?.toString() ?? "-"),
                                       _DataCell(text: emp['phone']?.toString() ?? "-"),
                                       _DataCell(text: UserRole.fromString(emp['role']).label),
+                                      _DataCell(
+                                        text: emp['gender']?.toString() ?? "-",
+                                      ), // 💡 Output dynamic gender row cell widget
                                       _DataCell(text: emp['cluster']?.toString() ?? "-"),
                                       _DataCell(text: emp['village']?.toString() ?? "-"),
                                       _DataCell(text: emp['school']?.toString() ?? "-"),
