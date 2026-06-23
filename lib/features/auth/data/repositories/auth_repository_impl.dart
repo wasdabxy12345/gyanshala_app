@@ -11,48 +11,75 @@ class AuthRepositoryImpl implements AuthRepository {
   GoTrueClient get _auth => _supabase.auth;
 
   @override
-  Future<UserModel> login({
-    required String identifier,
-    required String password,
-  }) async {
-    final response = await _supabase.auth.signInWithPassword(
-      phone: identifier,
-      password: password,
-    );
+  Future<UserModel> login({required String identifier, required String password}) async {
+    final normalizedPhone = _normalizePhone(identifier);
+
+    // 1. Authenticate credentials against Supabase GoTrue Auth
+    final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
 
     if (response.user == null) {
       throw Exception("Login failed");
     }
 
-    final request = await _supabase
-        .from('signup_requests')
-        .select('status, action_reason')
-        .eq('id', response.user!.id)
-        .single();
+    try {
+      // 2. Query both tables concurrently or matching by normalized phone number
+      final requestData = await _supabase
+          .from('signup_requests')
+          .select('status, action_reason')
+          .eq('phone', normalizedPhone)
+          .maybeSingle();
 
-    final status = request['status']?.toString().toLowerCase();
+      final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
 
-    if (status == 'suspended') {
+      // Fallback variables if record rows are structurally missing or cleared
+      final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
+      final profileStatus = (profileData?['account_status']?.toString() ?? 'removed').toLowerCase();
+
+      // Determine what reason to show (prioritize explicit profile reason, fallback to request text)
+      final actionReason =
+          profileData?['action_reason']?.toString() ??
+          requestData?['action_reason']?.toString() ??
+          'No explicit reason specified by administration.';
+
+      // Rule Check A: Reject if signup application table is not fully 'approved'
+      if (requestStatus == 'pending') {
+        await _supabase.auth.signOut();
+        throw Exception('Your signup request is still pending admin approval.');
+      }
+
+      if (requestStatus == 'removed' || requestStatus == 'not_found') {
+        await _supabase.auth.signOut();
+        throw Exception('Your signup request was declined or could not be found.\n\nReason: $actionReason');
+      }
+
+      // Rule Check B: Reject if operational profile status is 'suspended' or 'removed'
+      if (profileStatus == 'suspended') {
+        await _supabase.auth.signOut();
+        throw Exception('Your account profile has been suspended.\n\nReason: $actionReason');
+      }
+
+      if (profileStatus == 'removed') {
+        await _supabase.auth.signOut();
+        throw Exception('Your account access has been removed.\n\nReason: $actionReason');
+      }
+
+      // Final Gate: Only allow if explicitly active and approved
+      if (profileStatus != 'active' || requestStatus != 'approved') {
+        await _supabase.auth.signOut();
+        throw Exception('Unauthorized Account State. Please contact support.');
+      }
+
+      // 3. Complete process and map user payload to model
+      if (profileData == null) {
+        throw Exception("Profile initialization records missing.");
+      }
+
+      return UserModel.fromJson(profileData);
+    } catch (e) {
+      // Catch safety guarantee: ensure Auth session drops if check calculations crash
       await _supabase.auth.signOut();
-
-      throw Exception(
-        'Your account has been suspended.\n\nReason: ${request['action_reason'] ?? 'Not specified'}',
-      );
+      rethrow;
     }
-
-    if (status == 'removed') {
-      await _supabase.auth.signOut();
-
-      throw Exception('Your account has been removed.');
-    }
-
-    final profileData = await _supabase
-        .from('profiles')
-        .select()
-        .eq('id', response.user!.id)
-        .single();
-
-    return UserModel.fromJson(profileData);
   }
 
   @override
@@ -70,7 +97,6 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     final phone = _normalizePhone(identifier);
 
-    // 1. Fire up standard GoTrue onboarding creation request
     final authResponse = await _auth.signUp(
       phone: phone,
       password: password,
@@ -91,8 +117,6 @@ class AuthRepositoryImpl implements AuthRepository {
       throw Exception("Signup registration sequence failed.");
     }
 
-    // 2. Insert into signup_requests. The database trigger intercepts duplicates
-    // and converts this to an update/reset if the user was previously rejected.
     await _supabase.from('signup_requests').insert({
       'id': authResponse.user!.id,
       'phone': phone,
@@ -109,10 +133,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> sendOtp({
-    required String identifier,
-    bool requireApprovedSignup = true,
-  }) async {
+  Future<void> sendOtp({required String identifier, bool requireApprovedSignup = true}) async {
     final phone = _normalizePhone(identifier);
     final signupData = await getSignupStatus(identifier);
     final status = signupData['status'];
@@ -140,39 +161,22 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> verifyOtp({
-    required String identifier,
-    required String otp,
-  }) async {
+  Future<void> verifyOtp({required String identifier, required String otp}) async {
     try {
       AuthResponse response;
       try {
-        response = await _supabase.auth.verifyOTP(
-          phone: identifier,
-          token: otp,
-          type: OtpType.phoneChange,
-        );
+        response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.phoneChange);
       } on AuthException catch (e) {
         if (kDebugMode) {
-          print(
-            "phoneChange verification failed, attempting standard sms fallback: ${e.message}",
-          );
+          print("phoneChange verification failed, attempting standard sms fallback: ${e.message}");
         }
-        response = await _supabase.auth.verifyOTP(
-          phone: identifier,
-          token: otp,
-          type: OtpType.sms,
-        );
+        response = await _supabase.auth.verifyOTP(phone: identifier, token: otp, type: OtpType.sms);
       }
       if (response.user != null) {
         int retryCount = 0;
         bool profileExists = false;
         while (retryCount < 3 && !profileExists) {
-          final profile = await _supabase
-              .from('profiles')
-              .select()
-              .eq('id', response.user!.id)
-              .maybeSingle();
+          final profile = await _supabase.from('profiles').select().eq('id', response.user!.id).maybeSingle();
           if (profile != null) {
             profileExists = true;
             break;
@@ -192,18 +196,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> updatePassword({
-    required String password,
-    String? identifier,
-    String? oldPassword,
-  }) async {
+  Future<void> updatePassword({required String password, String? identifier, String? oldPassword}) async {
     try {
       if (identifier != null) {
         final phone = _normalizePhone(identifier);
-        final requestRows = await _fetchSignupRequestsByPhone(
-          phone,
-          columns: 'first_name,last_name,role',
-        );
+        final requestRows = await _fetchSignupRequestsByPhone(phone, columns: 'first_name,last_name,role');
 
         Map<String, dynamic> metadata = {};
         if (requestRows.isNotEmpty) {
@@ -214,13 +211,8 @@ class AuthRepositoryImpl implements AuthRepository {
           };
         }
 
-        await _auth.updateUser(
-          UserAttributes(password: password, data: metadata),
-        );
-        await _supabase
-            .from('signup_requests')
-            .update({'status': 'approved'})
-            .eq('phone', phone);
+        await _auth.updateUser(UserAttributes(password: password, data: metadata));
+        await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
       }
     } on AuthException catch (e) {
       if (e.message.contains('Invalid login credentials')) {
@@ -237,10 +229,7 @@ class AuthRepositoryImpl implements AuthRepository {
     final phone = _normalizePhone(identifier);
 
     // 💡 Request both 'status' and 'action_reason' columns from Supabase
-    final rows = await _fetchSignupRequestsByPhone(
-      phone,
-      columns: 'status, action_reason',
-    );
+    final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status, action_reason');
 
     if (rows.isEmpty) {
       return {'status': 'not_found', 'rejection_reason': null};
@@ -249,9 +238,7 @@ class AuthRepositoryImpl implements AuthRepository {
     final firstRow = rows.first;
     return {
       'status': (firstRow['status'] as String?)?.toLowerCase(),
-      'rejection_reason':
-          firstRow['action_reason']
-              as String?, // Make sure this matches your Supabase column name exactly
+      'rejection_reason': firstRow['action_reason'] as String?, // Make sure this matches your Supabase column name exactly
     };
   }
 
@@ -264,17 +251,10 @@ class AuthRepositoryImpl implements AuthRepository {
     throw Exception('Enter a valid phone number.');
   }
 
-  Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(
-    String phone, {
-    String columns = 'status',
-  }) async {
+  Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(String phone, {String columns = 'status'}) async {
     final candidates = _phoneCandidates(phone);
     for (final candidate in candidates) {
-      final rows = await _supabase
-          .from('signup_requests')
-          .select(columns)
-          .eq('phone', candidate)
-          .limit(1);
+      final rows = await _supabase.from('signup_requests').select(columns).eq('phone', candidate).limit(1);
       if (rows.isNotEmpty) return List<Map<String, dynamic>>.from(rows);
     }
     return [];
@@ -307,9 +287,7 @@ class AuthRepositoryImpl implements AuthRepository {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception("No authenticated user found.");
 
-    final String role = (user.userMetadata?['role'] ?? '')
-        .toString()
-        .toLowerCase();
+    final String role = (user.userMetadata?['role'] ?? '').toString().toLowerCase();
     final bool isAdmin = role == 'Admin';
 
     final Map<String, dynamic> updateData = {
@@ -327,10 +305,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
     await _supabase.from('profiles').update(updateData).eq('id', user.id);
 
-    await _auth.updateUser(
-      UserAttributes(
-        data: {'first_name': firstName.trim(), 'last_name': lastName.trim()},
-      ),
-    );
+    await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
   }
 }

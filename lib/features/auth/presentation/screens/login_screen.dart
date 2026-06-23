@@ -36,13 +36,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      final user = await authRepo.login(
-        identifier: _identifierController.text.trim(),
-        password: _passwordController.text,
-      );
-      final name = (user.firstName ?? '').trim().isEmpty
-          ? 'User'
-          : user.firstName!.trim();
+      final user = await authRepo.login(identifier: _identifierController.text.trim(), password: _passwordController.text);
+      final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
       if (!mounted) return;
       Widget nextScreen;
       final userRole = UserRole.fromString(user.role);
@@ -58,19 +53,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           break;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Welcome back, $name!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Welcome back, $name!')));
 
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => nextScreen),
-        (route) => false,
-      );
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => nextScreen), (route) => false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -89,15 +77,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             TextFormField(
               controller: _identifierController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
+              decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
               validator: (value) {
                 final phone = value?.trim() ?? '';
                 if (phone.isEmpty) return 'Phone Number is required';
-                if (!Validators.isValidPhone(phone))
-                  return 'Enter a valid phone number';
+                if (!Validators.isValidPhone(phone)) return 'Enter a valid phone number';
                 return null;
               },
             ),
@@ -105,24 +89,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
+              decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
               validator: (value) {
-                if (value == null || value.isEmpty)
-                  return 'Password is required';
+                if (value == null || value.isEmpty) return 'Password is required';
                 return null;
               },
             ),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ForgotPasswordScreen(),
-                  ),
-                ),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
                 child: const Text('Forgot password?'),
               ),
             ),
@@ -132,11 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _onLoginPressed,
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Log In'),
               ),
             ),
@@ -148,9 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         children: [
           const Text('New user? '),
           TextButton(
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SignupScreen())),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen())),
             child: const Text('Sign Up'),
           ),
         ],
