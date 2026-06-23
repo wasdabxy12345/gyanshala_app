@@ -11,7 +11,9 @@ class AppConfig {
 }
 
 final authStateProvider = StreamProvider<User?>((ref) {
-  return Supabase.instance.client.auth.onAuthStateChange.map((event) => event.session?.user);
+  return Supabase.instance.client.auth.onAuthStateChange.map(
+    (event) => event.session?.user,
+  );
 });
 
 final currentUserProvider = Provider<User?>((ref) {

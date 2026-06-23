@@ -11,12 +11,81 @@ class SignupRequestsScreen extends ConsumerStatefulWidget {
       _SignupRequestsScreenState();
 }
 
+class _SortableHeader extends StatelessWidget {
+  final String label;
+  final VoidCallback onSort;
+  final VoidCallback onFilter;
+  final bool isSorted;
+  final bool isAscending;
+  final bool hasFilter;
+  const _SortableHeader({
+    required this.label,
+    required this.onSort,
+    required this.onFilter,
+    required this.isSorted,
+    required this.isAscending,
+    required this.hasFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: onSort,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(
+                    isSorted
+                        ? (isAscending
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward)
+                        : Icons.unfold_more,
+                    size: 13,
+                    color: isSorted ? AppTheme.primaryBlue : Colors.grey,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: onFilter,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: hasFilter
+                    ? AppTheme.primaryBlue.withValues(alpha: 0.13)
+                    : Colors.transparent,
+              ),
+              child: Icon(
+                Icons.filter_alt,
+                size: 13,
+                color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
   final _searchController = TextEditingController();
   int _sortColumnIndex = 7;
   bool _isAscending = false;
-
   Set<String>? _selectedNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
@@ -26,10 +95,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   Set<String>? _selectedQualificationFilters;
   late DateTimeRange _selectedDateRange;
   Set<String>? _selectedTimeFilters;
-
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
-
   @override
   void initState() {
     super.initState();
@@ -42,39 +109,35 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  /// Reusable confirmation dialog that asks for a mandatory reason
-  Future<String?> _showActionReasonDialog({
-    required String name,
-    required String actionTitle,
-    required String explanationText,
-    Color confirmButtonColor = Colors.red,
-  }) async {
+  Future<String?> _showRejectDialog(String name, String actionTitle) async {
     final reasonController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text('$actionTitle Account'),
+        title: Text('$actionTitle Request'),
         content: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(explanationText),
+              Text(
+                'Are you sure you want to reject the signup request for $name?',
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: reasonController,
                 maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Reason for $actionTitle',
-                  hintText: 'Provide context or justification...',
-                  border: const OutlineInputBorder(),
+                decoration: const InputDecoration(
+                  labelText: 'Reason for Rejection',
+                  hintText: 'Provide context or why it was rejected...',
+                  border: OutlineInputBorder(),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
-                    return 'Please enter a reason for this action';
+                    return 'Please enter a reason for the rejection';
                   }
                   return null;
                 },
@@ -90,65 +153,18 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
-                Navigator.pop(context, reasonController.text.trim());
+                Navigator.pop(context, reasonController.text);
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: confirmButtonColor,
+              backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: Text('Confirm $actionTitle'),
+            child: const Text('Confirm Reject'),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _handleAction({
-    required String id,
-    required String currentStatus,
-    required String targetStatus,
-    required bool isProfileTable,
-    String? reason,
-  }) async {
-    setState(() => _isLoading = true);
-    final supabase = ref.read(supabaseClientProvider);
-    final currentAdminId = supabase.auth.currentUser?.id;
-
-    try {
-      if (isProfileTable) {
-        // For Active & Suspended tabs, update ONLY the profiles table
-        await supabase
-            .from('profiles')
-            .update({
-              'account_status': targetStatus, // e.g., 'suspended' or 'active'
-              'action_reason': reason,
-              'actioned_by': currentAdminId,
-              'actioned_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('id', id);
-      } else {
-        // For Pending requests tab, update the signup_requests table
-        await supabase
-            .from('signup_requests')
-            .update({
-              'status': targetStatus, // e.g., 'approved' or 'removed'
-              'action_reason': reason,
-              'actioned_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('id', id);
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Successfully updated status to $targetStatus')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    } finally {
-      setState(() => _isLoading = false);
-    }
   }
 
   void _applyAllFilters() {
@@ -161,14 +177,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final village = req['village']?.toString() ?? "";
       final school = req['school']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
-
-      // Select appropriate timestamp depending on source row origin
-      final dateField = req.containsKey('account_status')
-          ? req['updated_at']
-          : req['created_at'];
-
-      final createdAt = dateField != null
-          ? DateTime.parse(dateField).toLocal()
+      final createdAt = req['created_at'] != null
+          ? DateTime.parse(req['created_at']).toLocal()
           : null;
       if (createdAt != null) {
         if (createdAt.isBefore(_selectedDateRange.start) ||
@@ -176,10 +186,11 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           return false;
         }
       }
-      final signupTime = dateField != null
-          ? DateFormat('hh:mm a').format(DateTime.parse(dateField).toLocal())
+      final signupTime = req['created_at'] != null
+          ? DateFormat(
+              'hh:mm a',
+            ).format(DateTime.parse(req['created_at']).toLocal())
           : '';
-
       final matchesSearch =
           query.isEmpty ||
           fullName.toLowerCase().contains(query) ||
@@ -190,7 +201,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           school.toLowerCase().contains(query) ||
           qualification.toLowerCase().contains(query) ||
           signupTime.toLowerCase().contains(query);
-
       if (!matchesSearch) return false;
       if (_selectedNameFilters != null &&
           !_selectedNameFilters!.contains(fullName))
@@ -217,7 +227,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         return false;
       return true;
     }).toList();
-
     setState(() {
       _filteredRequests = result;
       _applySorting();
@@ -259,14 +268,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           break;
         case 7:
         case 8:
-          final dateFieldA = a.containsKey('account_status')
-              ? a['updated_at']
-              : a['created_at'];
-          final dateFieldB = b.containsKey('account_status')
-              ? b['updated_at']
-              : b['created_at'];
-          final dateA = DateTime.tryParse(dateFieldA ?? '') ?? DateTime(1970);
-          final dateB = DateTime.tryParse(dateFieldB ?? '') ?? DateTime(1970);
+          final dateA =
+              DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
+          final dateB =
+              DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
           return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       }
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
@@ -274,57 +279,47 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     });
   }
 
-  List<String> _getUniqueValuesForColumn(int columnIndex) {
-    final Set<String> values = {};
-    for (final req in _rawRequests) {
-      switch (columnIndex) {
-        case 0:
-          values.add("${req['first_name'] ?? ''} ${req['last_name'] ?? ''}");
-          break;
-        case 1:
-          if (req['phone'] != null) values.add(req['phone'].toString());
-          break;
-        case 2:
-          if (req['role'] != null) values.add(req['role'].toString());
-          break;
-        case 3:
-          if (req['cluster'] != null) values.add(req['cluster'].toString());
-          break;
-        case 4:
-          if (req['village'] != null) values.add(req['village'].toString());
-          break;
-        case 5:
-          if (req['school'] != null) values.add(req['school'].toString());
-          break;
-        case 6:
-          if (req['qualification'] != null)
-            values.add(req['qualification'].toString());
-          break;
-        case 8:
-          final dateField = req.containsKey('account_status')
-              ? req['updated_at']
-              : req['created_at'];
-          if (dateField != null) {
-            final date = DateTime.parse(dateField).toLocal();
-            values.add(DateFormat('hh:mm a').format(date));
-          }
-          break;
-      }
-    }
-    return values.toList()..sort();
+  Widget _quickBtn(String label, VoidCallback action) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 37),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: action,
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
-  void _onSort(int columnIndex) {
-    if (columnIndex == 9) return;
-    setState(() {
-      if (_sortColumnIndex == columnIndex) {
-        _isAscending = !_isAscending;
-      } else {
-        _sortColumnIndex = columnIndex;
-        _isAscending = true;
-      }
-      _applySorting();
-    });
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateRange.end,
+      firstDate: _selectedDateRange.start,
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDateRange = DateTimeRange(
+          start: _selectedDateRange.start,
+          end: picked,
+        );
+      });
+      _applyAllFilters();
+    }
+  }
+
+  String _formatDateWithMonth(DateTime date) {
+    final dayName = DateFormat('EEE').format(date);
+    final formatted = DateFormat('dd-MM-yyyy').format(date);
+    return '$formatted ($dayName)';
   }
 
   Widget _buildDateControls() {
@@ -438,6 +433,51 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
       ],
     );
+    Future<void> _pickStartDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: _selectedDateRange.start,
+        firstDate: DateTime(1970),
+        lastDate: _selectedDateRange.end,
+      );
+
+      if (picked != null) {
+        setState(() {
+          _selectedDateRange = DateTimeRange(
+            start: picked,
+            end: _selectedDateRange.end,
+          );
+        });
+        _applyAllFilters();
+      }
+    }
+
+    Widget _dateInkWell({required DateTime date, required bool isStart}) {
+      return InkWell(
+        onTap: () {
+          if (isStart) {
+            _pickStartDate();
+          } else {
+            _pickEndDate();
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 13),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppTheme.primaryBlue),
+            color: Colors.white,
+          ),
+          child: Text(
+            _formatDateWithMonth(date),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryBlue,
+            ),
+          ),
+        ),
+      );
+    }
 
     Widget buildDateSelectors() => Center(
       child: Padding(
@@ -454,7 +494,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         ),
       ),
     );
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
       child: LayoutBuilder(
@@ -486,85 +525,54 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Widget _quickBtn(String label, VoidCallback action) {
-    return TextButton(
-      style: TextButton.styleFrom(
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 37),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: action,
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
-      ),
-    );
+  void _onSort(int columnIndex) {
+    if (columnIndex == 9) return;
+    setState(() {
+      if (_sortColumnIndex == columnIndex) {
+        _isAscending = !_isAscending;
+      } else {
+        _sortColumnIndex = columnIndex;
+        _isAscending = true;
+      }
+      _applySorting();
+    });
   }
 
-  Widget _dateInkWell({required DateTime date, required bool isStart}) {
-    return InkWell(
-      onTap: () => isStart ? _pickStartDate() : _pickEndDate(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 13),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppTheme.primaryBlue),
-          color: Colors.white,
-        ),
-        child: Text(
-          _formatDateWithMonth(date),
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryBlue,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickStartDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDateRange.start,
-      firstDate: DateTime(1970),
-      lastDate: _selectedDateRange.end,
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDateRange = DateTimeRange(
-          start: picked,
-          end: _selectedDateRange.end,
-        );
-      });
-      _applyAllFilters();
+  List<String> _getUniqueValuesForColumn(int columnIndex) {
+    final Set<String> values = {};
+    for (final req in _rawRequests) {
+      switch (columnIndex) {
+        case 0:
+          values.add("${req['first_name'] ?? ''} ${req['last_name'] ?? ''}");
+          break;
+        case 1:
+          if (req['phone'] != null) values.add(req['phone'].toString());
+          break;
+        case 2:
+          if (req['role'] != null) values.add(req['role'].toString());
+          break;
+        case 3:
+          if (req['cluster'] != null) values.add(req['cluster'].toString());
+          break;
+        case 4:
+          if (req['village'] != null) values.add(req['village'].toString());
+          break;
+        case 5:
+          if (req['school'] != null) values.add(req['school'].toString());
+          break;
+        case 6:
+          if (req['qualification'] != null)
+            values.add(req['qualification'].toString());
+          break;
+        case 8:
+          if (req['created_at'] != null) {
+            final date = DateTime.parse(req['created_at']).toLocal();
+            values.add(DateFormat('hh:mm a').format(date));
+          }
+          break;
+      }
     }
-  }
-
-  Future<void> _pickEndDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDateRange.end,
-      firstDate: _selectedDateRange.start,
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDateRange = DateTimeRange(
-          start: _selectedDateRange.start,
-          end: picked,
-        );
-      });
-      _applyAllFilters();
-    }
-  }
-
-  String _formatDateWithMonth(DateTime date) {
-    final dayName = DateFormat('EEE').format(date);
-    final formatted = DateFormat('dd-MM-yyyy').format(date);
-    return '$formatted ($dayName)';
+    return values.toList()..sort();
   }
 
   Future<void> _showFilterMenu(int columnIndex, String label) async {
@@ -679,6 +687,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                   final noFilter =
                       currentSelection.isEmpty ||
                       currentSelection.length == allValues.length;
+
                   if (columnIndex == 0)
                     _selectedNameFilters = noFilter
                         ? null
@@ -723,41 +732,98 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Widget _buildTable({
-    required String statusFilter,
-    required bool isProfileTable,
-  }) {
-    final supabase = ref.watch(supabaseClientProvider);
-    final table = isProfileTable ? 'profiles' : 'signup_requests';
-    final statusColumn = isProfileTable ? 'account_status' : 'status';
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateRange.start,
+      firstDate: DateTime(1970),
+      lastDate: _selectedDateRange.end,
+    );
 
+    if (picked != null) {
+      setState(() {
+        _selectedDateRange = DateTimeRange(
+          start: picked,
+          end: _selectedDateRange.end,
+        );
+      });
+      _applyAllFilters();
+    }
+  }
+
+  Widget _buildTable(String statusFilter) {
+    final supabase = ref.watch(supabaseClientProvider);
     return Column(
       children: [
         _buildDateControls(),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: supabase
-                .from(table)
+                .from('signup_requests')
                 .stream(primaryKey: ['id'])
-                .eq(statusColumn, statusFilter),
+                .eq('status', statusFilter),
             builder: (context, snapshot) {
               if (!snapshot.hasData)
                 return const Center(child: CircularProgressIndicator());
-
               _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
-
-              // Schedule the filter and state updates to run safely AFTER the build frame completes
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _applyAllFilters();
+              final query = _searchController.text.toLowerCase().trim();
+              _filteredRequests = _rawRequests.where((req) {
+                final fullName =
+                    "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
+                final signupTime = req['created_at'] != null
+                    ? DateFormat(
+                        'hh:mm a',
+                      ).format(DateTime.parse(req['created_at']).toLocal())
+                    : '';
+                if (_selectedNameFilters != null &&
+                    !_selectedNameFilters!.contains(fullName))
+                  return false;
+                if (_selectedPhoneFilters != null &&
+                    !_selectedPhoneFilters!.contains(req['phone']?.toString()))
+                  return false;
+                if (_selectedRoleFilters != null &&
+                    !_selectedRoleFilters!.contains(req['role']))
+                  return false;
+                if (_selectedClusterFilters != null &&
+                    !_selectedClusterFilters!.contains(req['cluster']))
+                  return false;
+                if (_selectedVillageFilters != null &&
+                    !_selectedVillageFilters!.contains(req['village']))
+                  return false;
+                if (_selectedSchoolFilters != null &&
+                    !_selectedSchoolFilters!.contains(req['school']))
+                  return false;
+                if (_selectedQualificationFilters != null &&
+                    !_selectedQualificationFilters!.contains(
+                      req['qualification'],
+                    ))
+                  return false;
+                final createdAt = req['created_at'] != null
+                    ? DateTime.parse(req['created_at']).toLocal()
+                    : null;
+                if (createdAt != null) {
+                  if (createdAt.isBefore(_selectedDateRange.start) ||
+                      createdAt.isAfter(_selectedDateRange.end)) {
+                    return false;
+                  }
                 }
-              });
-
+                if (_selectedTimeFilters != null &&
+                    !_selectedTimeFilters!.contains(signupTime))
+                  return false;
+                return query.isEmpty ||
+                    fullName.toLowerCase().contains(query) ||
+                    (req['phone']?.toString().toLowerCase().contains(query) ??
+                        false) ||
+                    (req['qualification']?.toString().toLowerCase().contains(
+                          query,
+                        ) ??
+                        false);
+              }).toList();
+              _applySorting();
               final defaultStart = DateTime.now().subtract(
                 Duration(days: DateTime.now().weekday - 1),
               );
               final defaultEnd = defaultStart.add(const Duration(days: 6));
-
               return Column(
                 children: [
                   Expanded(
@@ -898,13 +964,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                   ..._filteredRequests.map((req) {
                                     final String currentName =
                                         "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                                    final dateField = isProfileTable
-                                        ? req['updated_at']
-                                        : req['created_at'];
-                                    final parsedDate = DateTime.parse(
-                                      dateField,
+                                    final createdAt = DateTime.parse(
+                                      req['created_at'],
                                     ).toLocal();
-
                                     return TableRow(
                                       children: [
                                         _DataCell(
@@ -938,23 +1000,187 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                         _DataCell(
                                           text: DateFormat(
                                             'dd MMM yyyy',
-                                          ).format(parsedDate),
+                                          ).format(createdAt),
                                         ),
                                         _DataCell(
                                           text: DateFormat(
                                             'hh:mm a',
-                                          ).format(parsedDate),
+                                          ).format(createdAt),
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 12,
                                             vertical: 6,
                                           ),
-                                          child: _buildActionButtons(
-                                            statusFilter,
-                                            req,
-                                            currentName,
-                                          ),
+                                          child: statusFilter == 'pending'
+                                              ? Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () => _updateStatus(
+                                                                req['id'],
+                                                                req['first_name'] ??
+                                                                    '',
+                                                                'approved',
+                                                              ),
+                                                        style:
+                                                            ElevatedButton.styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.green,
+                                                              foregroundColor:
+                                                                  Colors.white,
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                            ),
+                                                        child: const Text(
+                                                          "Approve",
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () async {
+                                                                final reason =
+                                                                    await _showRejectDialog(
+                                                                      req['first_name'] ??
+                                                                          'User',
+                                                                      'Reject',
+                                                                    );
+                                                                if (reason !=
+                                                                    null) {
+                                                                  _updateStatus(
+                                                                    req['id'],
+                                                                    req['first_name'] ??
+                                                                        '',
+                                                                    'removed',
+                                                                    reason:
+                                                                        reason,
+                                                                  );
+                                                                }
+                                                              },
+                                                        style:
+                                                            ElevatedButton.styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.red,
+                                                              foregroundColor:
+                                                                  Colors.white,
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                            ),
+                                                        child: const Text(
+                                                          "Reject",
+                                                          style: TextStyle(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                )
+                                              : Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 80,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () => _updateStatus(
+                                                                req['id'],
+                                                                req['first_name'] ??
+                                                                    '',
+                                                                'suspended',
+                                                              ),
+                                                        style:
+                                                            ElevatedButton.styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.orange,
+                                                              foregroundColor:
+                                                                  Colors.white,
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                            ),
+                                                        child: const Text(
+                                                          "Suspend",
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    SizedBox(
+                                                      height: 32,
+                                                      width: 75,
+                                                      child: ElevatedButton(
+                                                        onPressed: _isLoading
+                                                            ? null
+                                                            : () async {
+                                                                final reason =
+                                                                    await _showRejectDialog(
+                                                                      req['first_name'] ??
+                                                                          'User',
+                                                                      'Remove',
+                                                                    );
+                                                                if (reason !=
+                                                                    null) {
+                                                                  _updateStatus(
+                                                                    req['id'],
+                                                                    req['first_name'] ??
+                                                                        '',
+                                                                    'removed',
+                                                                    reason:
+                                                                        reason,
+                                                                  );
+                                                                }
+                                                              },
+                                                        style:
+                                                            ElevatedButton.styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.red,
+                                                              foregroundColor:
+                                                                  Colors.white,
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .zero,
+                                                            ),
+                                                        child: const Text(
+                                                          "Remove",
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                         ),
                                       ],
                                     );
@@ -973,230 +1199,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     );
   }
 
-  Widget _buildActionButtons(
-    String statusFilter,
-    Map<String, dynamic> req,
-    String currentName,
-  ) {
-    if (statusFilter == 'pending') {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 32,
-            width: 75,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () => _handleAction(
-                      id: req['id'],
-                      currentStatus: 'pending',
-                      targetStatus: 'approved',
-                      isProfileTable: false,
-                    ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Approve",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            height: 32,
-            width: 75,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      final reason = await _showActionReasonDialog(
-                        name: currentName,
-                        actionTitle: 'Reject',
-                        explanationText:
-                            'Are you sure you want to reject the signup request for $currentName?',
-                      );
-                      if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'pending',
-                          targetStatus: 'removed',
-                          isProfileTable: false,
-                          reason: reason,
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Reject",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      );
-    } else if (statusFilter == 'active') {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 32,
-            width: 80,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      final reason = await _showActionReasonDialog(
-                        name: currentName,
-                        actionTitle: 'Suspend',
-                        explanationText:
-                            'Provide a reason to temporarily suspend $currentName account access.',
-                        confirmButtonColor: Colors.orange,
-                      );
-                      if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'active',
-                          targetStatus: 'suspended',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Suspend",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            height: 32,
-            width: 75,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      final reason = await _showActionReasonDialog(
-                        name: currentName,
-                        actionTitle: 'Remove',
-                        explanationText:
-                            'Are you completely sure you want to permanently remove $currentName?',
-                      );
-                      if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'active',
-                          targetStatus: 'removed',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Remove",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      );
-    } else {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 32,
-            width: 90,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      final reason = await _showActionReasonDialog(
-                        name: currentName,
-                        actionTitle: 'Unsuspend',
-                        explanationText:
-                            'Provide a reason to reinstate $currentName to active status.',
-                        confirmButtonColor: Colors.blue,
-                      );
-                      if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'suspended',
-                          targetStatus: 'active',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Unsuspend",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            height: 32,
-            width: 75,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      final reason = await _showActionReasonDialog(
-                        name: currentName,
-                        actionTitle: 'Remove',
-                        explanationText:
-                            'Permanently remove $currentName? This action is irreversible.',
-                      );
-                      if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'suspended',
-                          targetStatus: 'removed',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text(
-                "Remove",
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -1206,90 +1208,20 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           title: const Text("Signup Request Management"),
           bottom: const TabBar(
             tabs: [
-              Tab(text: "Pending Requests"),
-              Tab(text: "Active Profiles"),
-              Tab(text: "Suspended Profiles"),
+              Tab(text: "Pending"),
+              Tab(text: "Approved"),
+              Tab(text: "Suspended"),
             ],
           ),
         ),
         body: TabBarView(
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            _buildTable(statusFilter: 'pending', isProfileTable: false),
-            _buildTable(statusFilter: 'active', isProfileTable: true),
-            _buildTable(statusFilter: 'suspended', isProfileTable: true),
+            _buildTable('pending'),
+            _buildTable('approved'),
+            _buildTable('suspended'),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SortableHeader extends StatelessWidget {
-  final String label;
-  final VoidCallback onSort;
-  final VoidCallback onFilter;
-  final bool isSorted;
-  final bool isAscending;
-  final bool hasFilter;
-  const _SortableHeader({
-    required this.label,
-    required this.onSort,
-    required this.onFilter,
-    required this.isSorted,
-    required this.isAscending,
-    required this.hasFilter,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: onSort,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      label,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(
-                    isSorted
-                        ? (isAscending
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward)
-                        : Icons.unfold_more,
-                    size: 13,
-                    color: isSorted ? AppTheme.primaryBlue : Colors.grey,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          InkWell(
-            onTap: onFilter,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: hasFilter
-                    ? AppTheme.primaryBlue.withAlpha(33)
-                    : Colors.transparent,
-              ),
-              child: Icon(
-                Icons.filter_alt,
-                size: 13,
-                color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
