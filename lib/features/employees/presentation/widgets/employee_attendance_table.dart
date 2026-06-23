@@ -67,14 +67,18 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
+
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
+
+      // 💡 Added latitude and longitude to the select statement
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
-                  .select('id, user_id, status, recorded_at, school_id, schools(name)')
+                  .select('id, user_id, latitude, longitude, status, recorded_at, school_id, schools(name)')
                   .gte('recorded_at', utcRange.start.toIso8601String())
                   .lte('recorded_at', utcRange.end.toIso8601String()))
               as List<dynamic>;
+
       return await compute(_processAttendanceData, {'employees': employeesRaw, 'records': attendanceRecordsRaw});
     } catch (e) {
       rethrow;
@@ -114,48 +118,52 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   Future<void> exportExcel() async {
     try {
       final data = await _loadDataPipeline();
-      final employees =
-          ((data['employees'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
-              .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
-              .toList();
-      final dates = _getDatesInRange(widget.startDate, widget.endDate);
+      final employeeMap = data['employees'] as Map<String, dynamic>;
+      final List<dynamic> rawRecords = data['records'];
+
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
-      final headers = ['Employee', ...dates.map((d) => DateFormat('dd-MM-yyyy').format(d))];
+
+      // 💡 Defined custom request header columns
+      final headers = ["User's Name", 'Latitude', 'Longitude', 'Status', 'Recorded At', 'School'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
-      for (final employee in employees) {
-        final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
-        final row = <CellValue>[TextCellValue(employee['full_name'] ?? '')];
-        for (final d in dates) {
-          final key = DateFormat('yyyy-MM-dd').format(d);
-          final record = attMap[key];
-          final isPresent = record != null && record['status'] == 'present';
-          final location = record != null ? record['location'].toString().toLowerCase() : "";
-          String value;
-          if (_isHoliday(d)) {
-            value = 'Holiday';
-          } else if (isPresent) {
-            value = location != "off-site" ? 'Present' : 'Present (Off-Site)';
-          } else if (DateTime(
-            d.year,
-            d.month,
-            d.day,
-          ).isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day))) {
-            value = 'Absent';
-          } else {
-            value = 'Pending';
-          }
-          row.add(TextCellValue(value));
+      // 💡 Flatten raw structural log records down to individual data rows
+      for (final record in rawRecords) {
+        final userId = record['user_id'];
+        final employee = employeeMap[userId];
+        final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
+
+        // Filter out search queries if matching filters apply locally
+        if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) {
+          continue;
         }
-        sheet.appendRow(row);
+
+        final double? lat = record['latitude'] != null ? double.tryParse(record['latitude'].toString()) : null;
+        final double? lng = record['longitude'] != null ? double.tryParse(record['longitude'].toString()) : null;
+        final String status = record['status'] ?? '';
+
+        final DateTime localRecordedAt = DateTime.parse(record['recorded_at']).toLocal();
+        final String formattedDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(localRecordedAt);
+
+        final schoolData = record['schools'];
+        final String schoolName = schoolData != null ? schoolData['name'] : "off-site";
+
+        sheet.appendRow([
+          TextCellValue(fullName),
+          lat != null ? DoubleCellValue(lat) : TextCellValue(''),
+          lng != null ? DoubleCellValue(lng) : TextCellValue(''),
+          TextCellValue(status),
+          TextCellValue(formattedDate),
+          TextCellValue(schoolName),
+        ]);
       }
 
       final bytes = excel.encode();
       if (bytes == null) throw Exception('Failed to generate excel file');
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
-      final fileName = 'Employee_Attendance_[$startRange to $endRange].xlsx';
+      final fileName = 'Employee_Attendance_Details_[$startRange to $endRange].xlsx';
 
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -222,15 +230,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     }
   }
 
-  Future<void> refresh() async {
-    setState(() {
-      _attendanceFetchFuture = _loadDataPipeline();
-    });
-  }
-
-  bool _isHoliday(DateTime date) {
-    return date.weekday == DateTime.sunday;
-  }
+  // Rest of code remains exactly the same for UI component painting...
+  bool _isHoliday(DateTime date) => date.weekday == DateTime.sunday;
 
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
     return List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
