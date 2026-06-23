@@ -13,16 +13,11 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<UserModel> login({required String identifier, required String password}) async {
     final normalizedPhone = _normalizePhone(identifier);
-
-    // 1. Authenticate credentials against Supabase GoTrue Auth
     final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
-
     if (response.user == null) {
       throw Exception("Login failed");
     }
-
     try {
-      // 2. Query both tables concurrently or matching by normalized phone number
       final requestData = await _supabase
           .from('signup_requests')
           .select('status, action_reason')
@@ -31,52 +26,38 @@ class AuthRepositoryImpl implements AuthRepository {
 
       final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
 
-      // Fallback variables if record rows are structurally missing or cleared
       final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
       final profileStatus = (profileData?['account_status']?.toString() ?? 'removed').toLowerCase();
-
-      // Determine what reason to show (prioritize explicit profile reason, fallback to request text)
       final actionReason =
           profileData?['action_reason']?.toString() ??
           requestData?['action_reason']?.toString() ??
           'No explicit reason specified by administration.';
 
-      // Rule Check A: Reject if signup application table is not fully 'approved'
       if (requestStatus == 'pending') {
         await _supabase.auth.signOut();
         throw Exception('Your signup request is still pending admin approval.');
       }
-
       if (requestStatus == 'removed' || requestStatus == 'not_found') {
         await _supabase.auth.signOut();
         throw Exception('Your signup request was declined or could not be found.\n\nReason: $actionReason');
       }
-
-      // Rule Check B: Reject if operational profile status is 'suspended' or 'removed'
       if (profileStatus == 'suspended') {
         await _supabase.auth.signOut();
         throw Exception('Your account profile has been suspended.\n\nReason: $actionReason');
       }
-
       if (profileStatus == 'removed') {
         await _supabase.auth.signOut();
         throw Exception('Your account access has been removed.\n\nReason: $actionReason');
       }
-
-      // Final Gate: Only allow if explicitly active and approved
       if (profileStatus != 'active' || requestStatus != 'approved') {
         await _supabase.auth.signOut();
         throw Exception('Unauthorized Account State. Please contact support.');
       }
-
-      // 3. Complete process and map user payload to model
       if (profileData == null) {
         throw Exception("Profile initialization records missing.");
       }
-
       return UserModel.fromJson(profileData);
     } catch (e) {
-      // Catch safety guarantee: ensure Auth session drops if check calculations crash
       await _supabase.auth.signOut();
       rethrow;
     }
@@ -89,15 +70,12 @@ class AuthRepositoryImpl implements AuthRepository {
     required String identifier,
     required String password,
     required String role,
-    String? gender, // 💡 Implemented gender option
+    String? gender,
     String? qualification,
-    String? village,
-    String? cluster,
-    String? school,
+    String? schoolId,
     String? pushToken,
   }) async {
     final phone = _normalizePhone(identifier);
-
     final authResponse = await _auth.signUp(
       phone: phone,
       password: password,
@@ -105,16 +83,13 @@ class AuthRepositoryImpl implements AuthRepository {
         'first_name': firstName.trim(),
         'last_name': lastName.trim(),
         'role': role,
-        'gender': gender, // 💡 Appended to Auth raw app metadata map
+        'gender': gender,
         'status': 'pending',
         'push_token': pushToken,
         'qualification': qualification,
-        'village': village,
-        'cluster': cluster,
-        'school': school,
+        'school_id': schoolId,
       },
     );
-
     if (authResponse.user == null) {
       throw Exception("Signup registration sequence failed.");
     }
@@ -125,13 +100,11 @@ class AuthRepositoryImpl implements AuthRepository {
       'first_name': firstName.trim(),
       'last_name': lastName.trim(),
       'role': role,
-      'gender': gender, // 💡 Appended to DB tracking insert payload
+      'gender': gender,
       'status': 'pending',
       'push_token': pushToken,
       'qualification': qualification,
-      'village': village,
-      'cluster': cluster,
-      'school': school,
+      'school_id': schoolId,
     });
   }
 
@@ -140,19 +113,15 @@ class AuthRepositoryImpl implements AuthRepository {
     final phone = _normalizePhone(identifier);
     final signupData = await getSignupStatus(identifier);
     final status = signupData['status'];
-
     if (status == 'pending') {
       throw Exception('Your account is still $status. OTP cannot be sent.');
     }
-
     if (status == 'suspended') {
       throw Exception('Your account has been suspended.');
     }
-
     if (status == 'removed') {
       throw Exception('Your account has been removed');
     }
-
     try {
       await _auth.signInWithOtp(phone: phone, shouldCreateUser: false);
     } on AuthException catch (e) {
@@ -204,7 +173,6 @@ class AuthRepositoryImpl implements AuthRepository {
       if (identifier != null) {
         final phone = _normalizePhone(identifier);
         final requestRows = await _fetchSignupRequestsByPhone(phone, columns: 'first_name,last_name,role');
-
         Map<String, dynamic> metadata = {};
         if (requestRows.isNotEmpty) {
           metadata = {
@@ -213,7 +181,6 @@ class AuthRepositoryImpl implements AuthRepository {
             'role': requestRows.first['role'],
           };
         }
-
         await _auth.updateUser(UserAttributes(password: password, data: metadata));
         await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
       }
@@ -230,19 +197,12 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Map<String, String?>> getSignupStatus(String identifier) async {
     final phone = _normalizePhone(identifier);
-
-    // 💡 Request both 'status' and 'action_reason' columns from Supabase
     final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status, action_reason');
-
     if (rows.isEmpty) {
       return {'status': 'not_found', 'rejection_reason': null};
     }
-
     final firstRow = rows.first;
-    return {
-      'status': (firstRow['status'] as String?)?.toLowerCase(),
-      'rejection_reason': firstRow['action_reason'] as String?, // Make sure this matches your Supabase column name exactly
-    };
+    return {'status': (firstRow['status'] as String?)?.toLowerCase(), 'rejection_reason': firstRow['action_reason'] as String?};
   }
 
   String _normalizePhone(String value) {
@@ -283,31 +243,22 @@ class AuthRepositoryImpl implements AuthRepository {
     required String firstName,
     required String lastName,
     String? qualification,
-    String? village,
-    String? cluster,
-    String? school,
+    String? schoolId,
   }) async {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception("No authenticated user found.");
-
     final String role = (user.userMetadata?['role'] ?? '').toString().toLowerCase();
-    final bool isAdmin = role == 'Admin';
-
+    final bool isAdmin = role == 'admin';
     final Map<String, dynamic> updateData = {
       'first_name': firstName.trim(),
       'last_name': lastName.trim(),
       'updated_at': DateTime.now().toIso8601String(),
     };
-
     if (!isAdmin) {
       if (qualification != null) updateData['qualification'] = qualification;
-      if (village != null) updateData['village'] = village;
-      if (cluster != null) updateData['cluster'] = cluster;
-      if (school != null) updateData['school'] = school;
+      if (schoolId != null) updateData['school_id'] = schoolId;
     }
-
     await _supabase.from('profiles').update(updateData).eq('id', user.id);
-
     await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
   }
 }

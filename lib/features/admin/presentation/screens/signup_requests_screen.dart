@@ -1,12 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignupRequestsScreen extends ConsumerStatefulWidget {
   const SignupRequestsScreen({super.key});
-
   @override
   ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
 }
@@ -14,13 +16,13 @@ class SignupRequestsScreen extends ConsumerStatefulWidget {
 class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   bool _isLoading = false;
   final _searchController = TextEditingController();
-  int _sortColumnIndex = 8; // 💡 Incremented from 7 to 8 to match shifting date field index
+  int _sortColumnIndex = 8;
   bool _isAscending = false;
 
   Set<String>? _selectedNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
-  Set<String>? _selectedGenderFilters; // 💡 Added new structural filter state tracker
+  Set<String>? _selectedGenderFilters;
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
@@ -31,11 +33,47 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
 
+  // Realtime subscription listeners to trigger automatic view invalidation on mutation hooks
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
     final startOfWeek = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
     _selectedDateRange = DateTimeRange(start: startOfWeek, end: startOfWeek.add(const Duration(days: 6)));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  DateTime _parseDateTimeSafely(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    String dateStr = dateValue.toString().trim();
+    if (dateStr.isEmpty) return DateTime.now();
+    if (!dateStr.contains('Z') && !dateStr.contains('+') && !dateStr.endsWith('Z')) {
+      if (dateStr.contains(' ') && !dateStr.contains('T')) {
+        dateStr = dateStr.replaceFirst(' ', 'T');
+      }
+      dateStr = '${dateStr}Z';
+    }
+    return DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now();
+  }
+
+  Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
+    final schoolMap = row['schools'] as Map<String, dynamic>?;
+    final schoolName = schoolMap?['name']?.toString() ?? '-';
+
+    final villageMap = schoolMap?['villages'] as Map<String, dynamic>?;
+    final villageName = villageMap?['name']?.toString() ?? '-';
+
+    final clusterMap = villageMap?['clusters'] as Map<String, dynamic>?;
+    final clusterName = clusterMap?['name']?.toString() ?? '-';
+
+    return {'cluster': clusterName, 'village': villageName, 'school': schoolName};
   }
 
   Future<String?> _showActionReasonDialog({
@@ -134,27 +172,26 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
       final phone = req['phone']?.toString() ?? "";
       final role = req['role']?.toString() ?? "";
-      final gender = req['gender']?.toString() ?? ""; // 💡 Added database row runtime context reference extraction
-      final cluster = req['cluster']?.toString() ?? "";
-      final village = req['village']?.toString() ?? "";
-      final school = req['school']?.toString() ?? "";
+      final gender = req['gender']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
-      final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
-      final createdAt = dateField != null ? DateTime.parse(dateField).toLocal() : null;
 
-      if (createdAt != null) {
-        if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) {
-          return false;
-        }
-      }
-      final signupTime = dateField != null ? DateFormat('hh:mm a').format(DateTime.parse(dateField).toLocal()) : '';
+      // 💡 Pull dynamic location values safely using relationship models
+      final loc = _extractLocationNames(req);
+      final cluster = loc['cluster']!;
+      final village = loc['village']!;
+      final school = loc['school']!;
+
+      final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
+      final createdAt = _parseDateTimeSafely(dateField);
+      if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) return false;
+      final signupTime = DateFormat('hh:mm a').format(createdAt);
 
       final matchesSearch =
           query.isEmpty ||
           fullName.toLowerCase().contains(query) ||
           phone.toLowerCase().contains(query) ||
           role.toLowerCase().contains(query) ||
-          gender.toLowerCase().contains(query) || // 💡 Allowed fuzzy text search indexing over gender keys
+          gender.toLowerCase().contains(query) ||
           cluster.toLowerCase().contains(query) ||
           village.toLowerCase().contains(query) ||
           school.toLowerCase().contains(query) ||
@@ -165,8 +202,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
       if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role)) return false;
-      if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender))
-        return false; // 💡 Added explicit dropdown filter logic
+      if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender)) return false;
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
       if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
       if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
@@ -174,6 +210,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
       return true;
     }).toList();
+
     setState(() {
       _filteredRequests = result;
       _applySorting();
@@ -197,21 +234,21 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           valA = a['role']?.toString() ?? "";
           valB = b['role']?.toString() ?? "";
           break;
-        case 3: // 💡 Added case 3 logic variant to sort across alphabetical gender states
+        case 3:
           valA = a['gender']?.toString() ?? "";
           valB = b['gender']?.toString() ?? "";
           break;
         case 4:
-          valA = a['cluster']?.toString() ?? "";
-          valB = b['cluster']?.toString() ?? "";
+          valA = _extractLocationNames(a)['cluster']!;
+          valB = _extractLocationNames(b)['cluster']!;
           break;
         case 5:
-          valA = a['village']?.toString() ?? "";
-          valB = b['village']?.toString() ?? "";
+          valA = _extractLocationNames(a)['village']!;
+          valB = _extractLocationNames(b)['village']!;
           break;
         case 6:
-          valA = a['school']?.toString() ?? "";
-          valB = b['school']?.toString() ?? "";
+          valA = _extractLocationNames(a)['school']!;
+          valB = _extractLocationNames(b)['school']!;
           break;
         case 7:
           valA = a['qualification']?.toString() ?? "";
@@ -221,8 +258,8 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 9:
           final dateFieldA = a.containsKey('account_status') ? a['updated_at'] : a['created_at'];
           final dateFieldB = b.containsKey('account_status') ? b['updated_at'] : b['created_at'];
-          final dateA = DateTime.tryParse(dateFieldA ?? '') ?? DateTime(1970);
-          final dateB = DateTime.tryParse(dateFieldB ?? '') ?? DateTime(1970);
+          final dateA = _parseDateTimeSafely(dateFieldA);
+          final dateB = _parseDateTimeSafely(dateFieldB);
           return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       }
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
@@ -243,17 +280,17 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 2:
           if (req['role'] != null) values.add(req['role'].toString());
           break;
-        case 3: // 💡 Added extraction case parsing logic for gender values collection
+        case 3:
           if (req['gender'] != null) values.add(req['gender'].toString());
           break;
         case 4:
-          if (req['cluster'] != null) values.add(req['cluster'].toString());
+          values.add(_extractLocationNames(req)['cluster']!);
           break;
         case 5:
-          if (req['village'] != null) values.add(req['village'].toString());
+          values.add(_extractLocationNames(req)['village']!);
           break;
         case 6:
-          if (req['school'] != null) values.add(req['school'].toString());
+          values.add(_extractLocationNames(req)['school']!);
           break;
         case 7:
           if (req['qualification'] != null) values.add(req['qualification'].toString());
@@ -261,7 +298,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
         case 9:
           final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
           if (dateField != null) {
-            final date = DateTime.parse(dateField).toLocal();
+            final date = _parseDateTimeSafely(dateField);
             values.add(DateFormat('hh:mm a').format(date));
           }
           break;
@@ -271,7 +308,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   }
 
   void _onSort(int columnIndex) {
-    if (columnIndex == 10) return; // Action index block extended boundaries offset
+    if (columnIndex == 10) return;
     setState(() {
       if (_sortColumnIndex == columnIndex) {
         _isAscending = !_isAscending;
@@ -281,6 +318,47 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       }
       _applySorting();
     });
+  }
+
+  // 💡 Sets up continuous realtime event streams to force grid refresh on remote updates
+  void _setupRealtimeSubscription(String table) {
+    _realtimeChannel?.unsubscribe();
+    final supabase = ref.read(supabaseClientProvider);
+    _realtimeChannel =
+        supabase
+            .channel('signup-mgmt-channel')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: table,
+              callback: (payload) {
+                if (mounted) setState(() {});
+              },
+            )
+          ..subscribe();
+  }
+
+  Stream<List<Map<String, dynamic>>> _fetchDataStream({required String table, required String column, required String value}) {
+    final supabase = ref.watch(supabaseClientProvider);
+    _setupRealtimeSubscription(table);
+    return Stream.fromFuture(
+      supabase
+          .from(table)
+          .select('''
+            *,
+            schools:school_id (
+              name,
+              villages:village_id (
+                name,
+                clusters:cluster_id (
+                  name
+                )
+              )
+            )
+          ''')
+          .eq(column, value)
+          .then((data) => List<Map<String, dynamic>>.from(data as List)),
+    );
   }
 
   Widget _buildDateControls() {
@@ -493,7 +571,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       currentSelection = _selectedPhoneFilters != null ? Set.from(_selectedPhoneFilters!) : Set.from(allValues);
     else if (columnIndex == 2)
       currentSelection = _selectedRoleFilters != null ? Set.from(_selectedRoleFilters!) : Set.from(allValues);
-    else if (columnIndex == 3) // 💡 Handle initialization for gender filter assignment states
+    else if (columnIndex == 3)
       currentSelection = _selectedGenderFilters != null ? Set.from(_selectedGenderFilters!) : Set.from(allValues);
     else if (columnIndex == 4)
       currentSelection = _selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues);
@@ -505,7 +583,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
     else
       currentSelection = _selectedTimeFilters != null ? Set.from(_selectedTimeFilters!) : Set.from(allValues);
-
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
     await showDialog(
@@ -567,8 +644,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                   if (columnIndex == 0) _selectedNameFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 1) _selectedPhoneFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 2) _selectedRoleFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 3)
-                    _selectedGenderFilters = noFilter ? null : Set.from(currentSelection); // 💡 Apply gender selection criteria
+                  if (columnIndex == 3) _selectedGenderFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 4) _selectedClusterFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 5) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
                   if (columnIndex == 6) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
@@ -587,25 +663,30 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   }
 
   Widget _buildTable({required String statusFilter, required bool isProfileTable}) {
-    final supabase = ref.watch(supabaseClientProvider);
     final table = isProfileTable ? 'profiles' : 'signup_requests';
     final statusColumn = isProfileTable ? 'account_status' : 'status';
+
     return Column(
       children: [
         _buildDateControls(),
         Expanded(
+          // 💡 Replaced direct flat streams with unified custom fetch streams handling structural table mapping
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: supabase.from(table).stream(primaryKey: ['id']).eq(statusColumn, statusFilter),
+            stream: _fetchDataStream(table: table, column: statusColumn, value: statusFilter),
             builder: (context, snapshot) {
+              if (snapshot.hasError) return Center(child: Text('Error resolving rows: ${snapshot.error}'));
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              _rawRequests = List<Map<String, dynamic>>.from(snapshot.data!);
+
+              _rawRequests = snapshot.data!;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _applyAllFilters();
                 }
               });
+
               final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
               final defaultEnd = defaultStart.add(const Duration(days: 6));
+
               return Column(
                 children: [
                   Expanded(
@@ -652,7 +733,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                         isAscending: _isAscending,
                                         hasFilter: _selectedRoleFilters != null,
                                       ),
-                                      // 💡 Added Gender header column widget inside layout array
                                       _SortableHeader(
                                         label: "Gender",
                                         onSort: () => _onSort(3),
@@ -719,18 +799,20 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                   ..._filteredRequests.map((req) {
                                     final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
                                     final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
-                                    final parsedDate = DateTime.parse(dateField).toLocal();
+                                    final parsedDate = _parseDateTimeSafely(dateField);
+
+                                    // 💡 Extract mapped locations from the dynamically joined snapshots
+                                    final locationInfo = _extractLocationNames(req);
+
                                     return TableRow(
                                       children: [
                                         _DataCell(text: currentName, isBold: true),
                                         _DataCell(text: req['phone']?.toString() ?? "-"),
                                         _DataCell(text: req['role']?.toString() ?? "-"),
-                                        _DataCell(
-                                          text: req['gender']?.toString() ?? "-",
-                                        ), // 💡 Rendered runtime Gender payload value
-                                        _DataCell(text: req['cluster']?.toString() ?? "-"),
-                                        _DataCell(text: req['village']?.toString() ?? "-"),
-                                        _DataCell(text: req['school']?.toString() ?? "-"),
+                                        _DataCell(text: req['gender']?.toString() ?? "-"),
+                                        _DataCell(text: locationInfo['cluster']!),
+                                        _DataCell(text: locationInfo['village']!),
+                                        _DataCell(text: locationInfo['school']!),
                                         _DataCell(text: req['qualification']?.toString() ?? "-"),
                                         _DataCell(text: DateFormat('dd MMM yyyy').format(parsedDate)),
                                         _DataCell(text: DateFormat('hh:mm a').format(parsedDate)),
@@ -982,7 +1064,6 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
-
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -991,7 +1072,6 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1037,9 +1117,7 @@ class _SortableHeader extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
-
   const _DataCell({required this.text, this.isBold = false});
-
   @override
   Widget build(BuildContext context) {
     return Padding(

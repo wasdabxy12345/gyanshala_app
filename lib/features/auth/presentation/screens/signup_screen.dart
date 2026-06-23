@@ -15,6 +15,10 @@ import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
 import 'otp_verification_screen.dart';
 
+class AppConfig {
+  static const bool useDevBypass = false;
+}
+
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
@@ -30,8 +34,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
-
-  // 💡 Updated starting default selection to match our new enum values
   UserRole _selectedRole = UserRole.shikshaMitra38;
   String? _selectedGender;
 
@@ -77,26 +79,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     try {
       String? pushToken = await FirebaseMessaging.instance.getToken();
-
-      final clusterName = _clusters
-          .firstWhere(
-            (e) => e.id == _selectedClusterId,
-            orElse: () => LocationItem(id: '', name: ''),
-          )
-          .name;
-      final villageName = _villages
-          .firstWhere(
-            (e) => e.id == _selectedVillageId,
-            orElse: () => LocationItem(id: '', name: ''),
-          )
-          .name;
-      final schoolName = _schools
-          .firstWhere(
-            (e) => e.id == _selectedSchoolId,
-            orElse: () => LocationItem(id: '', name: ''),
-          )
-          .name;
-
       await ref
           .read(authRepositoryProvider)
           .signup(
@@ -108,9 +90,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             gender: _selectedGender,
             pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
-            cluster: clusterName,
-            village: villageName,
-            school: schoolName,
+            schoolId: _selectedSchoolId,
           );
 
       final prefs = await SharedPreferences.getInstance();
@@ -147,7 +127,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 💡 Updated check condition logic to match our updated non-admin options mapping
     final isNotAdmin =
         _selectedRole == UserRole.shikshaMitra38 ||
         _selectedRole == UserRole.shikshaMitra910 ||
@@ -185,7 +164,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ],
             ),
             const SizedBox(height: 14),
-
             DropdownButtonFormField<String>(
               initialValue: _selectedGender,
               decoration: const InputDecoration(
@@ -202,7 +180,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               validator: (value) => (value == null || value.isEmpty) ? 'Gender Selection Required' : null,
             ),
             const SizedBox(height: 14),
-
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -229,7 +206,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               validator: (value) => (value != _passwordController.text) ? 'Passwords do not match' : null,
             ),
             const SizedBox(height: 14),
-
             if (isNotAdmin) ...[
               TextFormField(
                 controller: _qualificationController,
@@ -237,7 +213,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 validator: (value) => (value == null || value.isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 14),
-
               DropdownSearch<LocationItem>(
                 items: (filter, infiniteScrollProps) => _clusters,
                 itemAsString: (item) => item.name,
@@ -291,10 +266,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     decoration: InputDecoration(labelText: "Select School *", border: OutlineInputBorder()),
                   ),
                   onSelected: (data) => setState(() => _selectedSchoolId = data?.id),
+                  validator: (value) => (value == null || _selectedSchoolId == null) ? 'School Selection Required' : null,
                 ),
               ],
             ],
-
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

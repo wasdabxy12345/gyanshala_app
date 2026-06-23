@@ -9,12 +9,10 @@ abstract class AuthRepository {
     required String identifier,
     required String password,
     required String role,
-    String? gender, // 💡 Added optional gender param to contract
+    String? gender,
     String? pushToken,
-    required String qualification,
-    required String village,
-    required String cluster,
-    required String school,
+    String? qualification,
+    String? schoolId,
   });
 
   Future<void> sendOtp({required String identifier, bool requireApprovedSignup = false});
@@ -26,6 +24,5 @@ abstract class AuthRepository {
   Future<Map<String, String?>> getSignupStatus(String identifier);
 
   Future<void> signOut();
-
-  Future<void> updateProfile({required String firstName, required String lastName});
+  Future<void> updateProfile({required String firstName, required String lastName, String? qualification, String? schoolId});
 }

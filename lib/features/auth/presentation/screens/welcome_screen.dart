@@ -10,7 +10,7 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/update_checker.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/otp_verification_screen.dart';
-import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/signup_screen.dart' hide AppConfig;
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
