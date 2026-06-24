@@ -20,6 +20,9 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
   List<DateTime> _holidays = [];
   bool _isLoading = false;
 
+  // Track selected grade filter ("All" defaults to showing every grade)
+  String? _selectedGrade;
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +42,6 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
   bool _isHoliday(DateTime date) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
     if (date.weekday == DateTime.sunday) return true;
-
     return _holidays.any((h) => h.year == normalizedDate.year && h.month == normalizedDate.month && h.day == normalizedDate.day);
   }
 
@@ -59,14 +61,11 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
   Future<void> _fetchTodayAttendance() async {
     final client = Supabase.instance.client;
     final dateStr = DateFormat('yyyy-MM-dd').format(widget.date);
-
     final data = await client.from('student_attendance').select('student_id, status').eq('date', dateStr);
-
     final Map<String, String> existing = {};
     for (var row in data) {
       existing[row['student_id']] = row['status'] == 'present' ? 'P' : 'A';
     }
-
     if (mounted) {
       setState(() {
         statusMap = existing;
@@ -81,7 +80,7 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
 
     return Column(
       children: [
-        Expanded(child: holidaySelected ? _buildHolidayPlaceholder() : _buildStudentList(isEditable: isCurrentDay)),
+        Expanded(child: holidaySelected ? _buildHolidayPlaceholder() : _buildStudentListWithFilter(isEditable: isCurrentDay)),
         if (!holidaySelected && isCurrentDay)
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -104,7 +103,7 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.event_busy, size: 80, color: Colors.amber),
+          const Icon(Icons.event_busy, size: 80, color: Colors.amber),
           const SizedBox(height: 16),
           const Text(
             "Holiday / Sunday",
@@ -116,45 +115,86 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
     );
   }
 
-  Widget _buildStudentList({required bool isEditable}) {
+  Widget _buildStudentListWithFilter({required bool isEditable}) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: ref.read(studentProvider.notifier).getMyStudents(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-        final students = snapshot.data!.where((s) {
-          final firstName = s['first_name']?.toString().toLowerCase() ?? '';
-          final lastName = s['last_name']?.toString().toLowerCase() ?? '';
-          final fullName = "$firstName $lastName";
+        final allStudents = snapshot.data!;
+        final gradeOptions = allStudents.map((s) => s['grade']?.toString() ?? '').where((g) => g.isNotEmpty).toSet().toList();
+        gradeOptions.sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+        if (!gradeOptions.contains(_selectedGrade) && _selectedGrade != null) _selectedGrade = null;
 
-          return fullName.contains(widget.searchQuery.toLowerCase());
-        }).toList();
+        final filteredStudents = _selectedGrade == null
+            ? <Map<String, dynamic>>[]
+            : allStudents.where((s) {
+                final firstName = s['first_name']?.toString().toLowerCase() ?? '';
+                final lastName = s['last_name']?.toString().toLowerCase() ?? '';
+                final fullName = "$firstName $lastName";
+                final matchesSearch = fullName.contains(widget.searchQuery.toLowerCase());
+                final currentStudentGrade = s['grade']?.toString() ?? '';
+                final matchesGrade = _selectedGrade == "All" || currentStudentGrade == _selectedGrade;
+                return matchesSearch && matchesGrade;
+              }).toList();
 
-        if (students.isEmpty) {
-          return const Center(child: Text("No students found."));
-        }
-
-        return ListView.builder(
-          itemCount: students.length,
-          itemBuilder: (context, index) {
-            final s = students[index];
-            final currentStatus = statusMap[s['id']];
-            final firstName = s['first_name'] ?? '';
-            final lastName = s['last_name'] ?? '';
-            return ListTile(
-              title: Text("$firstName $lastName"),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(),
+              child: Row(
                 children: [
-                  _statusBtn(s['id'], 'P', Colors.green, currentStatus == 'P', isEditable),
-                  const SizedBox(width: 8),
-                  _statusBtn(s['id'], 'A', Colors.red, currentStatus == 'A', isEditable),
+                  const Text("Filter by Grade: ", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _selectedGrade,
+                      hint: const Text("Select a grade"),
+                      items: gradeOptions.map((grade) {
+                        return DropdownMenuItem<String>(value: grade, child: Text("Grade $grade"));
+                      }).toList(),
+                      onChanged: (newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedGrade = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ),
                 ],
               ),
-            );
-          },
+            ),
+
+            // Student List View
+            Expanded(
+              child: _selectedGrade == null
+                  ? Center(child: Text("Please select a grade to mark attendance"))
+                  : filteredStudents.isEmpty
+                  ? const Center(child: Text('No students found in selected grade'))
+                  : ListView.builder(
+                      itemCount: filteredStudents.length,
+                      itemBuilder: (context, index) {
+                        final s = filteredStudents[index];
+                        final currentStatus = statusMap[s['id']];
+                        final firstName = s['first_name'] ?? '';
+                        final lastName = s['last_name'] ?? '';
+                        return ListTile(
+                          title: Text("$firstName $lastName"),
+                          subtitle: Text("Grade: ${s['grade']}"),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _statusBtn(s['id'], 'P', Colors.green, currentStatus == 'P', isEditable),
+                              const SizedBox(width: 8),
+                              _statusBtn(s['id'], 'A', Colors.red, currentStatus == 'A', isEditable),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -180,17 +220,13 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You can only save attendance for today.")));
       return;
     }
-
     if (statusMap.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No attendance marked to save")));
       return;
     }
-
     setState(() => _isLoading = true);
-
     final dateStr = DateFormat('yyyy-MM-dd').format(widget.date);
     final shikshaMitraId = Supabase.instance.client.auth.currentUser?.id;
-
     final List<Map<String, dynamic>> records = statusMap.entries.map((e) {
       return {
         'student_id': e.key,
@@ -199,9 +235,7 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
         'shiksha_mitra_id': shikshaMitraId,
       };
     }).toList();
-
     final success = await ref.read(studentProvider.notifier).submitAttendance(records);
-
     if (mounted) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
