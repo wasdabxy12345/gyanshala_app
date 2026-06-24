@@ -32,8 +32,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
-
-  // Realtime subscription listeners to trigger automatic view invalidation on mutation hooks
   RealtimeChannel? _realtimeChannel;
 
   @override
@@ -64,16 +62,46 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   }
 
   Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
-    final schoolMap = row['schools'] as Map<String, dynamic>?;
-    final schoolName = schoolMap?['name']?.toString() ?? '-';
+    final requestSchoolsList = row['signup_request_schools'] as List<dynamic>?;
 
-    final villageMap = schoolMap?['villages'] as Map<String, dynamic>?;
-    final villageName = villageMap?['name']?.toString() ?? '-';
+    final profileSchoolsList = row['profile_schools'] as List<dynamic>?;
 
-    final clusterMap = villageMap?['clusters'] as Map<String, dynamic>?;
-    final clusterName = clusterMap?['name']?.toString() ?? '-';
+    final schoolsRelations = [...(requestSchoolsList ?? []), ...(profileSchoolsList ?? [])];
 
-    return {'cluster': clusterName, 'village': villageName, 'school': schoolName};
+    final schoolNames = <String>{};
+    final villageNames = <String>{};
+    final clusterNames = <String>{};
+
+    for (final relation in schoolsRelations) {
+      final school = relation['schools'] as Map<String, dynamic>?;
+
+      if (school == null) continue;
+
+      final schoolName = school['name']?.toString();
+      if (schoolName != null) {
+        schoolNames.add(schoolName);
+      }
+
+      final village = school['villages'] as Map<String, dynamic>?;
+
+      if (village != null) {
+        final villageName = village['name']?.toString();
+
+        if (villageName != null) {
+          villageNames.add(villageName);
+        }
+
+        final cluster = village['clusters'] as Map<String, dynamic>?;
+
+        final clusterName = cluster?['name']?.toString();
+
+        if (clusterName != null) {
+          clusterNames.add(clusterName);
+        }
+      }
+    }
+
+    return {'cluster': clusterNames.join(', '), 'village': villageNames.join(', '), 'school': schoolNames.join(', ')};
   }
 
   Future<String?> _showActionReasonDialog({
@@ -174,8 +202,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final role = req['role']?.toString() ?? "";
       final gender = req['gender']?.toString() ?? "";
       final qualification = req['qualification']?.toString() ?? "";
-
-      // 💡 Pull dynamic location values safely using relationship models
       final loc = _extractLocationNames(req);
       final cluster = loc['cluster']!;
       final village = loc['village']!;
@@ -320,7 +346,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     });
   }
 
-  // 💡 Sets up continuous realtime event streams to force grid refresh on remote updates
   void _setupRealtimeSubscription(String table) {
     _realtimeChannel?.unsubscribe();
     final supabase = ref.read(supabaseClientProvider);
@@ -341,21 +366,28 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   Stream<List<Map<String, dynamic>>> _fetchDataStream({required String table, required String column, required String value}) {
     final supabase = ref.watch(supabaseClientProvider);
     _setupRealtimeSubscription(table);
+    final String junctionSelect = table == 'signup_requests'
+        ? '''
+signup_request_schools (
+schools (
+name,
+villages:village_id (name, clusters:cluster_id (name))
+)
+)
+'''
+        : '''
+profile_schools (
+schools (
+name,
+villages:village_id (name, clusters:cluster_id (name))
+)
+)
+''';
+
     return Stream.fromFuture(
       supabase
           .from(table)
-          .select('''
-            *,
-            schools:school_id (
-              name,
-              villages:village_id (
-                name,
-                clusters:cluster_id (
-                  name
-                )
-              )
-            )
-          ''')
+          .select('*, $junctionSelect')
           .eq(column, value)
           .then((data) => List<Map<String, dynamic>>.from(data as List)),
     );
@@ -670,7 +702,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       children: [
         _buildDateControls(),
         Expanded(
-          // 💡 Replaced direct flat streams with unified custom fetch streams handling structural table mapping
           child: StreamBuilder<List<Map<String, dynamic>>>(
             stream: _fetchDataStream(table: table, column: statusColumn, value: statusFilter),
             builder: (context, snapshot) {
@@ -800,8 +831,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
                                     final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
                                     final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
                                     final parsedDate = _parseDateTimeSafely(dateField);
-
-                                    // 💡 Extract mapped locations from the dynamically joined snapshots
                                     final locationInfo = _extractLocationNames(req);
 
                                     return TableRow(

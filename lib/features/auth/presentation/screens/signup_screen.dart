@@ -13,7 +13,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
-import 'otp_verification_screen.dart';
 
 class AppConfig {
   static const bool useDevBypass = false;
@@ -21,7 +20,6 @@ class AppConfig {
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
-
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
@@ -40,10 +38,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final List<LocationItem> _clusters = [];
   final List<LocationItem> _villages = [];
   final List<LocationItem> _schools = [];
-
   String? _selectedClusterId;
   String? _selectedVillageId;
-  String? _selectedSchoolId;
+
+  final List<String> _selectedSchoolIds = [];
+  final List<LocationItem> _selectedSchoolObjects = [];
 
   @override
   void initState() {
@@ -76,7 +75,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   Future<void> _onSignupPressed() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
     try {
       String? pushToken = await FirebaseMessaging.instance.getToken();
       await ref
@@ -90,35 +88,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             gender: _selectedGender,
             pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
-            schoolId: _selectedSchoolId,
+            schoolIds: _selectedSchoolIds,
           );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pending_id', _phoneController.text.trim());
 
       if (!mounted) return;
-      if (AppConfig.useDevBypass) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
-          (route) => false,
-        );
-      } else {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OtpVerificationScreen(
-              identifier: _phoneController.text.trim(),
-              title: 'Verify OTP',
-              subtitle: 'Enter the verification code sent to your device',
-              onVerified: () async {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
-                  (route) => false,
-                );
-              },
-            ),
-          ),
-        );
-      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
@@ -131,6 +111,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         _selectedRole == UserRole.shikshaMitra38 ||
         _selectedRole == UserRole.shikshaMitra910 ||
         _selectedRole == UserRole.mentorBV8;
+    final isMultiSchool = _selectedRole == UserRole.mentorBV8;
 
     return AuthShell(
       title: 'Signup',
@@ -142,7 +123,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           children: [
             const Text('Select Position *', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            RoleSelector(selectedRole: _selectedRole, onRoleSelected: (role) => setState(() => _selectedRole = role)),
+            RoleSelector(
+              selectedRole: _selectedRole,
+              onRoleSelected: (role) => setState(() {
+                _selectedRole = role;
+                _selectedSchoolIds.clear();
+                _selectedSchoolObjects.clear();
+                _selectedClusterId = null;
+                _selectedVillageId = null;
+              }),
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -213,18 +203,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 validator: (value) => (value == null || value.isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 14),
+
               DropdownSearch<LocationItem>(
                 items: (filter, infiniteScrollProps) => _clusters,
                 itemAsString: (item) => item.name,
                 compareFn: (item1, item2) => item1.id == item2.id,
                 decoratorProps: const DropDownDecoratorProps(
-                  decoration: InputDecoration(labelText: "Select Cluster *", border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: "🏢 Select Cluster *", border: OutlineInputBorder()),
                 ),
                 onSelected: (data) async {
                   setState(() {
                     _selectedClusterId = data?.id;
                     _selectedVillageId = null;
-                    _selectedSchoolId = null;
+                    if (!isMultiSchool) {
+                      _selectedSchoolIds.clear();
+                      _selectedSchoolObjects.clear();
+                    }
                     _villages.clear();
                     _schools.clear();
                   });
@@ -234,39 +228,155 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   }
                 },
               ),
-              if (_selectedClusterId != null) ...[
-                const SizedBox(height: 14),
-                DropdownSearch<LocationItem>(
-                  items: (filter, loadProps) => _villages,
-                  itemAsString: (item) => item.name,
-                  compareFn: (item1, item2) => item1.id == item2.id,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(labelText: "Select Village *", border: OutlineInputBorder()),
+
+              const SizedBox(height: 14),
+
+              DropdownSearch<LocationItem>(
+                enabled: _selectedClusterId != null,
+                items: (filter, loadProps) => _villages,
+                itemAsString: (item) => item.name,
+                compareFn: (item1, item2) => item1.id == item2.id,
+                decoratorProps: DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    labelText: "🏡 Select Village *",
+                    border: const OutlineInputBorder(),
+                    filled: _selectedClusterId == null,
+                    fillColor: Colors.grey.shade100,
                   ),
-                  onSelected: (data) async {
-                    setState(() {
-                      _selectedVillageId = data?.id;
-                      _selectedSchoolId = null;
-                      _schools.clear();
-                    });
-                    if (data != null) {
-                      final list = await controller.fetchSchools(data.id);
-                      setState(() => _schools.addAll(list));
-                    }
-                  },
                 ),
-              ],
-              if (_selectedVillageId != null) ...[
-                const SizedBox(height: 14),
+                onSelected: (data) async {
+                  setState(() {
+                    _selectedVillageId = data?.id;
+                    if (!isMultiSchool) {
+                      _selectedSchoolIds.clear();
+                      _selectedSchoolObjects.clear();
+                    }
+                    _schools.clear();
+                  });
+                  if (data != null) {
+                    final list = await controller.fetchSchools(data.id);
+                    setState(() => _schools.addAll(list));
+                  }
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              if (isMultiSchool) ...[
                 DropdownSearch<LocationItem>(
+                  enabled: _selectedVillageId != null,
                   items: (filter, loadProps) => _schools,
                   itemAsString: (item) => item.name,
                   compareFn: (item1, item2) => item1.id == item2.id,
-                  decoratorProps: const DropDownDecoratorProps(
-                    decoration: InputDecoration(labelText: "Select School *", border: OutlineInputBorder()),
+                  decoratorProps: DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "🏫 Select School *",
+                      border: const OutlineInputBorder(),
+                      filled: _selectedVillageId == null,
+                      fillColor: Colors.grey.shade100,
+                    ),
                   ),
-                  onSelected: (data) => setState(() => _selectedSchoolId = data?.id),
-                  validator: (value) => (value == null || _selectedSchoolId == null) ? 'School Selection Required' : null,
+                  popupProps: PopupProps.menu(
+                    itemBuilder: (context, item, isDisabled, isSelected) {
+                      final isAdded = _selectedSchoolIds.contains(item.id);
+                      return ListTile(
+                        title: Text(item.name),
+                        trailing: TextButton.icon(
+                          onPressed: isAdded
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _selectedSchoolIds.add(item.id);
+                                    _selectedSchoolObjects.add(item);
+                                  });
+                                  Navigator.of(context).pop();
+                                },
+                          icon: Icon(isAdded ? Icons.check : Icons.add, size: 16),
+                          label: Text(isAdded ? 'Added' : 'Add'),
+                        ),
+                      );
+                    },
+                  ),
+                  onSelected: (data) {
+                    if (data != null && !_selectedSchoolIds.contains(data.id)) {
+                      setState(() {
+                        _selectedSchoolIds.add(data.id);
+                        _selectedSchoolObjects.add(data);
+                      });
+                    }
+                  },
+                ),
+
+                if (_selectedSchoolObjects.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, bottom: 8),
+                    child: Text(
+                      '🎒 Selected Schools *',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _selectedSchoolObjects.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final school = _selectedSchoolObjects[index];
+                        return ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.school, color: Colors.blue),
+                          title: Text(school.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
+                            onPressed: () => setState(() {
+                              _selectedSchoolIds.remove(school.id);
+                              _selectedSchoolObjects.removeAt(index);
+                            }),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+
+                FormField<List<String>>(
+                  initialValue: _selectedSchoolIds,
+                  validator: (_) => _selectedSchoolIds.isEmpty ? 'Please pick at least one school before continuing.' : null,
+                  builder: (state) => state.hasError
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 12),
+                          child: Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ] else ...[
+                DropdownSearch<LocationItem>(
+                  enabled: _selectedVillageId != null,
+                  items: (filter, loadProps) => _schools,
+                  itemAsString: (item) => item.name,
+                  compareFn: (item1, item2) => item1.id == item2.id,
+                  decoratorProps: DropDownDecoratorProps(
+                    decoration: InputDecoration(
+                      labelText: "Select School *",
+                      border: const OutlineInputBorder(),
+                      filled: _selectedVillageId == null,
+                      fillColor: Colors.grey.shade100,
+                    ),
+                  ),
+                  onSelected: (data) {
+                    setState(() {
+                      _selectedSchoolIds.clear();
+                      if (data != null) _selectedSchoolIds.add(data.id);
+                    });
+                  },
+                  validator: (value) => (value == null || _selectedSchoolIds.isEmpty) ? 'School Selection Required' : null,
                 ),
               ],
             ],

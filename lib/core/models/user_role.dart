@@ -1,7 +1,7 @@
 enum UserRole {
   shikshaMitra38,
   shikshaMitra910,
-  mentorBV8, // 💡 Completely renamed internally to avoid future confusion
+  mentorBV8,
   admin;
 
   static UserRole fromString(String? value) {
@@ -20,7 +20,7 @@ extension UserRoleLabel on UserRole {
       case UserRole.shikshaMitra910:
         return 'Shiksha Mitra (9-10)';
       case UserRole.mentorBV8:
-        return 'Mentor (BV-8)'; // 💡 Clean, cohesive internal and external naming
+        return 'Mentor (BV-8)';
       case UserRole.admin:
         return 'Admin';
     }

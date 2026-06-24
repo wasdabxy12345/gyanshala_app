@@ -3,12 +3,10 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class AuthShell extends StatelessWidget {
   const AuthShell({super.key, required this.title, required this.subtitle, required this.formChild, required this.footer});
-
   final String title;
   final String subtitle;
   final Widget formChild;
   final Widget footer;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,12 +36,10 @@ class AuthShell extends StatelessWidget {
 
 class _FormPanel extends StatelessWidget {
   const _FormPanel({required this.title, required this.subtitle, required this.formChild, required this.footer});
-
   final String title;
   final String subtitle;
   final Widget formChild;
   final Widget footer;
-
   @override
   Widget build(BuildContext context) {
     return Card(

@@ -4,10 +4,8 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class RoleSelector extends StatelessWidget {
   const RoleSelector({super.key, required this.selectedRole, required this.onRoleSelected});
-
   final UserRole selectedRole;
   final ValueChanged<UserRole> onRoleSelected;
-
   @override
   Widget build(BuildContext context) {
     return Wrap(

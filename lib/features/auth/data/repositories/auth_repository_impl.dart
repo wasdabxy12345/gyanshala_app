@@ -13,54 +13,54 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<UserModel> login({required String identifier, required String password}) async {
     final normalizedPhone = _normalizePhone(identifier);
-    final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
-    if (response.user == null) {
-      throw Exception("Login failed");
+
+    // 1. Fetch data from signup_requests first
+    final requestData = await _supabase
+        .from('signup_requests')
+        .select('status, action_reason')
+        .eq('phone', normalizedPhone)
+        .maybeSingle();
+
+    final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
+    final requestActionReason = requestData?['action_reason']?.toString() ?? 'No explicit reason specified.';
+
+    // 2. Evaluate signup_requests conditions
+    if (requestStatus == 'pending') {
+      throw Exception('Your signup request is still pending admin approval.');
     }
-    try {
-      final requestData = await _supabase
-          .from('signup_requests')
-          .select('status, action_reason')
-          .eq('phone', normalizedPhone)
-          .maybeSingle();
 
-      final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
+    if (requestStatus == 'rejected') {
+      throw Exception('Your signup request has been rejected.\n\nReason: $requestActionReason');
+    }
 
-      final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
-      final profileStatus = (profileData?['account_status']?.toString() ?? 'removed').toLowerCase();
-      final actionReason =
-          profileData?['action_reason']?.toString() ??
-          requestData?['action_reason']?.toString() ??
-          'No explicit reason specified by administration.';
+    // 3. If "approved" (or not found in signup_requests), proceed to check profiles table
+    final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
 
-      if (requestStatus == 'pending') {
-        await _supabase.auth.signOut();
-        throw Exception('Your signup request is still pending admin approval.');
-      }
-      if (requestStatus == 'removed' || requestStatus == 'not_found') {
-        await _supabase.auth.signOut();
-        throw Exception('Your signup request was declined or could not be found.\n\nReason: $actionReason');
-      }
+    if (profileData != null) {
+      final profileStatus = (profileData['account_status'].toString()).toLowerCase();
+      final profileActionReason = profileData['action_reason']?.toString() ?? 'No reason specified';
+
       if (profileStatus == 'suspended') {
-        await _supabase.auth.signOut();
-        throw Exception('Your account profile has been suspended.\n\nReason: $actionReason');
+        throw Exception('Your account has been temporarily suspended\n\nReason: $profileActionReason');
       }
+
       if (profileStatus == 'removed') {
-        await _supabase.auth.signOut();
-        throw Exception('Your account access has been removed.\n\nReason: $actionReason');
+        throw Exception('Your account has been permanently removed\n\nReason: $profileActionReason');
       }
-      if (profileStatus != 'active' || requestStatus != 'approved') {
-        await _supabase.auth.signOut();
-        throw Exception('Unauthorized Account State. Please contact support.');
-      }
-      if (profileData == null) {
-        throw Exception("Profile initialization records missing.");
-      }
-      return UserModel.fromJson(profileData);
-    } catch (e) {
-      await _supabase.auth.signOut();
-      rethrow;
+    } else {
+      // Optional: Handle case where user is allowed by signup_requests but has no matching profile record
+      throw Exception('No account found associated with the entered phone number');
     }
+
+    // 4. If all validations pass, proceed to authenticating the session
+    final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
+
+    if (response.user == null) {
+      throw Exception("Login failed. Invalid credentials.");
+    }
+
+    // Return the verified user model
+    return UserModel.fromJson(profileData);
   }
 
   @override
@@ -72,7 +72,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String role,
     String? gender,
     String? qualification,
-    String? schoolId,
+    List<String>? schoolIds,
     String? pushToken,
   }) async {
     final phone = _normalizePhone(identifier);
@@ -87,15 +87,14 @@ class AuthRepositoryImpl implements AuthRepository {
         'status': 'pending',
         'push_token': pushToken,
         'qualification': qualification,
-        'school_id': schoolId,
       },
     );
     if (authResponse.user == null) {
       throw Exception("Signup registration sequence failed.");
     }
-
+    final userId = authResponse.user!.id;
     await _supabase.from('signup_requests').insert({
-      'id': authResponse.user!.id,
+      'id': userId,
       'phone': phone,
       'first_name': firstName.trim(),
       'last_name': lastName.trim(),
@@ -104,8 +103,12 @@ class AuthRepositoryImpl implements AuthRepository {
       'status': 'pending',
       'push_token': pushToken,
       'qualification': qualification,
-      'school_id': schoolId,
     });
+
+    if (schoolIds != null && schoolIds.isNotEmpty) {
+      final junctionRows = schoolIds.map((sid) => {'user_id': userId, 'school_id': sid}).toList();
+      await _supabase.from('signup_request_schools').insert(junctionRows);
+    }
   }
 
   @override
@@ -243,7 +246,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String firstName,
     required String lastName,
     String? qualification,
-    String? schoolId,
+    List<String>? schoolIds,
   }) async {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception("No authenticated user found.");
@@ -256,9 +259,18 @@ class AuthRepositoryImpl implements AuthRepository {
     };
     if (!isAdmin) {
       if (qualification != null) updateData['qualification'] = qualification;
-      if (schoolId != null) updateData['school_id'] = schoolId;
     }
     await _supabase.from('profiles').update(updateData).eq('id', user.id);
     await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
+
+    if (!isAdmin && schoolIds != null) {
+      // 🔗 Updated filter key to match profile_schools schema
+      await _supabase.from('profile_schools').delete().eq('profile_id', user.id);
+      if (schoolIds.isNotEmpty) {
+        // 🔗 Updated assignment map to target profile_id
+        final profileSchoolRows = schoolIds.map((sid) => {'profile_id': user.id, 'school_id': sid}).toList();
+        await _supabase.from('profile_schools').insert(profileSchoolRows);
+      }
+    }
   }
 }
