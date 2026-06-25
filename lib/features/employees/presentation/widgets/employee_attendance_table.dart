@@ -71,7 +71,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
 
-      // Added attendance_time_variance directly into select block context
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
@@ -103,7 +102,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       };
     }
 
-    // Sort records chronologically so entries build systematically
     final sortedRecords = List.from(attendanceRecords)
       ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
 
@@ -121,25 +119,20 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
 
       if (!currentMap.containsKey(dateKey)) {
-        // First entry of the day
         currentMap[dateKey] = {'status': 'present', 'location': currentSchoolName, 'variance': currentVariance};
       } else {
-        // Cumulative Day Evaluator: If either event fails, poison the flag state for the day
         final existingData = currentMap[dateKey] as Map<String, dynamic>;
 
-        // 1. Location Rule: If check-in OR check-out was off-site, the whole day drops to off-site status
         String finalLocation = existingData['location'];
         if (currentSchoolName == "off-site" || finalLocation == "off-site") {
           finalLocation = "off-site";
         }
 
-        // 2. Timing Rule: If either event is not perfect ("00:00:00"), preserve the violating variance string
         String finalVariance = existingData['variance'];
         bool currentHasError = currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
         bool existingHasError = finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
 
         if (currentHasError || existingHasError) {
-          // If the new record carries an explicit failure message, or if a failure was already registered, prioritize the error string
           finalVariance = currentHasError ? currentVariance : finalVariance;
         }
 
@@ -327,7 +320,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
               final variance = record != null ? record['variance'].toString() : "99:99:99";
 
-              // Increment toward total column count only if they are perfectly valid (on-site and on-time)
               if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000")) {
                 count++;
               }
@@ -495,7 +487,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                                   final bool isCorrectLocation = location != "off-site";
                                                   final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
 
-                                                  // IMPLEMENTING SETTLED MATRIX RULE ENGINE RULES
                                                   if (isCorrectLocation && isOnTime) {
                                                     return const Icon(Icons.check, color: Colors.green, size: 28);
                                                   } else if (isCorrectLocation && !isOnTime) {
@@ -503,11 +494,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                                   } else if (!isCorrectLocation && isOnTime) {
                                                     return const Icon(Icons.wrong_location, color: Colors.amber, size: 22);
                                                   } else {
-                                                    return const Icon(
-                                                      Icons.warning,
-                                                      color: Colors.purple,
-                                                      size: 22,
-                                                    ); // Deep Purple fallback
+                                                    return const Icon(Icons.warning, color: Colors.purple, size: 22);
                                                   }
                                                 }())
                                               : isFutureOrToday
