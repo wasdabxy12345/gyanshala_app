@@ -667,12 +667,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                               ),
                             ),
                             const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8.0),
+                              padding: EdgeInsets.symmetric(),
                               child: Row(
                                 children: [
                                   Expanded(child: Divider()),
                                   Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                    padding: EdgeInsets.symmetric(),
                                     child: Text("OR MANUALLY", style: TextStyle(fontSize: 13, color: Colors.grey)),
                                   ),
                                   Expanded(child: Divider()),

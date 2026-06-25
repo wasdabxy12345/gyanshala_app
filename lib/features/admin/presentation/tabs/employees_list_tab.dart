@@ -425,7 +425,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
     return Scaffold(
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        // 💡 Updated query array to filter on our updated internal enum names matching the database entries
         stream: supabase.from('profiles').stream(primaryKey: ['id']).inFilter('role', [
           'shikshaMitra38',
           'shikshaMitra910',

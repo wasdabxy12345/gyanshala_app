@@ -18,7 +18,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   final _searchController = TextEditingController();
   int _sortColumnIndex = 8;
   bool _isAscending = false;
-
   Set<String>? _selectedNameFilters;
   Set<String>? _selectedPhoneFilters;
   Set<String>? _selectedRoleFilters;
@@ -29,11 +28,9 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
   Set<String>? _selectedQualificationFilters;
   late DateTimeRange _selectedDateRange;
   Set<String>? _selectedTimeFilters;
-
   List<Map<String, dynamic>> _rawRequests = [];
   List<Map<String, dynamic>> _filteredRequests = [];
   RealtimeChannel? _realtimeChannel;
-
   @override
   void initState() {
     super.initState();
@@ -63,45 +60,68 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
   Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
     final requestSchoolsList = row['signup_request_schools'] as List<dynamic>?;
-
     final profileSchoolsList = row['profile_schools'] as List<dynamic>?;
-
     final schoolsRelations = [...(requestSchoolsList ?? []), ...(profileSchoolsList ?? [])];
 
-    final schoolNames = <String>{};
-    final villageNames = <String>{};
-    final clusterNames = <String>{};
+    final List<Map<String, String>> structuralList = [];
 
     for (final relation in schoolsRelations) {
       final school = relation['schools'] as Map<String, dynamic>?;
-
       if (school == null) continue;
 
-      final schoolName = school['name']?.toString();
-      if (schoolName != null) {
-        schoolNames.add(schoolName);
-      }
-
+      final schoolName = school['name']?.toString() ?? "-";
       final village = school['villages'] as Map<String, dynamic>?;
+      final villageName = village?['name']?.toString() ?? "-";
+      final cluster = village?['clusters'] as Map<String, dynamic>?;
+      final clusterName = cluster?['name']?.toString() ?? "-";
 
-      if (village != null) {
-        final villageName = village['name']?.toString();
+      structuralList.add({'cluster': clusterName, 'village': villageName, 'school': schoolName});
+    }
+    structuralList.sort((a, b) {
+      int clusterCompare = a['cluster']!.compareTo(b['cluster']!);
+      if (clusterCompare != 0) return clusterCompare;
+      int villageCompare = a['village']!.compareTo(b['village']!);
+      if (villageCompare != 0) return villageCompare;
+      return a['school']!.compareTo(b['school']!);
+    });
 
-        if (villageName != null) {
-          villageNames.add(villageName);
-        }
+    final List<String> clusterLines = [];
+    final List<String> villageLines = [];
+    final List<String> schoolLines = [];
 
-        final cluster = village['clusters'] as Map<String, dynamic>?;
+    String lastCluster = "";
+    String lastVillage = "";
+    bool isFirstRow = true;
 
-        final clusterName = cluster?['name']?.toString();
+    for (final item in structuralList) {
+      final currentCluster = item['cluster']!;
+      final currentVillage = item['village']!;
+      final currentSchool = item['school']!;
 
-        if (clusterName != null) {
-          clusterNames.add(clusterName);
-        }
-      }
+      bool isNewCluster = currentCluster != lastCluster;
+      bool isNewVillage = currentVillage != lastVillage;
+      bool globalBlockChanged = !isFirstRow && (isNewCluster || isNewVillage);
+      if (isNewCluster) {
+        clusterLines.add(isFirstRow ? currentCluster : "[LINE]$currentCluster");
+        lastCluster = currentCluster;
+        lastVillage = "";
+      } else
+        clusterLines.add(globalBlockChanged ? "[SPACE]" : "");
+
+      if (currentVillage != lastVillage) {
+        villageLines.add(isFirstRow ? currentVillage : "[LINE]$currentVillage");
+        lastVillage = currentVillage;
+      } else
+        villageLines.add(globalBlockChanged ? "[SPACE]" : "");
+
+      schoolLines.add(globalBlockChanged ? "[LINE]$currentSchool" : currentSchool);
+
+      isFirstRow = false;
     }
 
-    return {'cluster': clusterNames.join(', '), 'village': villageNames.join(', '), 'school': schoolNames.join(', ')};
+    if (clusterLines.isEmpty) return {'cluster': '-', 'village': '-', 'school': '-'};
+
+    return {'cluster': clusterLines.join('\n'), 'village': villageLines.join('\n'), 'school': schoolLines.join('\n')};
   }
 
   Future<String?> _showActionReasonDialog({
@@ -206,12 +226,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       final cluster = loc['cluster']!;
       final village = loc['village']!;
       final school = loc['school']!;
-
       final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
       final createdAt = _parseDateTimeSafely(dateField);
       if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) return false;
       final signupTime = DateFormat('hh:mm a').format(createdAt);
-
       final matchesSearch =
           query.isEmpty ||
           fullName.toLowerCase().contains(query) ||
@@ -223,7 +241,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
           school.toLowerCase().contains(query) ||
           qualification.toLowerCase().contains(query) ||
           signupTime.toLowerCase().contains(query);
-
       if (!matchesSearch) return false;
       if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
@@ -236,7 +253,6 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
       return true;
     }).toList();
-
     setState(() {
       _filteredRequests = result;
       _applySorting();
@@ -383,7 +399,6 @@ villages:village_id (name, clusters:cluster_id (name))
 )
 )
 ''';
-
     return Stream.fromFuture(
       supabase
           .from(table)
@@ -697,7 +712,6 @@ villages:village_id (name, clusters:cluster_id (name))
   Widget _buildTable({required String statusFilter, required bool isProfileTable}) {
     final table = isProfileTable ? 'profiles' : 'signup_requests';
     final statusColumn = isProfileTable ? 'account_status' : 'status';
-
     return Column(
       children: [
         _buildDateControls(),
@@ -707,17 +721,14 @@ villages:village_id (name, clusters:cluster_id (name))
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text('Error resolving rows: ${snapshot.error}'));
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
               _rawRequests = snapshot.data!;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _applyAllFilters();
                 }
               });
-
               final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
               final defaultEnd = defaultStart.add(const Duration(days: 6));
-
               return Column(
                 children: [
                   Expanded(
@@ -832,7 +843,6 @@ villages:village_id (name, clusters:cluster_id (name))
                                     final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
                                     final parsedDate = _parseDateTimeSafely(dateField);
                                     final locationInfo = _extractLocationNames(req);
-
                                     return TableRow(
                                       children: [
                                         _DataCell(text: currentName, isBold: true),
@@ -1146,19 +1156,57 @@ class _SortableHeader extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
+
   const _DataCell({required this.text, this.isBold = false});
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          color: text == "-" ? Colors.grey : AppTheme.textPrimary,
-        ),
-      ),
+    final lines = text.split('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: lines.map((line) {
+        bool drawDivider = line.startsWith("[LINE]");
+        bool addLineSpacing = line.startsWith("[SPACE]");
+
+        String cleanText = line.replaceFirst("[LINE]", "").replaceFirst("[SPACE]", "");
+        Widget lineWidget = Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 3),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 22),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              cleanText,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                color: cleanText == "-" || cleanText.isEmpty ? Colors.grey : AppTheme.textPrimary,
+              ),
+            ),
+          ),
+        );
+
+        if (drawDivider) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Divider(color: Colors.grey.shade300, thickness: 0.8, height: 1, indent: 0, endIndent: 0),
+              lineWidget,
+            ],
+          );
+        }
+
+        if (addLineSpacing) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [const SizedBox(height: 13), lineWidget],
+          );
+        }
+
+        return lineWidget;
+      }).toList(),
     );
   }
 }
