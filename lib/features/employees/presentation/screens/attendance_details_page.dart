@@ -14,13 +14,14 @@ class AttendanceDetailsPage extends ConsumerWidget {
   final String userId;
   final String dateString;
   const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
+
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
     try {
       final futures = await Future.wait([
         supabase
             .from('employee_attendance')
-            .select('*, schools(name)')
+            .select('*, schools(name)') // Fetches the attendance_time_variance column automatically inside '*'
             .eq('user_id', userId)
             .gte('recorded_at', '$dateString 00:00:00+00')
             .lte('recorded_at', '$dateString 23:59:59+00')
@@ -29,6 +30,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
       ]);
       final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
       final List<Map<String, dynamic>> schools = List<Map<String, dynamic>>.from(futures[1]);
+
       if (logs.isNotEmpty) {
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
@@ -103,6 +105,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool useWideLayout = screenWidth > 850;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Daily Attendance Summary')),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -126,9 +129,11 @@ class AttendanceDetailsPage extends ConsumerWidget {
           final data = snapshot.data;
           final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
           final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
+
           if (logs.isEmpty) {
             return const Center(child: Text('No details available for this day.'));
           }
+
           final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null
               ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
@@ -136,6 +141,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
           final role = profile?['role'] ?? 'N/A';
           final formattedDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(logs.first['recorded_at']).toLocal());
           final totalHours = _calculateTotalHours(logs);
+
           Widget logsDetailsPanel() {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,12 +159,42 @@ class AttendanceDetailsPage extends ConsumerWidget {
                   final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
                   final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
                   final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+
+                  // Geofence Check and Location Safety Fallbacks
                   final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
                   final bool isAtSchool = matchingSchool != null;
                   final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "off-site";
+
+                  // Extracting Time Variances with Fallback Logic
+                  final String variance = log['attendance_time_variance']?.toString() ?? "99:99:99";
+                  final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
+
+                  // Evaluating Context Matrix Styling Configuration Variables
+                  IconData statusIcon;
+                  Color statusColor;
+                  String statusLabel;
+
+                  if (isAtSchool && isOnTime) {
+                    statusIcon = Icons.check;
+                    statusColor = Colors.green;
+                    statusLabel = isCheckIn ? "On-Time Check In" : "On-Time Check Out";
+                  } else if (isAtSchool && !isOnTime) {
+                    statusIcon = Icons.access_time;
+                    statusColor = Colors.amber;
+                    statusLabel = variance == "99:99:99" ? "Timing Untracked" : "Wrong Time (Variance: $variance)";
+                  } else if (!isAtSchool && isOnTime) {
+                    statusIcon = Icons.wrong_location;
+                    statusColor = Colors.amber;
+                    statusLabel = "Off-Site Check";
+                  } else {
+                    statusIcon = Icons.warning;
+                    statusColor = Colors.purple; // Deep Purple Warning Configuration
+                    statusLabel = variance == "99:99:99" ? "Off-Site & Untracked" : "Off-Site & Wrong Time ($variance)";
+                  }
+
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(isCheckIn ? Icons.login : Icons.logout, color: isAtSchool ? Colors.green : Colors.red),
+                    leading: Icon(statusIcon, color: statusColor, size: 26),
                     title: Row(
                       children: [
                         Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -166,22 +202,27 @@ class AttendanceDetailsPage extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isAtSchool ? Colors.green.shade50 : Colors.red.shade50,
-                            border: Border.all(color: isAtSchool ? Colors.green : Colors.red, width: 0.5),
+                            color: statusColor.withValues(alpha: 0.1),
+                            border: Border.all(color: statusColor, width: 0.5),
                           ),
                           child: Text(
-                            isAtSchool ? "At a school" : "Not at a school",
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: isAtSchool ? Colors.green : Colors.red,
-                            ),
+                            isAtSchool ? "School Grounds" : "Off-Site",
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
                           ),
                         ),
                       ],
                     ),
-                    subtitle: Text(presenceSubtitle),
-                    trailing: Text(timeStr, style: const TextStyle(fontSize: 13)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(presenceSubtitle),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    trailing: Text(timeStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                   );
                 }),
               ],
@@ -235,6 +276,7 @@ class AttendanceMultiMapView extends StatefulWidget {
     required this.employeeName,
     this.height = 280,
   });
+
   @override
   State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
 }
@@ -248,6 +290,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   final Set<Polyline> _polylines = {};
   LatLngBounds? _mapBounds;
   bool _isLoadingIcons = true;
+
   @override
   void initState() {
     super.initState();
@@ -262,25 +305,30 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     final paint = Paint()
       ..color = badgeColor
       ..style = PaintingStyle.fill;
+
     final RRect rRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble() - 10),
       const Radius.circular(8),
     );
     canvas.drawRRect(rRect, paint);
+
     final path = Path();
     path.moveTo(width / 2 - 10, height - 10);
     path.lineTo(width / 2 + 10, height - 10);
     path.lineTo(width / 2, height.toDouble());
     path.close();
     canvas.drawPath(path, paint);
+
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center);
     textPainter.text = TextSpan(
       text: text,
       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
     );
     textPainter.layout(minWidth: 0, maxWidth: width.toDouble());
+
     final offset = Offset((width - textPainter.width) / 2, ((height - 10) - textPainter.height) / 2);
     textPainter.paint(canvas, offset);
+
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(width, height);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -292,6 +340,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     List<LatLng> tracePoints = [];
     final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.blue);
     final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue);
+
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
       final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
@@ -318,6 +367,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         );
       }
     }
+
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
       final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
@@ -335,15 +385,18 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         );
       }
     }
+
     if (tracePoints.length > 1) {
       _polylines.add(Polyline(polylineId: const PolylineId('route_trace'), points: tracePoints, color: Colors.black54, width: 3));
     }
+
     final pointsToBound = tracePoints.isNotEmpty ? tracePoints : _markers.map((m) => m.position).toList();
     if (pointsToBound.isNotEmpty) {
       double minLat = pointsToBound.first.latitude;
       double maxLat = pointsToBound.first.latitude;
       double minLng = pointsToBound.first.longitude;
       double maxLng = pointsToBound.first.longitude;
+
       for (var p in pointsToBound) {
         if (p.latitude < minLat) minLat = p.latitude;
         if (p.latitude > maxLat) maxLat = p.latitude;
@@ -355,6 +408,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         northeast: LatLng(maxLat + 0.002, maxLng + 0.002),
       );
     }
+
     if (mounted) {
       setState(() {
         _isLoadingIcons = false;
@@ -449,36 +503,31 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         opaque: false,
         barrierDismissible: true,
         pageBuilder: (_, _, _) {
-          return StatefulBuilder(
-            builder: (fsContext, setFsState) {
-              return Scaffold(
-                backgroundColor: Colors.black38,
-                body: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(3),
-                    child: Material(
-                      elevation: 13,
-                      child: Column(
-                        children: [
-                          Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                            child: _buildMapHeader(
-                              expanded: true,
-                              onRefresh: () {
-                                setFsState(() {});
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          Expanded(child: _buildBaseMapWidget()),
-                        ],
+          return Scaffold(
+            backgroundColor: Colors.black38,
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: Material(
+                  elevation: 13,
+                  child: Column(
+                    children: [
+                      Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                        child: _buildMapHeader(
+                          expanded: true,
+                          onRefresh: () {
+                            if (mounted) setState(() {});
+                          },
+                        ),
                       ),
-                    ),
+                      Expanded(child: _buildBaseMapWidget()),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           );
         },
       ),
