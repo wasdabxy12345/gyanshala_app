@@ -498,17 +498,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     int mapRefreshKey = 0;
 
     double initialLat = config.isEditMode && config.entity['latitude'] != null
-        ? double.tryParse(config.entity['latitude'].toString()) ?? 0.0
-        : 0.0;
+        ? double.tryParse(config.entity['latitude'].toString()) ?? 0
+        : 0;
     double initialLng = config.isEditMode && config.entity['longitude'] != null
-        ? double.tryParse(config.entity['longitude'].toString()) ?? 0.0
-        : 0.0;
-    LatLng? selectedLatLng = initialLat != 0.0 || initialLng != 0.0 ? LatLng(initialLat, initialLng) : null;
+        ? double.tryParse(config.entity['longitude'].toString()) ?? 0
+        : 0;
+    LatLng? selectedLatLng = initialLat != 0 || initialLng != 0 ? LatLng(initialLat, initialLng) : null;
 
     void updateMapLocation() {
       final double? lat = double.tryParse(latController.text.trim());
       final double? lng = double.tryParse(lngController.text.trim());
-      final double radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+      final double radius = double.tryParse(radiusController.text.trim()) ?? 50;
 
       if (lat != null && lng != null && mapController != null) {
         _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);

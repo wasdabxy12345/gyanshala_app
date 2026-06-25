@@ -6,7 +6,6 @@ import 'package:gyanshala_app/features/settings/presentation/views/settings_scre
 import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
 
-// 💡 Completely renamed class to support Mentor (BV-8) schema structures
 class MentorBv8DashboardScreen extends ConsumerWidget {
   final String mentorName;
   const MentorBv8DashboardScreen({super.key, required this.mentorName});

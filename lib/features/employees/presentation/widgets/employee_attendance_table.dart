@@ -60,21 +60,24 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     try {
       final supabase = ref.read(supabaseClientProvider);
       final employeesRaw =
-          ((await supabase.from('profiles').select('id, first_name, last_name').inFilter(
-                    'role',
-                    // 💡 Updated backend query array strings to fetch all our newly customized user roles cleanly
-                    ['shikshaMitra38', 'shikshaMitra910', 'mentorBV8'],
-                  ))
+          ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', [
+                    'shikshaMitra38',
+                    'shikshaMitra910',
+                    'mentorBV8',
+                  ]))
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
 
+      // Added attendance_time_variance directly into select block context
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
-                  .select('id, user_id, latitude, longitude, status, recorded_at, school_id, schools(name)')
+                  .select(
+                    'id, user_id, latitude, longitude, status, recorded_at, school_id, attendance_time_variance, schools(name)',
+                  )
                   .gte('recorded_at', utcRange.start.toIso8601String())
                   .lte('recorded_at', utcRange.end.toIso8601String()))
               as List<dynamic>;
@@ -89,6 +92,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     final List<Map<String, dynamic>> employees = List<Map<String, dynamic>>.from(rawPayload['employees']);
     final List<dynamic> attendanceRecords = rawPayload['records'];
     Map<String, Map<String, dynamic>> employeeData = {};
+
     for (final employee in employees) {
       employeeData[employee['id']] = {
         'user_id': employee['id'],
@@ -98,18 +102,48 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         'attendance_map': <String, dynamic>{},
       };
     }
-    for (final record in attendanceRecords) {
+
+    // Sort records chronologically so entries build systematically
+    final sortedRecords = List.from(attendanceRecords)
+      ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
+
+    for (final record in sortedRecords) {
       final userId = record['user_id'];
-      final status = record['status'];
+      if (!employeeData.containsKey(userId)) continue;
+
       final recordedAt = DateTime.parse(record['recorded_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
+
       final schoolData = record['schools'];
-      final schoolName = schoolData != null ? schoolData['name'] : "off-site";
-      if (employeeData.containsKey(userId)) {
-        final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
-        if (status == 'check_in' || !currentMap.containsKey(dateKey)) {
-          currentMap[dateKey] = {'status': 'present', 'location': schoolName};
+      final currentSchoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
+      final currentVariance = record['attendance_time_variance']?.toString() ?? "99:99:99";
+
+      final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
+
+      if (!currentMap.containsKey(dateKey)) {
+        // First entry of the day
+        currentMap[dateKey] = {'status': 'present', 'location': currentSchoolName, 'variance': currentVariance};
+      } else {
+        // Cumulative Day Evaluator: If either event fails, poison the flag state for the day
+        final existingData = currentMap[dateKey] as Map<String, dynamic>;
+
+        // 1. Location Rule: If check-in OR check-out was off-site, the whole day drops to off-site status
+        String finalLocation = existingData['location'];
+        if (currentSchoolName == "off-site" || finalLocation == "off-site") {
+          finalLocation = "off-site";
         }
+
+        // 2. Timing Rule: If either event is not perfect ("00:00:00"), preserve the violating variance string
+        String finalVariance = existingData['variance'];
+        bool currentHasError = currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
+        bool existingHasError = finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
+
+        if (currentHasError || existingHasError) {
+          // If the new record carries an explicit failure message, or if a failure was already registered, prioritize the error string
+          finalVariance = currentHasError ? currentVariance : finalVariance;
+        }
+
+        currentMap[dateKey] = {'status': 'present', 'location': finalLocation, 'variance': finalVariance};
       }
     }
     return {'employees': employeeData, 'records': attendanceRecords};
@@ -120,11 +154,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final data = await _loadDataPipeline();
       final employeeMap = data['employees'] as Map<String, dynamic>;
       final List<dynamic> rawRecords = data['records'];
-
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
-
-      final headers = ["User's Name", 'Latitude', 'Longitude', 'Status', 'Recorded At', 'School'];
+      final headers = ["User's Name", 'Latitude', 'Longitude', 'Status', 'Recorded At', 'School', 'Time Variance'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
       for (final record in rawRecords) {
@@ -139,12 +171,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         final double? lat = record['latitude'] != null ? double.tryParse(record['latitude'].toString()) : null;
         final double? lng = record['longitude'] != null ? double.tryParse(record['longitude'].toString()) : null;
         final String status = record['status'] ?? '';
-
         final DateTime localRecordedAt = DateTime.parse(record['recorded_at']).toLocal();
         final String formattedDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(localRecordedAt);
-
         final schoolData = record['schools'];
-        final String schoolName = schoolData != null ? schoolData['name'] : "off-site";
+        final String schoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
+        final String variance = record['attendance_time_variance']?.toString() ?? "99:99:99";
 
         sheet.appendRow([
           TextCellValue(fullName),
@@ -153,6 +184,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           TextCellValue(status),
           TextCellValue(formattedDate),
           TextCellValue(schoolName),
+          TextCellValue(variance),
         ]);
       }
 
@@ -181,18 +213,15 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         if (!status.isGranted) {
           status = await Permission.manageExternalStorage.request();
         }
-        Directory? downloadsDir;
-        downloadsDir = Directory('/storage/emulated/0/Download');
+        Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
           downloadsDir = externalDirs != null && externalDirs.isNotEmpty
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
         }
-
         final file = File('${downloadsDir.path}/$fileName');
         await file.writeAsBytes(bytes);
-
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -203,20 +232,13 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     icon: const Icon(Icons.close, color: Colors.red),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    },
+                    onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                   ),
                   const SizedBox(width: 13),
                   Expanded(child: Text("Saved to Downloads: $fileName", softWrap: true)),
                 ],
               ),
-              action: SnackBarAction(
-                label: "OPEN",
-                onPressed: () async {
-                  await OpenFilex.open(file.path);
-                },
-              ),
+              action: SnackBarAction(label: "OPEN", onPressed: () async => await OpenFilex.open(file.path)),
             ),
           );
         }
@@ -228,10 +250,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   }
 
   bool _isHoliday(DateTime date) => date.weekday == DateTime.sunday;
-
-  List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
-    return List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
-  }
+  List<DateTime> _getDatesInRange(DateTime start, DateTime end) =>
+      List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
 
   Size calcTextSize(BuildContext context, String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
@@ -252,27 +272,23 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     const double totalColumnWidth = 50;
     final double rowHeight = isMobile ? 42 : 31;
     const double headerHeight = 42;
+
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error fetching records: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("No attendance data found"));
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
+
         final employees =
             ((snapshot.data!['employees'] as Map<String, dynamic>).values
                     .map((e) => Map<String, dynamic>.from(e as Map))
                     .toList())
                 .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
                 .toList();
-        if (employees.isEmpty) {
-          return const Center(child: Text("No employees found"));
-        }
+
+        if (employees.isEmpty) return const Center(child: Text("No employees found"));
+
         double maxNameWidth = 0;
         const TextStyle nameStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
         for (final emp in employees) {
@@ -283,21 +299,22 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               : (emp['full_name'] ?? 'Unknown');
           final Size size = calcTextSize(context, textToMeasure, nameStyle);
           final double totalNeeded = size.width + 26.0;
-          if (totalNeeded > maxNameWidth) {
-            maxNameWidth = totalNeeded;
-          }
+          if (totalNeeded > maxNameWidth) maxNameWidth = totalNeeded;
         }
+
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
         final workingDaysCount = dates.where((d) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
         }).length;
+
         List<int> dailyTotals = [];
         double grandTotalPresent = 0;
         for (final d in dates) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           final bool isFutureOrToday =
               cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
+
           if (_isHoliday(d) || isFutureOrToday) {
             dailyTotals.add(-1);
           } else {
@@ -307,13 +324,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
               final record = attMap[key];
               final isPresent = record != null && record['status'] == 'present';
-              final location = record != null ? record['location'].toString().toLowerCase() : "";
-              if (isPresent && location != "off-site") count++;
+              final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
+              final variance = record != null ? record['variance'].toString() : "99:99:99";
+
+              // Increment toward total column count only if they are perfectly valid (on-site and on-time)
+              if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000")) {
+                count++;
+              }
             }
             dailyTotals.add(count);
             grandTotalPresent += count;
           }
         }
+
         return Container(
           decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
           child: Column(
@@ -438,11 +461,15 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                     final record = attMap[key];
                                     final holiday = _isHoliday(d);
                                     final isPresent = record != null && record['status'] == 'present';
-                                    final location = record != null ? record['location'].toString().toLowerCase() : "";
+
+                                    final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
+                                    final variance = record != null ? record['variance'].toString() : "99:99:99";
+
                                     final cellDateNormalized = DateTime(d.year, d.month, d.day);
                                     final bool isFutureOrToday =
                                         cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
                                         cellDateNormalized.isAfter(todayNormalized);
+
                                     return Container(
                                       width: dateCellWidth,
                                       height: double.infinity,
@@ -464,12 +491,28 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                           child: holiday
                                               ? const Icon(Icons.remove, color: Colors.grey, size: 13)
                                               : isPresent
-                                              ? (location != "off-site"
-                                                    ? const Icon(Icons.check, color: Colors.green, size: 37)
-                                                    : const Icon(Icons.warning, color: Colors.amber, size: 22))
+                                              ? (() {
+                                                  final bool isCorrectLocation = location != "off-site";
+                                                  final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
+
+                                                  // IMPLEMENTING SETTLED MATRIX RULE ENGINE RULES
+                                                  if (isCorrectLocation && isOnTime) {
+                                                    return const Icon(Icons.check, color: Colors.green, size: 28);
+                                                  } else if (isCorrectLocation && !isOnTime) {
+                                                    return const Icon(Icons.access_time, color: Colors.amber, size: 22);
+                                                  } else if (!isCorrectLocation && isOnTime) {
+                                                    return const Icon(Icons.wrong_location, color: Colors.amber, size: 22);
+                                                  } else {
+                                                    return const Icon(
+                                                      Icons.warning,
+                                                      color: Colors.purple,
+                                                      size: 22,
+                                                    ); // Deep Purple fallback
+                                                  }
+                                                }())
                                               : isFutureOrToday
                                               ? const SizedBox.shrink()
-                                              : const Icon(Icons.close, color: Colors.red, size: 17),
+                                              : const Icon(Icons.close, color: Colors.red, size: 15),
                                         ),
                                       ),
                                     );
@@ -498,8 +541,12 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                 final key = DateFormat('yyyy-MM-dd').format(d);
                                 final record = attMap[key];
                                 final isPresent = record != null && record['status'] == 'present';
-                                final location = record != null ? record['location'].toString().toLowerCase() : "";
-                                if (isPresent && location != "off-site") {
+                                final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
+                                final variance = record != null ? record['variance'].toString() : "99:99:99";
+
+                                if (isPresent &&
+                                    location != "off-site" &&
+                                    (variance == "00:00:00" || variance == "00:00:00.000")) {
                                   presentCount++;
                                 }
                               }
