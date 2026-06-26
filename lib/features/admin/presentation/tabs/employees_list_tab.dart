@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:universal_html/html.dart' as html;
 
 class EmployeeListTab extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   final Set<String> _selectedEmployeeIds = {};
   int _sortColumnIndex = 0;
   bool _isAscending = true;
+
   Set<String>? _selectedFirstNameFilters;
   Set<String>? _selectedLastNameFilters;
   Set<String>? _selectedPhoneFilters;
@@ -33,11 +35,128 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
+
   List<Map<String, dynamic>> _rawEmployees = [];
   List<Map<String, dynamic>> _filteredEmployees = [];
+  RealtimeChannel? _realtimeChannel;
 
   List<Map<String, dynamic>> get filteredEmployees => _filteredEmployees;
   Set<String> get selectedEmployeeIds => _selectedEmployeeIds;
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _setupRealtimeSubscription() {
+    _realtimeChannel?.unsubscribe();
+    final supabase = ref.read(supabaseClientProvider);
+    _realtimeChannel =
+        supabase
+            .channel('employee-mgmt-channel')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'profiles',
+              callback: (payload) {
+                if (mounted) setState(() {});
+              },
+            )
+          ..subscribe();
+  }
+
+  // Stream provider converting future relational matrix lookups safely without stream.select breaks
+  Stream<List<Map<String, dynamic>>> _fetchEmployeesStream() {
+    final supabase = ref.watch(supabaseClientProvider);
+    _setupRealtimeSubscription();
+
+    return Stream.fromFuture(
+      supabase
+          .from('profiles')
+          .select('*, profile_schools(schools(name, villages:village_id(name, clusters:cluster_id(name))))')
+          .or('role.eq.shikshaMitra38,role.eq.shikshaMitra910,role.eq.mentorBV8')
+          .then((data) => List<Map<String, dynamic>>.from(data as List)),
+    );
+  }
+
+  Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
+    final requestSchoolsList = row['signup_request_schools'] as List<dynamic>?;
+    final profileSchoolsList = row['profile_schools'] as List<dynamic>?;
+    final schoolsRelations = [...(requestSchoolsList ?? []), ...(profileSchoolsList ?? [])];
+    final List<Map<String, String>> structuralList = [];
+
+    for (final relation in schoolsRelations) {
+      final school = relation['schools'] as Map<String, dynamic>?;
+      if (school == null) continue;
+      final schoolName = school['name']?.toString() ?? "-";
+      final village = school['villages'] as Map<String, dynamic>?;
+      final villageName = village?['name']?.toString() ?? "-";
+      final cluster = village?['clusters'] as Map<String, dynamic>?;
+      final clusterName = cluster?['name']?.toString() ?? "-";
+      structuralList.add({'cluster': clusterName, 'village': villageName, 'school': schoolName});
+    }
+
+    structuralList.sort((a, b) {
+      int clusterCompare = a['cluster']!.compareTo(b['cluster']!);
+      if (clusterCompare != 0) return clusterCompare;
+      int villageCompare = a['village']!.compareTo(b['village']!);
+      if (villageCompare != 0) return villageCompare;
+      return a['school']!.compareTo(b['school']!);
+    });
+
+    final List<String> clusterLines = [];
+    final List<String> villageLines = [];
+    final List<String> schoolLines = [];
+    String lastCluster = "";
+    String lastVillage = "";
+    bool isFirstRow = true;
+
+    for (final item in structuralList) {
+      final currentCluster = item['cluster']!;
+      final currentVillage = item['village']!;
+      final currentSchool = item['school']!;
+      bool isNewCluster = currentCluster != lastCluster;
+      bool isNewVillage = currentVillage != lastVillage;
+      bool globalBlockChanged = !isFirstRow && (isNewCluster || isNewVillage);
+
+      if (isNewCluster) {
+        clusterLines.add(isFirstRow ? currentCluster : "[LINE]$currentCluster");
+        lastCluster = currentCluster;
+        lastVillage = "";
+      } else {
+        clusterLines.add(globalBlockChanged ? "[SPACE]" : "");
+      }
+
+      if (currentVillage != lastVillage) {
+        villageLines.add(isFirstRow ? currentVillage : "[LINE]$currentVillage");
+        lastVillage = currentVillage;
+      } else {
+        villageLines.add(globalBlockChanged ? "[SPACE]" : "");
+      }
+      schoolLines.add(globalBlockChanged ? "[LINE]$currentSchool" : currentSchool);
+      isFirstRow = false;
+    }
+
+    if (clusterLines.isEmpty) return {'cluster': '-', 'village': '-', 'school': '-'};
+    return {'cluster': clusterLines.join('\n'), 'village': villageLines.join('\n'), 'school': schoolLines.join('\n')};
+  }
+
+  List<String> _extractFlatLocationList(Map<String, dynamic> row, String type) {
+    final profileSchoolsList = row['profile_schools'] as List<dynamic>? ?? [];
+    final Set<String> items = {};
+    for (final relation in profileSchoolsList) {
+      final school = relation['schools'] as Map<String, dynamic>?;
+      if (school == null) continue;
+      if (type == 'school') items.add(school['name']?.toString() ?? "-");
+      final village = school['villages'] as Map<String, dynamic>?;
+      if (village == null) continue;
+      if (type == 'village') items.add(village['name']?.toString() ?? "-");
+      final cluster = village['clusters'] as Map<String, dynamic>?;
+      if (cluster != null && type == 'cluster') items.add(cluster['name']?.toString() ?? "-");
+    }
+    return items.isEmpty ? ["-"] : items.toList();
+  }
 
   Future<void> exportExcel() async {
     try {
@@ -45,7 +164,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No employee data found")));
         return;
       }
-
       final targetedEmployees = _selectedEmployeeIds.isNotEmpty
           ? _filteredEmployees.where((e) => _selectedEmployeeIds.contains(e['id'].toString())).toList()
           : _filteredEmployees;
@@ -55,19 +173,22 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         excel.delete('Sheet1');
       }
       final Sheet sheet = excel['Sheet1'];
-      final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Gender', 'Cluster', 'Village', 'School'];
+      final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Gender', 'Cluster(s)', 'Village(s)', 'School(s)'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
       for (final emp in targetedEmployees) {
+        final loc = _extractLocationNames(emp);
+        String cleanLoc(String val) => val.replaceAll("[LINE]", "").replaceAll("[SPACE]", "");
+
         sheet.appendRow([
           TextCellValue(emp['first_name']?.toString() ?? "-"),
           TextCellValue(emp['last_name']?.toString() ?? "-"),
           TextCellValue(emp['phone']?.toString() ?? "-"),
           TextCellValue(UserRole.fromString(emp['role']).label),
           TextCellValue(emp['gender']?.toString() ?? "-"),
-          TextCellValue(emp['cluster']?.toString() ?? "-"),
-          TextCellValue(emp['village']?.toString() ?? "-"),
-          TextCellValue(emp['school']?.toString() ?? "-"),
+          TextCellValue(cleanLoc(loc['cluster'] ?? "-")),
+          TextCellValue(cleanLoc(loc['village'] ?? "-")),
+          TextCellValue(cleanLoc(loc['school'] ?? "-")),
         ]);
       }
 
@@ -95,19 +216,15 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         if (!status.isGranted) {
           status = await Permission.manageExternalStorage.request();
         }
-
-        Directory? downloadsDir;
-        downloadsDir = Directory('/storage/emulated/0/Download');
+        Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
           downloadsDir = externalDirs != null && externalDirs.isNotEmpty
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
         }
-
         final file = File('${downloadsDir.path}/$fileName');
         await file.writeAsBytes(bytes);
-
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -118,20 +235,13 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                     icon: const Icon(Icons.close, color: Colors.red),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    },
+                    onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                   ),
                   const SizedBox(width: 13),
                   Expanded(child: Text("Saved to Downloads: $fileName", softWrap: true)),
                 ],
               ),
-              action: SnackBarAction(
-                label: "OPEN",
-                onPressed: () async {
-                  await OpenFilex.open(file.path);
-                },
-              ),
+              action: SnackBarAction(label: "OPEN", onPressed: () async => await OpenFilex.open(file.path)),
             ),
           );
         }
@@ -159,38 +269,34 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       String valA = "";
       String valB = "";
 
-      switch (_sortColumnIndex) {
-        case 0:
-          valA = a['first_name']?.toString() ?? "";
-          break;
-        case 1:
-          valA = a['last_name']?.toString() ?? "";
-          break;
-        case 2:
-          valA = a['phone']?.toString() ?? "";
-          break;
-        case 3:
-          valA = UserRole.fromString(a['role']).label;
-          valB = UserRole.fromString(b['role']).label;
-          int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
-          return _isAscending ? compare : -compare;
-        case 4:
-          valA = a['gender']?.toString() ?? "";
-          break;
-        case 5:
-          valA = a['cluster']?.toString() ?? "";
-          break;
-        case 6:
-          valA = a['village']?.toString() ?? "";
-          break;
-        case 7:
-          valA = a['school']?.toString() ?? "";
-          break;
+      if (_sortColumnIndex >= 5 && _sortColumnIndex <= 7) {
+        final locKey = _sortColumnIndex == 5 ? 'cluster' : (_sortColumnIndex == 6 ? 'village' : 'school');
+        valA = _extractLocationNames(a)[locKey] ?? "";
+        valB = _extractLocationNames(b)[locKey] ?? "";
+      } else {
+        switch (_sortColumnIndex) {
+          case 0:
+            valA = a['first_name']?.toString() ?? "";
+            break;
+          case 1:
+            valA = a['last_name']?.toString() ?? "";
+            break;
+          case 2:
+            valA = a['phone']?.toString() ?? "";
+            break;
+          case 3:
+            valA = UserRole.fromString(a['role']).label;
+            valB = UserRole.fromString(b['role']).label;
+            int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
+            return _isAscending ? compare : -compare;
+          case 4:
+            valA = a['gender']?.toString() ?? "";
+            break;
+        }
+        if (_sortColumnIndex != 3) {
+          valB = b[_getDatabaseKeyFromColumnIndex(_sortColumnIndex)]?.toString() ?? "";
+        }
       }
-      if (_sortColumnIndex != 3) {
-        valB = b[_getDatabaseKeyFromColumnIndex(_sortColumnIndex)]?.toString() ?? "";
-      }
-
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
       return _isAscending ? compare : -compare;
     });
@@ -206,12 +312,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         return 'phone';
       case 4:
         return 'gender';
-      case 5:
-        return 'cluster';
-      case 6:
-        return 'village';
-      case 7:
-        return 'school';
       default:
         return '';
     }
@@ -219,10 +319,8 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
   void _applyAllFilters() {
     final query = widget.searchQuery.toLowerCase().trim();
-    final result = _rawRequestsFilterPass(_rawEmployees, query);
-
     setState(() {
-      _filteredEmployees = result;
+      _filteredEmployees = _rawRequestsFilterPass(_rawEmployees, query);
       _applySorting();
     });
   }
@@ -235,9 +333,10 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       final phone = emp['phone']?.toString() ?? "";
       final roleLabel = UserRole.fromString(emp['role']).label;
       final gender = emp['gender']?.toString() ?? "";
-      final cluster = emp['cluster']?.toString() ?? "";
-      final village = emp['village']?.toString() ?? "";
-      final school = emp['school']?.toString() ?? "";
+
+      final empClusters = _extractFlatLocationList(emp, 'cluster');
+      final empVillages = _extractFlatLocationList(emp, 'village');
+      final empSchools = _extractFlatLocationList(emp, 'school');
 
       final matchesSearch =
           searchStr.isEmpty ||
@@ -245,19 +344,21 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           phone.toLowerCase().contains(searchStr) ||
           roleLabel.toLowerCase().contains(searchStr) ||
           gender.toLowerCase().contains(searchStr) ||
-          cluster.toLowerCase().contains(searchStr) ||
-          village.toLowerCase().contains(searchStr) ||
-          school.toLowerCase().contains(searchStr);
+          empClusters.any((c) => c.toLowerCase().contains(searchStr)) ||
+          empVillages.any((v) => v.toLowerCase().contains(searchStr)) ||
+          empSchools.any((s) => s.toLowerCase().contains(searchStr));
 
       if (!matchesSearch) return false;
+
       if (_selectedFirstNameFilters != null && !_selectedFirstNameFilters!.contains(firstName)) return false;
       if (_selectedLastNameFilters != null && !_selectedLastNameFilters!.contains(lastName)) return false;
       if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
       if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(emp['role']?.toString())) return false;
       if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender)) return false;
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
-      if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
-      if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
+
+      if (_selectedClusterFilters != null && !empClusters.any((c) => _selectedClusterFilters!.contains(c))) return false;
+      if (_selectedVillageFilters != null && !empVillages.any((v) => _selectedVillageFilters!.contains(v))) return false;
+      if (_selectedSchoolFilters != null && !empSchools.any((s) => _selectedSchoolFilters!.contains(s))) return false;
 
       return true;
     }).toList();
@@ -283,13 +384,13 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           if (emp['gender'] != null) values.add(emp['gender'].toString());
           break;
         case 5:
-          if (emp['cluster'] != null) values.add(emp['cluster'].toString());
+          values.addAll(_extractFlatLocationList(emp, 'cluster'));
           break;
         case 6:
-          if (emp['village'] != null) values.add(emp['village'].toString());
+          values.addAll(_extractFlatLocationList(emp, 'village'));
           break;
         case 7:
-          if (emp['school'] != null) values.add(emp['school'].toString());
+          values.addAll(_extractFlatLocationList(emp, 'school'));
           break;
       }
     }
@@ -299,6 +400,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
     Set<String> currentSelection;
+
     if (columnIndex == 0)
       currentSelection = _selectedFirstNameFilters != null ? Set.from(_selectedFirstNameFilters!) : Set.from(allValues);
     else if (columnIndex == 1)
@@ -421,21 +523,22 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
   @override
   Widget build(BuildContext context) {
-    final supabase = ref.watch(supabaseClientProvider);
-
     return Scaffold(
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: supabase.from('profiles').stream(primaryKey: ['id']).inFilter('role', [
-          'shikshaMitra38',
-          'shikshaMitra910',
-          'mentorBV8',
-        ]),
+        stream: _fetchEmployeesStream(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) return Center(child: Text('Error resolving rows: ${snapshot.error}'));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          _rawEmployees = List<Map<String, dynamic>>.from(snapshot.data!);
-          final query = widget.searchQuery.toLowerCase().trim();
-          _filteredEmployees = _rawRequestsFilterPass(_rawEmployees, query);
-          _applySorting();
+
+          _rawEmployees = snapshot.data!;
+
+          // Schedules filter execution post render pass safely matching frame loops
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _applyAllFilters();
+            }
+          });
+
           bool hasActiveFilters = [
             _selectedFirstNameFilters,
             _selectedLastNameFilters,
@@ -503,18 +606,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: Table(
-                              defaultColumnWidth: const FixedColumnWidth(135),
-                              columnWidths: const {
-                                0: FixedColumnWidth(50), // Checkbox
-                                1: FixedColumnWidth(140), // First Name
-                                2: FixedColumnWidth(140), // Last Name
-                                3: FixedColumnWidth(110), // Phone
-                                4: FixedColumnWidth(120), // Role
-                                5: FixedColumnWidth(100), // Gender
-                                6: FixedColumnWidth(120), // Cluster
-                                7: FixedColumnWidth(110), // Village
-                                8: FixedColumnWidth(130), // School
-                              },
+                              defaultColumnWidth: const IntrinsicColumnWidth(),
                               border: TableBorder(
                                 verticalInside: BorderSide(color: Colors.grey.shade300),
                                 horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
@@ -613,6 +705,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                 ..._filteredEmployees.map((emp) {
                                   final empId = emp['id'].toString();
                                   final isRowSelected = _selectedEmployeeIds.contains(empId);
+                                  final locations = _extractLocationNames(emp);
 
                                   return TableRow(
                                     decoration: BoxDecoration(color: isRowSelected ? Colors.blue.withValues(alpha: 0.04) : null),
@@ -639,9 +732,9 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                       _DataCell(text: emp['phone']?.toString() ?? "-"),
                                       _DataCell(text: UserRole.fromString(emp['role']).label),
                                       _DataCell(text: emp['gender']?.toString() ?? "-"),
-                                      _DataCell(text: emp['cluster']?.toString() ?? "-"),
-                                      _DataCell(text: emp['village']?.toString() ?? "-"),
-                                      _DataCell(text: emp['school']?.toString() ?? "-"),
+                                      _DataCell(text: locations['cluster'] ?? "-"),
+                                      _DataCell(text: locations['village'] ?? "-"),
+                                      _DataCell(text: locations['school'] ?? "-"),
                                     ],
                                   );
                                 }),
@@ -681,6 +774,7 @@ class _SortableHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Expanded(
             child: InkWell(
@@ -698,7 +792,7 @@ class _SortableHeader extends StatelessWidget {
                   const SizedBox(width: 2),
                   Icon(
                     isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
-                    size: 14,
+                    size: 13,
                     color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
                 ],
@@ -709,8 +803,8 @@ class _SortableHeader extends StatelessWidget {
             onTap: onFilter,
             child: Container(
               padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withValues(alpha: 0.15) : Colors.transparent),
-              child: Icon(Icons.filter_alt, size: 16, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
+              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withAlpha(33) : Colors.transparent),
+              child: Icon(Icons.filter_alt, size: 13, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
             ),
           ),
         ],
@@ -722,20 +816,60 @@ class _SortableHeader extends StatelessWidget {
 class _DataCell extends StatelessWidget {
   final String text;
   final bool isBold;
-
   const _DataCell({required this.text, this.isBold = false});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          color: text == "-" ? Colors.grey : AppTheme.textPrimary,
-        ),
+    final lines = text.split('\n');
+    return TableCell(
+      // CHANGE THIS FROM .middle TO .top TO FIX THE ALIGNMENT SHIFT
+      verticalAlignment: TableCellVerticalAlignment.top,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: lines.map((line) {
+          bool drawDivider = line.startsWith("[LINE]");
+          bool addLineSpacing = line.startsWith("[SPACE]");
+          String cleanText = line.replaceFirst("[LINE]", "").replaceFirst("[SPACE]", "");
+
+          if (cleanText.isEmpty) {
+            cleanText = "\u200B";
+          }
+
+          Widget lineWidget = Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 3),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 22),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                cleanText,
+                style: TextStyle(
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                  color: cleanText == "-" || cleanText == "\u200B" ? Colors.transparent : AppTheme.textPrimary,
+                ),
+              ),
+            ),
+          );
+
+          if (drawDivider) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Divider(color: Colors.grey.shade300, thickness: 0.8, height: 1),
+                lineWidget,
+              ],
+            );
+          }
+          if (addLineSpacing) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [const SizedBox(height: 13), lineWidget],
+            );
+          }
+          return lineWidget;
+        }).toList(),
       ),
     );
   }
