@@ -10,10 +10,10 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
-class AttendanceDetailsPage extends ConsumerWidget {
+class EmployeeAttendanceDetailsPage extends ConsumerWidget {
   final String userId;
   final String dateString;
-  const AttendanceDetailsPage({super.key, required this.userId, required this.dateString});
+  const EmployeeAttendanceDetailsPage({super.key, required this.userId, required this.dateString});
 
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
@@ -21,7 +21,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
       final futures = await Future.wait([
         supabase
             .from('employee_attendance')
-            .select('*, schools(name)') // Fetches the attendance_time_variance column automatically inside '*'
+            .select('*, schools(name)')
             .eq('user_id', userId)
             .gte('recorded_at', '$dateString 00:00:00+00')
             .lte('recorded_at', '$dateString 23:59:59+00')
@@ -206,7 +206,7 @@ class AttendanceDetailsPage extends ConsumerWidget {
                             border: Border.all(color: statusColor, width: 0.5),
                           ),
                           child: Text(
-                            isAtSchool ? "School Grounds" : "Off-Site",
+                            isAtSchool ? "at a school" : "Off-Site",
                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
                           ),
                         ),

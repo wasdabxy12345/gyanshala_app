@@ -6,7 +6,7 @@ import 'package:flutter/material.dart' hide TextDirection;
 import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
-import 'package:gyanshala_app/features/employees/presentation/screens/attendance_details_page.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/employee_attendance_details_page.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -70,7 +70,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               .toList();
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
-
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
@@ -111,7 +110,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       final recordedAt = DateTime.parse(record['recorded_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
-
       final schoolData = record['schools'];
       final currentSchoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
       final currentVariance = record['attendance_time_variance']?.toString() ?? "99:99:99";
@@ -122,20 +120,16 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         currentMap[dateKey] = {'status': 'present', 'location': currentSchoolName, 'variance': currentVariance};
       } else {
         final existingData = currentMap[dateKey] as Map<String, dynamic>;
-
         String finalLocation = existingData['location'];
         if (currentSchoolName == "off-site" || finalLocation == "off-site") {
           finalLocation = "off-site";
         }
-
         String finalVariance = existingData['variance'];
         bool currentHasError = currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
         bool existingHasError = finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
-
         if (currentHasError || existingHasError) {
           finalVariance = currentHasError ? currentVariance : finalVariance;
         }
-
         currentMap[dateKey] = {'status': 'present', 'location': finalLocation, 'variance': finalVariance};
       }
     }
@@ -147,12 +141,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final data = await _loadDataPipeline();
       final employeeMap = data['employees'] as Map<String, dynamic>;
       final List<dynamic> rawRecords = data['records'];
+
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
-      final headers = ["User's Name", 'Latitude', 'Longitude', 'Status', 'Recorded At', 'School', 'Time Variance'];
+
+      final headers = ["Name", "Date", "Check In Time", "Check Out Time", "Check In Location", "Check Out Location"];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
-      for (final record in rawRecords) {
+      Map<String, Map<String, dynamic>> structuredRows = {};
+
+      final sortedRecords = List.from(rawRecords)
+        ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
+
+      for (final record in sortedRecords) {
         final userId = record['user_id'];
         final employee = employeeMap[userId];
         final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
@@ -161,31 +162,88 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           continue;
         }
 
-        final double? lat = record['latitude'] != null ? double.tryParse(record['latitude'].toString()) : null;
-        final double? lng = record['longitude'] != null ? double.tryParse(record['longitude'].toString()) : null;
+        final DateTime localTime = DateTime.parse(record['recorded_at']).toLocal();
+        final String dateKey = DateFormat('dd-MM-yyyy').format(localTime);
+        final String timeStr = DateFormat('HH:mm:ss').format(localTime);
         final String status = record['status'] ?? '';
-        final DateTime localRecordedAt = DateTime.parse(record['recorded_at']).toLocal();
-        final String formattedDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(localRecordedAt);
         final schoolData = record['schools'];
         final String schoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
         final String variance = record['attendance_time_variance']?.toString() ?? "99:99:99";
 
+        final String rowCompositeKey = "${userId}_$dateKey";
+
+        if (!structuredRows.containsKey(rowCompositeKey)) {
+          structuredRows[rowCompositeKey] = {
+            'name': fullName,
+            'date': dateKey,
+            'check_in_time': '',
+            'check_in_variance': '99:99:99',
+            'check_in_loc': 'off-site',
+            'check_out_time': '',
+            'check_out_variance': '99:99:99',
+            'check_out_loc': 'off-site',
+          };
+        }
+
+        if (status == 'check_in') {
+          structuredRows[rowCompositeKey]!['check_in_time'] = timeStr;
+          structuredRows[rowCompositeKey]!['check_in_variance'] = variance;
+          structuredRows[rowCompositeKey]!['check_in_loc'] = schoolName;
+        } else if (status == 'check_out') {
+          structuredRows[rowCompositeKey]!['check_out_time'] = timeStr;
+          structuredRows[rowCompositeKey]!['check_out_variance'] = variance;
+          structuredRows[rowCompositeKey]!['check_out_loc'] = schoolName;
+        }
+      }
+
+      final CellStyle offSiteAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
+
+      final CellStyle varianceAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
+
+      int currentExcelRowIndex = 1;
+
+      for (final rowKey in structuredRows.keys) {
+        final r = structuredRows[rowKey]!;
+
         sheet.appendRow([
-          TextCellValue(fullName),
-          lat != null ? DoubleCellValue(lat) : TextCellValue(''),
-          lng != null ? DoubleCellValue(lng) : TextCellValue(''),
-          TextCellValue(status),
-          TextCellValue(formattedDate),
-          TextCellValue(schoolName),
-          TextCellValue(variance),
+          TextCellValue(r['name']),
+          TextCellValue(r['date']),
+          TextCellValue(r['check_in_time']),
+          TextCellValue(r['check_out_time']),
+          TextCellValue(r['check_in_loc']),
+          TextCellValue(r['check_out_loc']),
         ]);
+
+        final String checkInVar = r['check_in_variance'];
+        final String checkOutVar = r['check_out_variance'];
+        final String checkInLoc = r['check_in_loc'].toString().toLowerCase();
+        final String checkOutLoc = r['check_out_loc'].toString().toLowerCase();
+
+        bool isCheckInLate = checkInVar != "00:00:00" && checkInVar != "00:00:00.000";
+        bool isCheckOutEarly = checkOutVar != "00:00:00" && checkOutVar != "00:00:00.000";
+
+        if (isCheckInLate && r['check_in_time'].isNotEmpty) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+        }
+        if (isCheckOutEarly && r['check_out_time'].isNotEmpty) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+        }
+
+        if (checkInLoc == "off-site") {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
+        }
+        if (checkOutLoc == "off-site") {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
+        }
+
+        currentExcelRowIndex++;
       }
 
       final bytes = excel.encode();
       if (bytes == null) throw Exception('Failed to generate excel file');
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
-      final fileName = 'Employee_Attendance_Details_[$startRange to $endRange].xlsx';
+      final fileName = 'Employee_Attendance_Summary_[$startRange to $endRange].xlsx';
 
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -453,10 +511,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                     final record = attMap[key];
                                     final holiday = _isHoliday(d);
                                     final isPresent = record != null && record['status'] == 'present';
-
                                     final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
                                     final variance = record != null ? record['variance'].toString() : "99:99:99";
-
                                     final cellDateNormalized = DateTime(d.year, d.month, d.day);
                                     final bool isFutureOrToday =
                                         cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
@@ -474,8 +530,10 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                             ? () => Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      AttendanceDetailsPage(userId: employee['user_id'] ?? '', dateString: key),
+                                                  builder: (context) => EmployeeAttendanceDetailsPage(
+                                                    userId: employee['user_id'] ?? '',
+                                                    dateString: key,
+                                                  ),
                                                 ),
                                               )
                                             : null,
@@ -486,7 +544,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                               ? (() {
                                                   final bool isCorrectLocation = location != "off-site";
                                                   final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
-
                                                   if (isCorrectLocation && isOnTime) {
                                                     return const Icon(Icons.check, color: Colors.green, size: 28);
                                                   } else if (isCorrectLocation && !isOnTime) {
@@ -530,7 +587,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                 final isPresent = record != null && record['status'] == 'present';
                                 final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
                                 final variance = record != null ? record['variance'].toString() : "99:99:99";
-
                                 if (isPresent &&
                                     location != "off-site" &&
                                     (variance == "00:00:00" || variance == "00:00:00.000")) {
