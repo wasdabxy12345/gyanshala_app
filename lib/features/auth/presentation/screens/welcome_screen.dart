@@ -330,11 +330,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.03),
 
-              Image.asset(
-                'assets/images/shiksha_setu_logo.png',
-                width: MediaQuery.of(context).size.width * 0.75,
-                fit: BoxFit.contain,
-              ),
+              Image.asset('assets/images/ss_logo.png', width: MediaQuery.of(context).size.width * 0.75, fit: BoxFit.contain),
 
               SizedBox(height: MediaQuery.of(context).size.height * 0.13),
 
@@ -421,7 +417,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 SizedBox(
                   width: (width * 0.9) / 2,
                   child: Center(
-                    child: Image.asset('assets/images/shiksha_setu_logo.png', width: logoSize, fit: BoxFit.contain),
+                    child: Image.asset('assets/images/ss_logo.png', width: logoSize, fit: BoxFit.contain),
                   ),
                 ),
                 SizedBox(

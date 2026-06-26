@@ -16,9 +16,9 @@ class AdminDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Gyan Shala UNM Foundation Shiksha Setu App",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 37),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: MediaQuery.of(context).size.width < 600 ? 3 : 37),
         ),
         centerTitle: true,
         actions: [

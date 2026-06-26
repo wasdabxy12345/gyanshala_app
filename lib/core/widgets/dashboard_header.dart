@@ -19,15 +19,15 @@ class DashboardHeader extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Image.asset('assets/images/gyanshala_logo.jpg', height: logoHeight, fit: BoxFit.contain),
+                child: Image.asset('assets/images/gs_logo.png', height: logoHeight, fit: BoxFit.contain),
               ),
               SizedBox(width: spacing),
               Expanded(
-                child: Image.asset('assets/images/unm_logo.jpg', height: logoHeight, fit: BoxFit.contain),
+                child: Image.asset('assets/images/ss_logo.png', height: logoHeight, fit: BoxFit.contain),
               ),
               SizedBox(width: spacing),
               Expanded(
-                child: Image.asset('assets/images/shiksha_setu_logo.png', height: logoHeight, fit: BoxFit.contain),
+                child: Image.asset('assets/images/unm_logo.png', height: logoHeight, fit: BoxFit.contain),
               ),
             ],
           ),
