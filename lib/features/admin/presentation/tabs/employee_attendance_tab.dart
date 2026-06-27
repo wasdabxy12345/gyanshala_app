@@ -162,7 +162,7 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         const Divider(),
         Expanded(
           child: EmployeeAttendanceTable(
-            key: _tableKey, // Assigned Table Key Reference Hook
+            key: _tableKey,
             searchQuery: widget.searchQuery,
             startDate: widget.range.start,
             endDate: widget.range.end,

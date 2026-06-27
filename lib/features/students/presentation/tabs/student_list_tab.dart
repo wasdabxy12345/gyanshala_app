@@ -422,11 +422,8 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
 
   Future<void> _showLocationPicker(Map<String, dynamic> student, String startAt) async {
     String? currentClusterId = student['cluster_id'];
-    String? currentClusterName = student['cluster'];
     String? currentVillageId = student['village_id'];
-    String? currentVillageName = student['village'];
     String? currentSchoolId = student['school_id'];
-    String? currentSchoolName = student['school'];
 
     Future<Map<String, dynamic>?> pick(String type, Map<String, dynamic> tempState) async {
       return await showDialog<Map<String, dynamic>>(
@@ -449,7 +446,6 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
       final res = await pick('cluster', {});
       if (res == null) return;
       currentClusterId = res['id'];
-      currentClusterName = res['name'];
       currentVillageId = null;
       currentSchoolId = null;
     }
@@ -458,14 +454,12 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
       final res = await pick('village', {'cluster_id': currentClusterId});
       if (res == null) return;
       currentVillageId = res['id'];
-      currentVillageName = res['name'];
       currentSchoolId = null;
     }
 
     final res = await pick('school', {'village_id': currentVillageId});
     if (res == null) return;
     currentSchoolId = res['id'];
-    currentSchoolName = res['name'];
 
     final updates = {'school_id': currentSchoolId};
 

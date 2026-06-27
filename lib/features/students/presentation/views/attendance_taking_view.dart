@@ -20,7 +20,6 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
   List<DateTime> _holidays = [];
   bool _isLoading = false;
 
-  // Track selected grade filter ("All" defaults to showing every grade)
   String? _selectedGrade;
 
   @override

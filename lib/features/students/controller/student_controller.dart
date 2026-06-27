@@ -221,16 +221,12 @@ class StudentController extends StateNotifier<bool> {
         for (int i = 1; i < sheet.maxRows; i++) {
           var row = sheet.rows[i];
 
-          // 1. Strict structural guard: Break immediately if the row is effectively empty
-          // to prevent parsing invisible trailing white-space rows.
           if (row.isEmpty || row.every((cell) => cell == null || cell.value == null || cell.value.toString().trim().isEmpty)) {
             continue;
           }
 
-          // 2. Extract underlying cell scalar content safely
           String? val(int index) {
             if (index >= row.length || row[index] == null || row[index]!.value == null) return null;
-            // Extract value directly; handles cell wrappers cleanly
             final rawValue = row[index]!.value;
             return rawValue.toString().trim();
           }

@@ -160,16 +160,13 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                   final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
                   final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
 
-                  // Geofence Check and Location Safety Fallbacks
                   final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
                   final bool isAtSchool = matchingSchool != null;
                   final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "off-site";
 
-                  // Extracting Time Variances with Fallback Logic
                   final String variance = log['attendance_time_variance']?.toString() ?? "99:99:99";
                   final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
 
-                  // Evaluating Context Matrix Styling Configuration Variables
                   IconData statusIcon;
                   Color statusColor;
                   String statusLabel;
@@ -188,7 +185,7 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                     statusLabel = "Off-Site Check";
                   } else {
                     statusIcon = Icons.warning;
-                    statusColor = Colors.purple; // Deep Purple Warning Configuration
+                    statusColor = Colors.purple;
                     statusLabel = variance == "99:99:99" ? "Off-Site & Untracked" : "Off-Site & Wrong Time ($variance)";
                   }
 

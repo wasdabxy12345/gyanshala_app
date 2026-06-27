@@ -76,9 +76,8 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     try {
       final profile = await _client.from('profiles').select('role').eq('id', userId).maybeSingle();
       if (profile == null || profile['role'] == null) return null;
-      final String userRole = profile['role'].toString(); // e.g., 'shikshaMitra38'
+      final String userRole = profile['role'].toString();
 
-      // FIX: Map your database profile values directly to your policy values
       String dbRoleKey = userRole;
       if (userRole == 'shikshaMitra38') dbRoleKey = 'Shiksha Mitra (3-8)';
       if (userRole == 'shikshaMitra910') dbRoleKey = 'Shiksha Mitra (9-10)';
@@ -87,7 +86,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       final policy = await _client.from('role_work_policies').select().eq('role', dbRoleKey).maybeSingle();
       if (policy == null) {
         dev.log("Warning: Policy record not found for matched key: $dbRoleKey");
-        return null; // This was returning null because of the key mismatch
+        return null;
       }
 
       final nowLocal = DateTime.now();

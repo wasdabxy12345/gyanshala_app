@@ -14,7 +14,6 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<UserModel> login({required String identifier, required String password}) async {
     final normalizedPhone = _normalizePhone(identifier);
 
-    // 1. Fetch data from signup_requests first
     final requestData = await _supabase
         .from('signup_requests')
         .select('status, action_reason')
@@ -24,7 +23,6 @@ class AuthRepositoryImpl implements AuthRepository {
     final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
     final requestActionReason = requestData?['action_reason']?.toString() ?? 'No explicit reason specified.';
 
-    // 2. Evaluate signup_requests conditions
     if (requestStatus == 'pending') {
       throw Exception('Your signup request is still pending admin approval.');
     }
@@ -33,7 +31,6 @@ class AuthRepositoryImpl implements AuthRepository {
       throw Exception('Your signup request has been rejected.\n\nReason: $requestActionReason');
     }
 
-    // 3. If "approved" (or not found in signup_requests), proceed to check profiles table
     final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
 
     if (profileData != null) {
@@ -48,18 +45,15 @@ class AuthRepositoryImpl implements AuthRepository {
         throw Exception('Your account has been permanently removed\n\nReason: $profileActionReason');
       }
     } else {
-      // Optional: Handle case where user is allowed by signup_requests but has no matching profile record
       throw Exception('No account found associated with the entered phone number');
     }
 
-    // 4. If all validations pass, proceed to authenticating the session
     final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
 
     if (response.user == null) {
       throw Exception("Login failed. Invalid credentials.");
     }
 
-    // Return the verified user model
     return UserModel.fromJson(profileData);
   }
 
@@ -264,10 +258,8 @@ class AuthRepositoryImpl implements AuthRepository {
     await _auth.updateUser(UserAttributes(data: {'first_name': firstName.trim(), 'last_name': lastName.trim()}));
 
     if (!isAdmin && schoolIds != null) {
-      // 🔗 Updated filter key to match profile_schools schema
       await _supabase.from('profile_schools').delete().eq('profile_id', user.id);
       if (schoolIds.isNotEmpty) {
-        // 🔗 Updated assignment map to target profile_id
         final profileSchoolRows = schoolIds.map((sid) => {'profile_id': user.id, 'school_id': sid}).toList();
         await _supabase.from('profile_schools').insert(profileSchoolRows);
       }

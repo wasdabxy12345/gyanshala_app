@@ -66,7 +66,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           ..subscribe();
   }
 
-  // Stream provider converting future relational matrix lookups safely without stream.select breaks
   Stream<List<Map<String, dynamic>>> _fetchEmployeesStream() {
     final supabase = ref.watch(supabaseClientProvider);
     _setupRealtimeSubscription();
@@ -532,7 +531,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
           _rawEmployees = snapshot.data!;
 
-          // Schedules filter execution post render pass safely matching frame loops
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               _applyAllFilters();
@@ -822,7 +820,6 @@ class _DataCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final lines = text.split('\n');
     return TableCell(
-      // CHANGE THIS FROM .middle TO .top TO FIX THE ALIGNMENT SHIFT
       verticalAlignment: TableCellVerticalAlignment.top,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
