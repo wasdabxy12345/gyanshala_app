@@ -60,7 +60,6 @@ class StudentController extends StateNotifier<bool> {
     try {
       final user = _client.auth.currentUser;
       if (user == null) return false;
-
       await _client.from('students').insert({
         'first_name': firstName,
         'last_name': lastName,
@@ -70,7 +69,6 @@ class StudentController extends StateNotifier<bool> {
         'shiksha_mitra_id': user.id,
         'school_id': schoolId,
       });
-
       state = false;
       return true;
     } catch (e, stack) {
@@ -83,38 +81,34 @@ class StudentController extends StateNotifier<bool> {
   Future<List<Map<String, dynamic>>> getMyStudents() async {
     try {
       final user = _client.auth.currentUser;
-
-      // Use dot-notation selectors to join schools, villages, and clusters automatically
       final data = await _client
           .from('students')
           .select('''
-          *,
-          schools (
-            name,
-            villages (
+            *,
+            schools (
               name,
-              clusters (
-                name
+              villages (
+                name,
+                clusters (
+                  name
+                )
               )
             )
-          )
-        ''')
+          ''')
           .eq('shiksha_mitra_id', user?.id ?? '')
           .order('first_name', ascending: true);
 
-      // Flatten out the structure into easy string variables so your existing UI matches up
       return List<Map<String, dynamic>>.from(data).map((student) {
         final schoolMap = student['schools'] as Map<String, dynamic>?;
         final villageMap = schoolMap?['villages'] as Map<String, dynamic>?;
         final clusterMap = villageMap?['clusters'] as Map<String, dynamic>?;
-
         return {
           ...student,
           'school': schoolMap?['name'] ?? '-',
           'village': villageMap?['name'] ?? '-',
           'cluster': clusterMap?['name'] ?? '-',
-          'cluster_id': villageMap?['cluster_id'], // required for dependency picking
-          'village_id': schoolMap?['village_id'], // required for dependency picking
+          'cluster_id': villageMap?['cluster_id'],
+          'village_id': schoolMap?['village_id'],
         };
       }).toList();
     } catch (e) {
@@ -196,7 +190,6 @@ class StudentController extends StateNotifier<bool> {
       withData: true,
     );
     if (result == null) return;
-
     try {
       final platformFile = result.files.first;
       List<int> bytes;
@@ -207,16 +200,11 @@ class StudentController extends StateNotifier<bool> {
       } else {
         throw Exception("Could not read file data contents.");
       }
-
       final excel = Excel.decodeBytes(bytes);
       final user = _client.auth.currentUser;
       if (user == null) return;
 
-      final List<dynamic> dbClusters = await _client.from('clusters').select('id, name');
-      final List<dynamic> dbVillages = await _client.from('villages').select('id, name');
       final List<dynamic> dbSchools = await _client.from('schools').select('id, name');
-
-      // Removed dropped text columns from select query
       final existingStudents = await _client
           .from('students')
           .select('student_id_custom, first_name, last_name, gender, grade, school_id')
@@ -232,19 +220,27 @@ class StudentController extends StateNotifier<bool> {
 
         for (int i = 1; i < sheet.maxRows; i++) {
           var row = sheet.rows[i];
-          if (row.isEmpty || row.every((cell) => cell == null)) continue;
 
-          String? val(int index) =>
-              (index < row.length && row[index]?.value != null) ? row[index]!.value.toString().trim() : null;
+          // 1. Strict structural guard: Break immediately if the row is effectively empty
+          // to prevent parsing invisible trailing white-space rows.
+          if (row.isEmpty || row.every((cell) => cell == null || cell.value == null || cell.value.toString().trim().isEmpty)) {
+            continue;
+          }
+
+          // 2. Extract underlying cell scalar content safely
+          String? val(int index) {
+            if (index >= row.length || row[index] == null || row[index]!.value == null) return null;
+            // Extract value directly; handles cell wrappers cleanly
+            final rawValue = row[index]!.value;
+            return rawValue.toString().trim();
+          }
 
           final customId = val(0);
           final fName = val(1);
           final lName = val(2);
           final genderRaw = val(3);
           final gradeRaw = val(4);
-          final excelCluster = val(5);
-          final excelVillage = val(6);
-          final excelSchool = val(7);
+          final excelSchool = val(5);
 
           List<String> rowErrors = [];
           if (customId == null || customId.isEmpty) rowErrors.add("ID");
@@ -274,13 +270,12 @@ class StudentController extends StateNotifier<bool> {
           }
 
           String? schoolId;
-
           if (excelSchool != null && excelSchool.isNotEmpty) {
             final matchS = dbSchools.firstWhereOrNull((s) => s['name'].toString().toLowerCase() == excelSchool.toLowerCase());
             if (matchS != null) {
               schoolId = matchS['id'];
             } else {
-              rowErrors.add("School '$excelSchool' not found");
+              rowErrors.add("School '$excelSchool' not found in system database");
             }
           } else {
             rowErrors.add("School is missing");
@@ -291,7 +286,6 @@ class StudentController extends StateNotifier<bool> {
             continue;
           }
 
-          // Cleaned up map payload containing only actual DB columns
           final incomingData = {
             'student_id_custom': customId,
             'first_name': fName,
@@ -312,7 +306,6 @@ class StudentController extends StateNotifier<bool> {
                 existingMatch['gender'] == finalGender &&
                 existingMatch['grade'] == finalGrade &&
                 existingMatch['school_id'] == schoolId;
-
             if (!isIdentical) {
               conflictingStudents.add({'current': existingMatch, 'incoming': incomingData});
             }
@@ -323,7 +316,6 @@ class StudentController extends StateNotifier<bool> {
       if (newStudents.isNotEmpty) {
         await _client.from('students').insert(newStudents);
       }
-
       String partialSuffix = errorMessages.isNotEmpty ? "&&PARTIAL:${errorMessages.join('\n')}" : "";
       if (conflictingStudents.isNotEmpty) {
         throw Exception(
@@ -331,7 +323,7 @@ class StudentController extends StateNotifier<bool> {
         );
       }
       if (errorMessages.isNotEmpty) {
-        throw Exception("PARTIAL:${errorMessages.join('\n')}");
+        throw Exception("PARTIAL:\n${errorMessages.join('\n')}");
       }
     } catch (e) {
       dev.log("Excel Import Error", error: e);
