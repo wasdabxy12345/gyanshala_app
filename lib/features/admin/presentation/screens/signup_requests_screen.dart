@@ -913,7 +913,7 @@ villages:village_id (name, clusters:cluster_id (name))
                         _handleAction(
                           id: req['id'],
                           currentStatus: 'pending',
-                          targetStatus: 'removed',
+                          targetStatus: 'rejected',
                           isProfileTable: false,
                           reason: reason,
                         );

@@ -222,10 +222,6 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      final selectedCluster = _clusters.firstWhere((c) => c['id'].toString() == _selectedClusterId);
-      final selectedVillage = _villages.firstWhere((v) => v['id'].toString() == _selectedVillageId);
-      final selectedSchool = _schools.firstWhere((s) => s['id'].toString() == _selectedSchoolId);
-
       final success = await ref
           .read(studentProvider.notifier)
           .registerStudent(
@@ -234,12 +230,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
             studentId: _idController.text.trim(),
             gender: _selectedGender,
             grade: _selectedGrade,
-            clusterId: _selectedClusterId!,
-            clusterName: selectedCluster['name'],
-            villageId: _selectedVillageId!,
-            villageName: selectedVillage['name'],
             schoolId: _selectedSchoolId!,
-            schoolName: selectedSchool['name'],
           );
 
       if (!mounted) return;
@@ -248,7 +239,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student Registered Successfully!')));
         Navigator.pop(context, true);
       } else {
-        _showErrorSnackBar('Registration failed. Check database permissions or properties.');
+        _showErrorSnackBar('Registration failed. Check Debug Console for exact system exception.');
       }
     } catch (e) {
       _showErrorSnackBar('Error: ${e.toString()}');
@@ -261,6 +252,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import successful!')));
     } catch (e) {
+      _showErrorSnackBar('Error Debug: ${e.toString()}');
       String msg = e.toString();
 
       if (msg.contains("CONFLICT:")) {

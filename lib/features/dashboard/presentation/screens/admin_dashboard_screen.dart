@@ -18,7 +18,7 @@ class AdminDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(
           "Gyan Shala UNM Foundation Shiksha Setu App",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: MediaQuery.of(context).size.width < 600 ? 3 : 37),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: MediaQuery.of(context).size.width < 842 ? 20 : 37),
         ),
         centerTitle: true,
         actions: [
@@ -60,7 +60,10 @@ class AdminHome extends StatelessWidget {
           children: [
             const DashboardHeader(),
             const SizedBox(height: 50),
-            Text("Welcome, $adminName", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+            Text(
+              "Welcome, $adminName",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: MediaQuery.of(context).size.width < 842 ? 13 : 20),
+            ),
             const SizedBox(height: 13),
             GridView.count(
               shrinkWrap: true,

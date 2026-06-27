@@ -467,14 +467,7 @@ class _StudentListTabState extends ConsumerState<StudentListTab> {
     currentSchoolId = res['id'];
     currentSchoolName = res['name'];
 
-    final updates = {
-      'cluster_id': currentClusterId,
-      'cluster': currentClusterName,
-      'village_id': currentVillageId,
-      'village': currentVillageName,
-      'school_id': currentSchoolId,
-      'school': currentSchoolName,
-    };
+    final updates = {'school_id': currentSchoolId};
 
     final success = await ref.read(studentProvider.notifier).updateStudent(student['id'], updates);
 

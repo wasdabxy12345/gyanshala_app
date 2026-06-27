@@ -1,0 +1,386 @@
+DROP TRIGGER IF EXISTS "01_send_notification" ON public.signup_requests;
+CREATE TRIGGER "01_send_notification"
+AFTER UPDATE
+ON public.signup_requests
+FOR EACH ROW
+EXECUTE FUNCTION supabase_functions.http_request(https://ntrniclejneisdzepntv.supabase.co/functions/v1/notify-approval, POST, {"Content-Type":"application/json"}, {}, 5000);
+DROP TRIGGER IF EXISTS on_signup_request_reset ON public.signup_requests;
+CREATE TRIGGER on_signup_request_reset
+AFTER UPDATE
+ON public.signup_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_signup_request_reset();
+DROP TRIGGER IF EXISTS tr_before_signup_request_insert ON public.signup_requests;
+CREATE TRIGGER tr_before_signup_request_insert
+BEFORE INSERT
+ON public.signup_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_repeated_signup_request();
+DROP TRIGGER IF EXISTS tr_on_request_approved ON public.signup_requests;
+CREATE TRIGGER tr_on_request_approved
+AFTER UPDATE
+ON public.signup_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.process_approved_request();
+DROP TRIGGER IF EXISTS tr_on_request_removed ON public.signup_requests;
+CREATE TRIGGER tr_on_request_removed
+AFTER UPDATE
+ON public.signup_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_signup_request_removal();
+CREATE OR REPLACE FUNCTION public.rls_auto_enable()
+RETURNS event_trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE
+cmd record;
+BEGIN
+FOR cmd IN
+SELECT *
+FROM pg_event_trigger_ddl_commands()
+WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+AND object_type IN ('table','partitioned table')
+LOOP
+IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN
+BEGIN
+EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);
+RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;
+EXCEPTION
+WHEN OTHERS THEN
+RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+END;
+ELSE
+RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;
+END IF;
+END LOOP;
+END;
+$function$
+;
+DROP EVENT TRIGGER IF EXISTS ensure_rls;
+CREATE EVENT TRIGGER ensure_rls
+ON ddl_command_end
+WHEN TAG IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+EXECUTE FUNCTION public.rls_auto_enable();
+CREATE OR REPLACE FUNCTION public.clean_dev_auto_verify()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$BEGIN
+NEW.phone_confirmed_at := NOW();
+NEW.confirmed_at := NOW();
+NEW.updated_at := NOW();
+NEW.confirmation_token := '123456';
+NEW.phone_change_token := '123456';
+NEW.confirmation_sent_at := NOW();
+NEW.phone_change_sent_at := NOW();
+RETURN NEW;
+END;$function$
+CREATE OR REPLACE FUNCTION public.delete_auth_user_on_denial()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$BEGIN
+IF (LOWER(NEW.status) = 'denied' OR LOWER(NEW.status) = 'rejected') THEN
+UPDATE public.signup_requests
+SET status = 'removed',
+actioned_at = NOW(),
+action_reason = COALESCE(action_reason, 'Denied by admin');
+END IF;
+RETURN NEW;
+END;$function$
+CREATE OR REPLACE FUNCTION public.get_school_at_location(lat double precision, lon double precision)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$declare
+detected_school_id uuid;
+begin
+select id into detected_school_id
+from public.schools
+where st_dwithin(
+st_setsrid(st_makepoint(schools.longitude, schools.latitude), 4326)::geography,
+st_setsrid(st_makepoint(lon, lat), 4326)::geography,
+schools.radius
+)
+order by st_distance(
+st_setsrid(st_makepoint(schools.longitude, schools.latitude), 4326)::geography,
+st_setsrid(st_makepoint(lon, lat), 4326)::geography
+) asc
+limit 1;
+return detected_school_id;
+end;$function$
+CREATE OR REPLACE FUNCTION public.get_student_stats(p_start_date date, p_end_date date, p_shiksha_mitra_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+result JSONB;
+BEGIN
+SELECT jsonb_agg(student_report)
+INTO result
+FROM (
+SELECT 
+s.id,
+(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) AS full_name,
+(
+SELECT jsonb_object_agg(date, status)
+FROM public.student_attendance
+WHERE student_id = s.id 
+AND date BETWEEN p_start_date AND p_end_date
+) AS attendance_map
+FROM public.students s
+-- Corrected to map exactly to your table column name
+WHERE s.shiksha_mitra_id = p_shiksha_mitra_id 
+) student_report;
+RETURN COALESCE(result, '[]'::jsonb);
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.handle_new_user_signup()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+INSERT INTO public.signup_requests (
+id, 
+phone, 
+first_name, 
+last_name, 
+role, 
+gender, 
+status, 
+push_token, 
+qualification
+)
+VALUES (
+NEW.id, 
+NEW.phone,
+NEW.raw_user_meta_data->>'first_name', 
+NEW.raw_user_meta_data->>'last_name', 
+NEW.raw_user_meta_data->>'role',      
+NEW.raw_user_meta_data->>'gender', 
+'pending',
+NEW.raw_user_meta_data->>'push_token',
+NEW.raw_user_meta_data->>'qualification'
+);
+RETURN NEW;
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.handle_repeated_signup_request()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+BEGIN
+IF EXISTS (SELECT 1 FROM public.signup_requests WHERE phone = NEW.phone) THEN
+UPDATE public.signup_requests
+SET 
+id = NEW.id,
+first_name = NEW.first_name,
+last_name = NEW.last_name,
+role = NEW.role,
+gender = NEW.gender,       
+status = 'pending',        
+push_token = NEW.push_token,
+qualification = NEW.qualification,
+action_reason = NULL,      
+actioned_at = NULL,
+created_at = NOW()
+WHERE phone = NEW.phone;
+-- Crucial: Clean up old school selections so the client can insert fresh ones
+DELETE FROM public.signup_request_schools WHERE user_id = NEW.id;
+RETURN NULL; 
+END IF;
+RETURN NEW;
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.handle_signup_request_removal()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+BEGIN
+-- Only drop the auth user entirely if they are being flat out 'removed' 
+-- directly from a raw signup stage (e.g., admin rejected a pending request).
+IF NEW.status = 'removed' AND OLD.status = 'pending' THEN
+DELETE FROM auth.users WHERE id = NEW.id;
+END IF;
+RETURN NEW;
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.handle_signup_request_reset()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$BEGIN
+IF NEW.status = 'pending' AND OLD.status != 'pending' THEN
+DELETE FROM public.profiles 
+WHERE id = NEW.id;
+UPDATE auth.users 
+SET raw_user_meta_data = jsonb_set(COALESCE(raw_user_meta_data, '{}'::jsonb), '{status}', '"pending"')
+WHERE id = NEW.id;
+END IF;
+RETURN NEW;
+END;$function$
+CREATE OR REPLACE FUNCTION public.process_approved_request()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+BEGIN
+IF NEW.status = 'approved' AND (OLD.status IS NULL OR OLD.status != 'approved') THEN
+-- 1. Insert/Update the core profile (without single school_id)
+INSERT INTO public.profiles (
+id, 
+first_name, 
+last_name, 
+role, 
+gender, 
+phone, 
+qualification, 
+updated_at
+)
+VALUES (
+NEW.id, 
+NEW.first_name, 
+NEW.last_name, 
+NEW.role, 
+NEW.gender, 
+NEW.phone, 
+NEW.qualification, 
+NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+first_name    = EXCLUDED.first_name,
+last_name     = EXCLUDED.last_name,
+role          = EXCLUDED.role, 
+gender        = EXCLUDED.gender,
+phone         = EXCLUDED.phone,
+qualification = EXCLUDED.qualification,
+updated_at    = NOW();
+-- 2. Clean out old entries in target table to prevent duplicates
+DELETE FROM public.profile_schools WHERE user_id = NEW.id;
+-- 3. Copy over all assigned schools from the signup junction to the active profile junction
+INSERT INTO public.profile_schools (user_id, school_id)
+SELECT user_id, school_id 
+FROM public.signup_request_schools 
+WHERE user_id = NEW.id;
+END IF;
+RETURN NEW;
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.rls_auto_enable()
+RETURNS event_trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE
+cmd record;
+BEGIN
+FOR cmd IN
+SELECT *
+FROM pg_event_trigger_ddl_commands()
+WHERE command_tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+AND object_type IN ('table','partitioned table')
+LOOP
+IF cmd.schema_name IS NOT NULL AND cmd.schema_name IN ('public') AND cmd.schema_name NOT IN ('pg_catalog','information_schema') AND cmd.schema_name NOT LIKE 'pg_toast%' AND cmd.schema_name NOT LIKE 'pg_temp%' THEN
+BEGIN
+EXECUTE format('alter table if exists %s enable row level security', cmd.object_identity);
+RAISE LOG 'rls_auto_enable: enabled RLS on %', cmd.object_identity;
+EXCEPTION
+WHEN OTHERS THEN
+RAISE LOG 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+END;
+ELSE
+RAISE LOG 'rls_auto_enable: skip % (either system schema or not in enforced list: %.)', cmd.object_identity, cmd.schema_name;
+END IF;
+END LOOP;
+END;
+$function$
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $function$
+begin
+new.updated_at = now();
+return new;
+end;
+$function$
+create table public.signup_requests (
+id uuid null,
+phone text not null,
+first_name text null,
+last_name text null,
+role text null,
+status text null default 'pending'::text,
+push_token text null,
+created_at timestamp with time zone null default now(),
+qualification text null,
+action_reason text null,
+actioned_at timestamp with time zone null,
+gender text null,
+constraint signup_requests_pkey primary key (phone),
+constraint signup_requests_id_unique unique (id),
+constraint signup_requests_phone_key unique (phone),
+constraint signup_requests_id_fkey foreign KEY (id) references auth.users (id) on delete set null,
+constraint profiles_role_check check (
+(
+role = any (
+array[
+'shikshaMitra38'::text,
+'shikshaMitra910'::text,
+'mentorBV8'::text,
+'admin'::text
+]
+)
+)
+),
+constraint signup_requests_status_check check (
+(
+status = any (
+array[
+'pending'::text,
+'approved'::text,
+'rejected'::text
+]
+)
+)
+)
+) TABLESPACE pg_default;
+create trigger "01_send_notification"
+after
+update on signup_requests for EACH row
+execute FUNCTION supabase_functions.http_request (
+'https://ntrniclejneisdzepntv.supabase.co/functions/v1/notify-approval',
+'POST',
+'{"Content-Type":"application/json"}',
+'{}',
+'5000'
+);
+create trigger on_signup_request_reset
+after
+update on signup_requests for EACH row
+execute FUNCTION handle_signup_request_reset ();
+create trigger tr_before_signup_request_insert BEFORE INSERT on signup_requests for EACH row
+execute FUNCTION handle_repeated_signup_request ();
+create trigger tr_on_request_approved
+after
+update on signup_requests for EACH row
+execute FUNCTION process_approved_request ();
+create trigger tr_on_request_removed
+after
+update on signup_requests for EACH row
+execute FUNCTION handle_signup_request_removal ();
+create table public.signup_request_schools (
+user_id uuid not null,
+school_id uuid not null,
+constraint signup_request_schools_pkey primary key (user_id, school_id),
+constraint signup_request_schools_school_fkey foreign KEY (school_id) references schools (id) on delete CASCADE,
+constraint signup_request_schools_user_id_fkey foreign KEY (user_id) references signup_requests (id) on delete CASCADE
+) TABLESPACE pg_default;

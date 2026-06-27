@@ -166,7 +166,6 @@ class _DailyMarkingViewState extends ConsumerState<AttendanceTakingView> {
               ),
             ),
 
-            // Student List View
             Expanded(
               child: _selectedGrade == null
                   ? Center(child: Text("Please select a grade to mark attendance"))
