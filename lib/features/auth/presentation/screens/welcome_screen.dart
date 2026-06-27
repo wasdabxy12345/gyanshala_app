@@ -17,7 +17,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum ApprovalState { loading, pending, approved, denied, none }
+enum ApprovalState { loading, pending, approved, rejected, none }
 
 class WelcomeScreen extends ConsumerStatefulWidget {
   final bool showPendingMessage;
@@ -115,8 +115,8 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         _rejectionReason = response['rejection_reason'];
         if (status == 'approved') {
           _state = ApprovalState.approved;
-        } else if (status == 'denied' || status == 'removed' || status == 'not_found') {
-          _state = ApprovalState.denied;
+        } else if (status == 'rejected' || status == 'removed' || status == 'not_found') {
+          _state = ApprovalState.rejected;
         } else {
           _state = ApprovalState.pending;
         }
@@ -525,7 +525,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           child: const Text("Verify Phone via SMS OTP"),
         );
         break;
-      case ApprovalState.denied:
+      case ApprovalState.rejected:
         bgColor = Colors.red.shade50;
         borderColor = Colors.red.shade200;
         icon = Icons.error_outline;
