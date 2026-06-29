@@ -1,5 +1,6 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/location_model.dart';
@@ -20,6 +21,7 @@ class AppConfig {
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
+
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
@@ -32,15 +34,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
+
   UserRole _selectedRole = UserRole.shikshaMitra38;
   String? _selectedGender;
+  bool _agreedToTerms = false;
 
   final List<LocationItem> _clusters = [];
   final List<LocationItem> _villages = [];
   final List<LocationItem> _schools = [];
   String? _selectedClusterId;
   String? _selectedVillageId;
-
   final List<String> _selectedSchoolIds = [];
   final List<LocationItem> _selectedSchoolObjects = [];
 
@@ -73,6 +76,37 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     super.dispose();
   }
 
+  void _showTermsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Terms and Conditions'),
+          content: const SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: SingleChildScrollView(
+              physics: BouncingScrollPhysics(),
+              child: Text(
+                'Insert your long Terms and Conditions text here...\n\n'
+                'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '
+                'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. '
+                'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi '
+                'ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit '
+                'in voluptate velit esse cillum dolore eu fugiat nulla pariatur. '
+                'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui '
+                'officia deserunt mollit anim id est laborum.\n\n'
+                'More policy text updates down here ensuring that the container content '
+                'is completely vertically scrollable for the user reading experience.',
+              ),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+        );
+      },
+    );
+  }
+
   Future<void> _onSignupPressed() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     try {
@@ -90,10 +124,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             qualification: _qualificationController.text.trim(),
             schoolIds: _selectedSchoolIds,
           );
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('pending_id', _phoneController.text.trim());
-
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
@@ -153,7 +185,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 13),
             DropdownButtonFormField<String>(
               initialValue: _selectedGender,
               decoration: const InputDecoration(
@@ -169,7 +201,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               onChanged: (value) => setState(() => _selectedGender = value),
               validator: (value) => (value == null || value.isEmpty) ? 'Gender Selection Required' : null,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 13),
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -181,35 +213,34 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 return null;
               },
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 13),
             TextFormField(
               controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Password *', prefixIcon: Icon(Icons.lock_outline)),
               validator: (value) => (value == null || value.length < 6) ? 'Min 6 characters' : null,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 13),
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Confirm Password *', prefixIcon: Icon(Icons.lock_person_outlined)),
               validator: (value) => (value != _passwordController.text) ? 'Passwords do not match' : null,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 13),
             if (isNotAdmin) ...[
               TextFormField(
                 controller: _qualificationController,
                 decoration: const InputDecoration(labelText: 'Qualification *', prefixIcon: Icon(Icons.school_outlined)),
                 validator: (value) => (value == null || value.isEmpty) ? 'Required' : null,
               ),
-              const SizedBox(height: 14),
-
+              const SizedBox(height: 13),
               DropdownSearch<LocationItem>(
                 items: (filter, infiniteScrollProps) => _clusters,
                 itemAsString: (item) => item.name,
                 compareFn: (item1, item2) => item1.id == item2.id,
                 decoratorProps: const DropDownDecoratorProps(
-                  decoration: InputDecoration(labelText: "🏢 Select Cluster *", border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: "Select Cluster *", border: OutlineInputBorder()),
                 ),
                 onSelected: (data) async {
                   setState(() {
@@ -228,9 +259,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   }
                 },
               ),
-
-              const SizedBox(height: 14),
-
+              const SizedBox(height: 13),
               DropdownSearch<LocationItem>(
                 enabled: _selectedClusterId != null,
                 items: (filter, loadProps) => _villages,
@@ -238,7 +267,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 compareFn: (item1, item2) => item1.id == item2.id,
                 decoratorProps: DropDownDecoratorProps(
                   decoration: InputDecoration(
-                    labelText: "🏡 Select Village *",
+                    labelText: "Select Village *",
                     border: const OutlineInputBorder(),
                     filled: _selectedClusterId == null,
                     fillColor: Colors.grey.shade100,
@@ -259,9 +288,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   }
                 },
               ),
-
-              const SizedBox(height: 14),
-
+              const SizedBox(height: 13),
               if (isMultiSchool) ...[
                 DropdownSearch<LocationItem>(
                   enabled: _selectedVillageId != null,
@@ -270,7 +297,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   compareFn: (item1, item2) => item1.id == item2.id,
                   decoratorProps: DropDownDecoratorProps(
                     decoration: InputDecoration(
-                      labelText: "🏫 Select School *",
+                      labelText: "Select School *",
                       border: const OutlineInputBorder(),
                       filled: _selectedVillageId == null,
                       fillColor: Colors.grey.shade100,
@@ -306,20 +333,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     }
                   },
                 ),
-
                 if (_selectedSchoolObjects.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 13),
                   const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 8),
+                    padding: EdgeInsets.only(left: 3, bottom: 8),
                     child: Text(
-                      '🎒 Selected Schools *',
+                      'Selected Schools *',
                       style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
                     ),
                   ),
                   Container(
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
                       color: Colors.white,
                     ),
                     child: ListView.separated(
@@ -334,7 +359,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           leading: const Icon(Icons.school, color: Colors.blue),
                           title: Text(school.name, style: const TextStyle(fontWeight: FontWeight.w500)),
                           trailing: IconButton(
-                            icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
+                            icon: const Icon(Icons.close, color: Colors.redAccent, size: 13),
                             onPressed: () => setState(() {
                               _selectedSchoolIds.remove(school.id);
                               _selectedSchoolObjects.removeAt(index);
@@ -345,14 +370,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ),
                 ],
-
                 FormField<List<String>>(
                   initialValue: _selectedSchoolIds,
                   validator: (_) => _selectedSchoolIds.isEmpty ? 'Please pick at least one school before continuing.' : null,
                   builder: (state) => state.hasError
                       ? Padding(
-                          padding: const EdgeInsets.only(top: 8, left: 12),
-                          child: Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                          padding: const EdgeInsets.only(top: 8, left: 13),
+                          child: Text(state.errorText!, style: const TextStyle(color: Colors.red)),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -380,10 +404,43 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
               ],
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 13),
+            Row(
+              children: [
+                Checkbox(
+                  value: _agreedToTerms,
+                  onChanged: (bool? value) {
+                    setState(() {
+                      _agreedToTerms = value ?? false;
+                    });
+                  },
+                ),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      text: "I agree to the ",
+                      style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                      children: [
+                        TextSpan(
+                          text: "terms and conditions",
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                          recognizer: TapGestureRecognizer()..onTap = _showTermsDialog,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 13),
+
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(onPressed: _onSignupPressed, child: const Text('Signup')),
+              child: ElevatedButton(onPressed: _agreedToTerms ? _onSignupPressed : null, child: const Text('Signup')),
             ),
           ],
         ),
