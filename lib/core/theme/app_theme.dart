@@ -28,7 +28,7 @@ class AppTheme {
       textTheme: const TextTheme(
         headlineMedium: TextStyle(fontWeight: FontWeight.w700, color: textPrimary),
         titleMedium: TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
-        bodyMedium: TextStyle(color: Colors.blueGrey),
+        bodyMedium: TextStyle(color: Colors.black),
       ),
 
       inputDecorationTheme: InputDecorationTheme(

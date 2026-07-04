@@ -15,7 +15,7 @@ flutter_native_splash:
     image: assets/splash/splash.png
     color: "#ffffff"
 
-version: 1.0.73+73
+version: 1.0.74+74
 
 environment:
   sdk: ^3.11.4
@@ -51,6 +51,7 @@ dependencies:
   universal_html: ^2.3.0
   permission_handler: ^12.0.3
   flutter_html: ^3.0.0
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -66,3 +67,4 @@ flutter:
     - assets/images/ss_logo.png
     - assets/images/gs_logo.png
     - assets/images/unm_logo.png
+    - assets/legal/data_collection_consent.md

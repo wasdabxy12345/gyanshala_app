@@ -2,11 +2,13 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/location_model.dart';
 import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:gyanshala_app/features/location/controller/location_controller.dart' as controller;
@@ -76,118 +78,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _confirmPasswordController.dispose();
     _qualificationController.dispose();
     super.dispose();
-  }
-
-  void _showConsentDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Center(
-            child: const Text('CONSENT FORM FOR DATA PROCESSING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: double.maxFinite,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Html(
-                    data: """
-                            <p>This consent form is issued to inform you of the purposes for which your personal data will be processed and to obtain your explicit consent for the same, in compliance with the Digital Personal Data Protection Act, 2023 ("DPDPA").</p>
-                            <ol>
-                              <li>
-                                <h3>INFORMATION WE WILL COLLECT</h3>
-                                <p>We may collect and process the following categories of personal data:</p>
-                                <ul>
-                                  <li><b>Basic Information:</b> This includes illustrations such as your full legal name, gender, mobile phone number, and qualification.</li>
-                                  <li><b>Location Data:</b> This includes illustrations such as precise geographic coordinates via GPS (latitude and longitude) collected only when the application is running in the foreground and only upon your explicit interaction with certain buttons in the application (such as checking in, checking out, or submitting a form in the application).</li>
-                                  <li><b>Technical Data:</b> This includes illustrations such as IP addresses, device identifiers such as device ID, and logs of your interactions with our digital platform.</li>
-                                </ul>
-                              </li>
-
-                              <li>
-                                <h3>PURPOSE OF PROCESSING</h3>
-                                <p>Your personal data will be processed strictly for the following organizational purposes:</p>
-                                <ul>
-                                  <li><b>User authentication and Record keeping:</b> To maintain accurate internal employee records and manage secure app access and authentication.</li>
-                                  <li><b>Workforce Analytics:</b> To analyze demographic trends, such as monitoring the gender ratio within our organization.</li>
-                                  <li><b>Attendance and Operational Tracking:</b> To accurately log daily attendance and form submissions, including the date, time, and precise location at the start and end of your work hours and at the time of submission of a form, for payroll, accountability, and operational management.</li>
-                                  <li><b>Fraud Prevention:</b> To detect and curb unauthorized credential sharing, proxy attendance, or fraudulent form submissions.</li>
-                                </ul>
-                              </li>
-
-                              <li>
-                                <h3>Data Retention Period</h3>
-                                <p>All personal data collected via the application will be managed, retained, and deleted in accordance with the following timelines:</p>
-                                <ul>
-                                  <li><b>Academic Year Cycle and Anonymization:</b> Data collected via the application will be maintained in our database for the duration of the specific academic year in which it was captured. Following the conclusion of that academic year, this data will be irreversibly anonymized and stored locally for tracking program progress and compiling organizational statistics.</li>
-                                  <li><b>Cessation of Employment and Erasure Requests:</b> Upon the cessation of your employment, or upon a valid and verified request for data erasure, your personal data will be securely erased from our active applications and database systems as soon as reasonably possible, except where retention is mandated by applicable Indian Laws (including but not limited to labor laws or tax regulations) or until the original purpose is fulfilled. Such legally mandated records will be retained only for the minimum statutory period prescribed by those laws (typically 3 to 8 years) and will be restricted from regular active use.</li>
-                                </ul>
-                              </li>
-
-                              <li>
-                                <h3>LEGAL BASIS FOR PROCESSING</h3>
-                                <p>The legal basis for processing your personal data is your <b>free, specific, informed, unconditional, and unambiguous consent</b> as provided under section 6 of the DPDPA.</p>
-                              </li>
-
-                              <li>
-                                <h3>RIGHTS AVAILABLE TO YOU</h3>
-                                <p>Under the DPDPA, you have the following statutory rights as a data principal:</p>
-                                <ul>
-                                  <li><b>Right to Access:</b> Obtain a summary of your personal data being processed and the processing activities.</li>
-                                  <li><b>Right to Correction and Completion:</b> Request updates or corrections to inaccuracies or completion of incomplete personal data.</li>
-                                  <li><b>Right to Erasure:</b> Request deletion of your personal data that is no longer necessary for the purpose of processing.</li>
-                                  <li><b>Right to Withdraw Consent:</b> Withdraw your consent at any time. The withdrawal will not affect the lawfulness of any processing based on consent before its withdrawal.</li>
-                                  <li><b>Right to Nominate:</b> Nominate any individual to exercise your rights on your behalf in the event of your death or incapacity.</li>
-                                  <li><b>Right to Grievance Redressal:</b> Register a formal grievance with the Data Fiduciary regarding any act or omission.</li>
-                                </ul>
-                                <p>To exercise these rights, you may contact us at:</p>
-                                <ul style="list-style-type:disc;">
-                                  <li><b>Email:</b> <a href="mailto:abc@abc.abc">abc@abc.abc</a></li>
-                                  <li><b>Phone:</b> <a href="tel:+91 12345 67890">+91 12345 67890</a></li>
-                                  <li><b>Address:</b> <span>[TO BE ADDED LATER]</span></li>
-                                </ul>
-                              </li>
-
-                              <li>
-                                <h3>CONSENT DECLARATION</h3>
-                                <p>By clicking or tapping “Accept” below, you confirm that you have read and understood the terms of this consent form and voluntarily agree to the processing of your data as described herein.</p>
-                                <p>I hereby give my <b>free, specific, informed, unconditional, and unambiguous consent</b> to <b>Gyanshala Organization</b> for the collection, retention, and processing of my personal data for the purposes mentioned above.</p>
-                              </li>
-
-                              <li>
-                                <h3>CONTACT INFORMATION</h3>
-                                <p>If you have any questions or concerns regarding this consent form or our data processing practices, please contact our Grievance Officer (GO) / Data Protection Officer (DPO)</p>
-                                <ul style="list-style-type:disc;">
-                                  <li><b>Name:</b> <span>[TO BE ADDED LATER]</span></li>
-                                  <li><b>Email:</b> <a href="mailto:abc@abc.abc">abc@abc.abc</a></li>
-                                  <li><b>Phone:</b> <a href="tel:+91 12345 67890">+91 12345 67890</a></li>
-                                </ul>
-                              </li>
-                            </ol>
-                          """,
-                    style: {
-                      "*": Style(color: Colors.black.withAlpha(170)),
-                      "ol li": Style(fontWeight: FontWeight.bold),
-                      "ul li": Style(fontWeight: FontWeight.normal),
-                      "ol p": Style(fontWeight: FontWeight.normal),
-                      "ol": Style(margin: Margins.only(left: 13), padding: HtmlPaddings.only(left: 3)),
-                      "ul": Style(margin: Margins.only(left: 13), padding: HtmlPaddings.only(left: 3)),
-                      "a": Style(color: Colors.red, textDecorationColor: Colors.red),
-                      "span": Style(color: Colors.red),
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
-        );
-      },
-    );
   }
 
   Future<void> _onSignupPressed() async {
@@ -502,15 +392,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   child: RichText(
                     text: TextSpan(
                       text: "I consent to ",
-                      style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                      style: TextStyle(color: Colors.black),
                       children: [
                         TextSpan(
                           text: "data collection",
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
+                          style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
                           recognizer: TapGestureRecognizer()..onTap = _showConsentDialog,
                         ),
                       ],
@@ -542,5 +428,37 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _showConsentDialog() async {
+    try {
+      final String markdownData = await rootBundle.loadString('assets/legal/data_collection_consent.md');
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            content: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.9,
+              child: Markdown(
+                data: markdownData,
+                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                  h1Align: WrapAlignment.center,
+                  horizontalRuleDecoration: BoxDecoration(
+                    border: Border(top: BorderSide(width: 2.2, color: AppTheme.textPrimary.withAlpha(99))),
+                  ),
+                ),
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error loading consent dialog: $e');
+    }
   }
 }
