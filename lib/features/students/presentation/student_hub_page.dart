@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gyanshala_app/features/students/presentation/tabs/student_attendance_parent_tab.dart';
+import 'package:gyanshala_app/features/students/presentation/tabs/student_attendance_records_tab.dart';
 import 'package:gyanshala_app/features/students/presentation/tabs/student_list_tab.dart';
 
-class StudentHubPage extends ConsumerStatefulWidget {
+class StudentHubPage extends StatefulWidget {
   const StudentHubPage({super.key});
 
   @override
-  ConsumerState<StudentHubPage> createState() => _StudentHubPageState();
+  State<StudentHubPage> createState() => _StudentHubPage();
 }
 
-class _StudentHubPageState extends ConsumerState<StudentHubPage> {
+class _StudentHubPage extends State<StudentHubPage> {
   String _searchQuery = "";
 
   @override
@@ -19,38 +18,18 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Students"),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(100),
-            child: Column(
-              children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: "Attendance"),
-                    Tab(text: "Student List"),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    decoration: InputDecoration(
-                      hintText: "Search students...",
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          title: Text("Students"),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: "Student Attendance"),
+              Tab(text: "Student List"),
+            ],
           ),
         ),
         body: TabBarView(
-          physics: const NeverScrollableScrollPhysics(),
+          physics: NeverScrollableScrollPhysics(),
           children: [
-            StudentAttendanceParentTab(searchQuery: _searchQuery),
+            StudentAttendanceRecordsTab(searchQuery: _searchQuery),
             StudentListTab(searchQuery: _searchQuery),
           ],
         ),

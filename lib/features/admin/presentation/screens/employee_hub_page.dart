@@ -198,7 +198,7 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
     final supabase = ref.read(supabaseClientProvider);
 
     try {
-      final List<dynamic> data = await supabase.from('role_work_policies').select();
+      final List<dynamic> data = await supabase.from('work_hours').select();
       final List<dynamic> profilesData = await supabase.from('profiles').select('id, first_name, last_name');
       final Map<String, String> userNamesMap = {
         for (var p in profilesData) p['id'].toString(): "${p['first_name'] ?? ''} ${p['last_name'] ?? ''}".trim(),
@@ -322,7 +322,7 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
                 final currentAdminId = supabase.auth.currentUser?.id;
 
                 try {
-                  await supabase.from('role_work_policies').upsert({
+                  await supabase.from('work_hours').upsert({
                     'role': rowData.role,
                     'start_time': _formatTime(localStart),
                     'end_time': _formatTime(localEnd),

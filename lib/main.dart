@@ -10,7 +10,7 @@ import 'app.dart';
 import 'firebase_options.dart';
 
 const _supabaseUrl = 'https://ntrniclejneisdzepntv.supabase.co';
-const _supabaseAnonKey = 'sb_publishable_sTcOrSy3ODTZyPOjUHLlHg_j6uS7P9N';
+const _supabasePublishableKey = 'sb_publishable_sTcOrSy3ODTZyPOjUHLlHg_j6uS7P9N';
 
 final FlutterLocalNotificationsPlugin _localNotif = FlutterLocalNotificationsPlugin();
 
@@ -24,7 +24,7 @@ Future<void> main() async {
   await _setupForegroundNotifications();
 
   try {
-    await Supabase.initialize(url: _supabaseUrl, publishableKey: _supabaseAnonKey, debug: true);
+    await Supabase.initialize(url: _supabaseUrl, publishableKey: _supabasePublishableKey, debug: true);
   } catch (e) {
     debugPrint("Supabase Initialization Error: $e");
   }

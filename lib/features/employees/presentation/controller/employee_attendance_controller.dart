@@ -83,7 +83,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       if (userRole == 'shikshaMitra910') dbRoleKey = 'Shiksha Mitra (9-10)';
       if (userRole == 'mentorBV8') dbRoleKey = 'Mentor (BV-8)';
 
-      final policy = await _client.from('role_work_policies').select().eq('role', dbRoleKey).maybeSingle();
+      final policy = await _client.from('work_hours').select().eq('role', dbRoleKey).maybeSingle();
       if (policy == null) {
         dev.log("Warning: Policy record not found for matched key: $dbRoleKey");
         return null;

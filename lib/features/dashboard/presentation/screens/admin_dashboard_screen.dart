@@ -7,6 +7,7 @@ import 'package:gyanshala_app/features/admin/presentation/screens/form_managemen
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
+import 'package:gyanshala_app/features/students/presentation/student_hub_page.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   final String adminName;
@@ -38,18 +39,15 @@ class AdminDashboardScreen extends ConsumerWidget {
 class AdminHome extends StatelessWidget {
   final String adminName;
   const AdminHome({super.key, required this.adminName});
+
   @override
   Widget build(BuildContext context) {
     final List<MenuItem> menuItems = [
-      const MenuItem(title: "Signup Requests", icon: Icons.how_to_reg, color: Colors.red, targetScreen: SignupRequestsScreen()),
-      const MenuItem(title: "Employee Hub", icon: Icons.groups, color: Colors.amber, targetScreen: EmployeeHubPage()),
-      const MenuItem(title: "Locations", icon: Icons.map, color: Colors.green, targetScreen: LocationManagementScreen()),
-      const MenuItem(
-        title: "Monitoring and Evaluation Tools",
-        icon: Icons.description,
-        color: Colors.blue,
-        targetScreen: FormManagementScreen(),
-      ),
+      MenuItem(title: "Signup Requests", targetScreen: SignupRequestsScreen()),
+      MenuItem(title: "Employee Hub", targetScreen: EmployeeHubPage()),
+      MenuItem(title: "Locations", targetScreen: LocationManagementScreen()),
+      MenuItem(title: "Monitoring and Evaluation Tools", targetScreen: FormManagementScreen()),
+      MenuItem(title: "Students", targetScreen: StudentHubPage()),
     ];
 
     return SingleChildScrollView(
@@ -83,24 +81,17 @@ class AdminHome extends StatelessWidget {
   Widget _buildMenuCard(BuildContext context, MenuItem item) {
     return InkWell(
       onTap: () {
-        if (item.targetScreen != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => item.targetScreen!));
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("not yet implemented")));
+        try {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => item.targetScreen));
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
         }
       },
       child: Container(
         decoration: BoxDecoration(color: AppTheme.lightBlue),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              backgroundColor: item.color.withValues(alpha: 0.13),
-              child: Icon(item.icon, color: item.color),
-            ),
-            const SizedBox(height: 13),
-            Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
+          children: [Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600))],
         ),
       ),
     );
@@ -109,9 +100,7 @@ class AdminHome extends StatelessWidget {
 
 class MenuItem {
   final String title;
-  final IconData icon;
-  final Color color;
-  final Widget? targetScreen;
+  final Widget targetScreen;
 
-  const MenuItem({required this.title, required this.icon, required this.color, this.targetScreen});
+  const MenuItem({required this.title, required this.targetScreen});
 }

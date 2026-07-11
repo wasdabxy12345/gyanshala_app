@@ -12,7 +12,10 @@ Future<List<LocationItem>> fetchVillages(String clusterId) async {
   return data.map((e) => LocationItem.fromJson(e)).toList();
 }
 
+final bool isAuthenticated = _supabase.auth.currentUser != null;
+final String columns = isAuthenticated ? '*' : 'id, name, village_id';
+
 Future<List<LocationItem>> fetchSchools(String villageId) async {
-  final List<dynamic> data = await _supabase.from('schools').select().eq('village_id', villageId).order('name');
+  final List<dynamic> data = await _supabase.from('schools').select(columns).eq('village_id', villageId).order('name');
   return data.map((e) => LocationItem.fromJson(e)).toList();
 }
