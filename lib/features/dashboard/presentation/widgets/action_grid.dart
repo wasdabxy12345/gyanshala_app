@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/available_forms_screen.dart';
-import 'package:gyanshala_app/features/students/presentation/mark_student_attendance_page.dart';
+import 'package:gyanshala_app/features/students/presentation/views/mark_student_attendance_page.dart';
 
 class ActionGrid extends StatelessWidget {
   ActionGrid({super.key});

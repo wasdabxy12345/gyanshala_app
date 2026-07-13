@@ -38,7 +38,7 @@ class StudentController extends StateNotifier<bool> {
         params: {
           'p_start_date': start.toIso8601String().split('T')[0],
           'p_end_date': end.toIso8601String().split('T')[0],
-          'p_shiksha_mitra_id': _client.auth.currentUser?.id,
+          'p_shiksha_mitra_id': _client.auth.currentUser?.id, // Ensure your RPC supports this or filter client-side
         },
       );
       return List<Map<String, dynamic>>.from(response);
@@ -49,8 +49,6 @@ class StudentController extends StateNotifier<bool> {
   }
 
   Future<bool> registerStudent({
-    required String firstName,
-    required String lastName,
     required String studentId,
     required String gender,
     required int grade,
@@ -60,13 +58,11 @@ class StudentController extends StateNotifier<bool> {
     try {
       final user = _client.auth.currentUser;
       if (user == null) return false;
+
       await _client.from('students').insert({
-        'first_name': firstName,
-        'last_name': lastName,
-        'student_id_custom': studentId,
+        'student_id_local': studentId,
         'gender': gender,
         'grade': grade,
-        'shiksha_mitra_id': user.id,
         'school_id': schoolId,
       });
       state = false;
@@ -80,7 +76,6 @@ class StudentController extends StateNotifier<bool> {
 
   Future<List<Map<String, dynamic>>> getMyStudents() async {
     try {
-      final user = _client.auth.currentUser;
       final data = await _client
           .from('students')
           .select('''
@@ -95,8 +90,7 @@ class StudentController extends StateNotifier<bool> {
               )
             )
           ''')
-          .eq('shiksha_mitra_id', user?.id ?? '')
-          .order('first_name', ascending: true);
+          .order('student_id_local', ascending: true);
 
       return List<Map<String, dynamic>>.from(data).map((student) {
         final schoolMap = student['schools'] as Map<String, dynamic>?;
@@ -205,10 +199,7 @@ class StudentController extends StateNotifier<bool> {
       if (user == null) return;
 
       final List<dynamic> dbSchools = await _client.from('schools').select('id, name');
-      final existingStudents = await _client
-          .from('students')
-          .select('student_id_custom, first_name, last_name, gender, grade, school_id')
-          .eq('shiksha_mitra_id', user.id);
+      final existingStudents = await _client.from('students').select('student_id_local, gender, grade, school_id');
 
       List<Map<String, dynamic>> newStudents = [];
       List<Map<String, dynamic>> conflictingStudents = [];
@@ -231,17 +222,13 @@ class StudentController extends StateNotifier<bool> {
             return rawValue.toString().trim();
           }
 
-          final customId = val(0);
-          final fName = val(1);
-          final lName = val(2);
-          final genderRaw = val(3);
-          final gradeRaw = val(4);
-          final excelSchool = val(5);
+          final localId = val(0);
+          final gradeRaw = val(1);
+          final genderRaw = val(2);
+          final excelSchool = val(3);
 
           List<String> rowErrors = [];
-          if (customId == null || customId.isEmpty) rowErrors.add("ID");
-          if (fName == null || fName.isEmpty) rowErrors.add("First Name");
-          if (lName == null || lName.isEmpty) rowErrors.add("Last Name");
+          if (localId == null || localId.isEmpty) rowErrors.add("Student Local ID");
 
           int? finalGrade;
           if (gradeRaw == null || gradeRaw.isEmpty) {
@@ -282,23 +269,13 @@ class StudentController extends StateNotifier<bool> {
             continue;
           }
 
-          final incomingData = {
-            'student_id_custom': customId,
-            'first_name': fName,
-            'last_name': lName,
-            'gender': finalGender,
-            'grade': finalGrade,
-            'shiksha_mitra_id': user.id,
-            'school_id': schoolId,
-          };
+          final incomingData = {'student_id_local': localId, 'gender': finalGender, 'grade': finalGrade, 'school_id': schoolId};
 
-          final existingMatch = existingStudents.firstWhereOrNull((s) => s['student_id_custom'] == customId);
+          final existingMatch = existingStudents.firstWhereOrNull((s) => s['student_id_local'] == localId);
           if (existingMatch == null) {
             newStudents.add(incomingData);
           } else {
             bool isIdentical =
-                existingMatch['first_name'] == fName &&
-                existingMatch['last_name'] == lName &&
                 existingMatch['gender'] == finalGender &&
                 existingMatch['grade'] == finalGrade &&
                 existingMatch['school_id'] == schoolId;
@@ -328,7 +305,7 @@ class StudentController extends StateNotifier<bool> {
   }
 
   Future<void> processUpsert(List<Map<String, dynamic>> students) async {
-    await _client.from('students').upsert(students, onConflict: 'student_id_custom');
+    await _client.from('students').upsert(students, onConflict: 'student_id_local');
   }
 
   Future<bool> deleteStudents(List<String> ids) async {
@@ -347,6 +324,22 @@ class StudentController extends StateNotifier<bool> {
     } finally {
       state = false;
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getVillagesForClusters(List<String> clusterIds) async {
+    if (clusterIds.isEmpty) return [];
+
+    final data = await _client.from('villages').select().inFilter('cluster_id', clusterIds).order('name');
+
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  Future<List<Map<String, dynamic>>> getSchoolsForVillages(List<String> villageIds) async {
+    if (villageIds.isEmpty) return [];
+
+    final data = await _client.from('schools').select('id, name, village_id').inFilter('village_id', villageIds).order('name');
+
+    return List<Map<String, dynamic>>.from(data);
   }
 }
 

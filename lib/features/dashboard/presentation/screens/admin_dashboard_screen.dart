@@ -7,7 +7,7 @@ import 'package:gyanshala_app/features/admin/presentation/screens/form_managemen
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
-import 'package:gyanshala_app/features/students/presentation/student_hub_page.dart';
+import 'package:gyanshala_app/features/students/presentation/views/student_hub_page.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   final String adminName;

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/students/controller/student_controller.dart';
 import 'package:gyanshala_app/features/students/presentation/widgets/conflict_workspace_dialog.dart';
 
@@ -14,9 +15,7 @@ class AddStudentScreen extends ConsumerStatefulWidget {
 
 class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController();
-  final _lastNameController = TextEditingController();
-  final _idController = TextEditingController();
+  final _studentIdLocalController = TextEditingController();
 
   String _selectedGender = 'Male';
   int _selectedGrade = 1;
@@ -39,9 +38,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
 
   @override
   void dispose() {
-    _firstNameController.dispose();
-    _lastNameController.dispose();
-    _idController.dispose();
+    _studentIdLocalController.dispose();
     super.dispose();
   }
 
@@ -128,30 +125,10 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           child: Column(
             children: [
               if (_isLoadingLocations) const Padding(padding: EdgeInsets.only(bottom: 16.0), child: LinearProgressIndicator()),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _firstNameController,
-                      decoration: const InputDecoration(labelText: 'First Name', border: OutlineInputBorder()),
-                      validator: (val) => val == null || val.isEmpty ? 'Enter first name' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _lastNameController,
-                      decoration: const InputDecoration(labelText: 'Last Name', border: OutlineInputBorder()),
-                      validator: (val) => val == null || val.isEmpty ? 'Enter last name' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               TextFormField(
-                controller: _idController,
-                decoration: const InputDecoration(labelText: 'Student ID', border: OutlineInputBorder()),
-                validator: (val) => val == null || val.isEmpty ? 'Enter student ID' : null,
+                controller: _studentIdLocalController,
+                decoration: const InputDecoration(labelText: 'Student Local ID', border: OutlineInputBorder()),
+                validator: (val) => val == null || val.isEmpty ? 'Enter student local ID' : null,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -211,9 +188,11 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        label: const Text("Import Excel"),
-        icon: const Icon(Icons.upload_file),
+        label: Text("Import Excel"),
+        icon: isLoading ? CircularProgressIndicator() : Icon(Icons.upload_file),
         onPressed: isLoading ? null : _handleExcelImport,
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
       ),
     );
   }
@@ -225,9 +204,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
       final success = await ref
           .read(studentProvider.notifier)
           .registerStudent(
-            firstName: _firstNameController.text.trim(),
-            lastName: _lastNameController.text.trim(),
-            studentId: _idController.text.trim(),
+            studentId: _studentIdLocalController.text.trim(),
             gender: _selectedGender,
             grade: _selectedGrade,
             schoolId: _selectedSchoolId!,

@@ -22,7 +22,7 @@ class _ConflictWorkspaceDialogState extends State<ConflictWorkspaceDialog> {
   int? lowestSelectedIndex;
   int? highestSelectedIndex;
   Map<String, Map<String, bool>> fieldSelections = {};
-  final fields = const ['student_id_custom', 'first_name', 'last_name', 'gender', 'grade', 'school', 'village', 'cluster'];
+  final fields = const ['student_id_custom', 'gender', 'grade', 'school', 'village', 'cluster'];
   @override
   void initState() {
     super.initState();
