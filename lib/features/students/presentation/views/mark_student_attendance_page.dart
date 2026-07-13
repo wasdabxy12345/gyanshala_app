@@ -77,7 +77,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
   Future<void> _fetchAttendanceForSelectedDate() async {
     try {
       final targetDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-
       final data = await _client
           .from('student_attendance')
           .select('student_id, status')
@@ -96,6 +95,15 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
           existing[studentUuid] = 'A';
         } else if (dbStatus == 'late') {
           existing[studentUuid] = 'L';
+        }
+      }
+
+      // --- APPLY DEFAULT 'P' STATUS FOR NEW RECORDS ---
+      // Loop through all fetched students; if they aren't in the database yet, default them to 'P'
+      for (var student in _allStudents) {
+        final studentUuid = student['id']?.toString();
+        if (studentUuid != null && !existing.containsKey(studentUuid)) {
+          existing[studentUuid] = 'P';
         }
       }
 

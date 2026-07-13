@@ -63,24 +63,13 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   Future<void> _loadLocationMetadata() async {
     try {
       final controller = ref.read(studentProvider.notifier);
-
-      // 1. Fetch all clusters
       final clusters = await controller.getClusters();
       if (clusters.isEmpty || !mounted) return;
-
-      // Extract all cluster IDs
       final List<String> clusterIds = clusters.map((c) => c['id'].toString()).toList();
-
-      // 2. BATCH FETCH: Get ALL villages for these clusters in ONE query
-      // (Ensure your controller supports passing a list, or query Supabase using .in_('cluster_id', clusterIds))
       final allVillages = await controller.getVillagesForClusters(clusterIds);
 
       final List<String> villageIds = allVillages.map((v) => v['id'].toString()).toList();
-
-      // 3. BATCH FETCH: Get ALL schools for these villages in ONE query
       final allSchools = await controller.getSchoolsForVillages(villageIds);
-
-      // 4. Map them locally in-memory (Super fast!)
       Map<String, List<Map<String, dynamic>>> villageMap = {};
       for (var vil in allVillages) {
         final cId = vil['cluster_id'].toString();
