@@ -166,7 +166,7 @@ class StudentController extends StateNotifier<bool> {
     try {
       final response = await _client.from('students').update(updates).eq('id', id).select();
       if (response.isEmpty) {
-        dev.log("Update successful but 0 rows affected. Check your RLS policy 'using' clause.");
+        dev.log("Update successful but 0 rows affected. Check your RLS 'using' clause.");
         return false;
       }
       dev.log("Update Success: $response");

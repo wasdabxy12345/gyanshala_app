@@ -144,8 +144,11 @@ class _EmployeeHubPageState extends ConsumerState<EmployeeHubPage> with SingleTi
   }
 }
 
-class _PolicyRowData {
+class WorkHoursRowData {
+  final String? id;
   final String role;
+  final String? schoolId;
+  final String? schoolName;
   TimeOfDay startTime;
   TimeOfDay endTime;
   int leewayLate;
@@ -153,8 +156,11 @@ class _PolicyRowData {
   String updatedBy;
   String updatedAt;
 
-  _PolicyRowData({
+  WorkHoursRowData({
+    this.id,
     required this.role,
+    this.schoolId,
+    this.schoolName,
     this.startTime = const TimeOfDay(hour: 0, minute: 0),
     this.endTime = const TimeOfDay(hour: 0, minute: 0),
     this.leewayLate = 0,
@@ -162,6 +168,7 @@ class _PolicyRowData {
     this.updatedBy = "-",
     this.updatedAt = "-",
   });
+  bool get isUniversal => schoolId == null;
 }
 
 class _TimingSettingsOverlay extends ConsumerStatefulWidget {
@@ -173,169 +180,252 @@ class _TimingSettingsOverlay extends ConsumerStatefulWidget {
 
 class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> {
   bool _isLoading = true;
-  List<_PolicyRowData> _tableRows = [];
+  List<WorkHoursRowData> _tableRows = [];
+  List<Map<String, dynamic>> _allSchools = [];
 
   final List<String> _systemRoles = ['Shiksha Mitra (3-8)', 'Shiksha Mitra (9-10)', 'Mentor (BV-8)'];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAllWorkPolicies());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeData());
   }
 
-  TimeOfDay _parseTime(String? timeStr) {
-    if (timeStr == null) return const TimeOfDay(hour: 0, minute: 0);
+  Future<void> _initializeData() async {
+    await _loadSchools();
+    await _loadAllWorkHours();
+  }
+
+  Future<void> _loadSchools() async {
+    final supabase = ref.read(supabaseClientProvider);
     try {
-      final parts = timeStr.split(':');
+      final data = await supabase.from('schools').select('id, name').order('name');
+      _allSchools = List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      debugPrint("Error loading schools: $e");
+    }
+  }
+
+  TimeOfDay _parseTimeWithZone(String? timeStr) {
+    if (timeStr == null || timeStr.isEmpty) return const TimeOfDay(hour: 0, minute: 0);
+    try {
+      // Handles both "HH:mm:ss" and full offset expressions "HH:mm:ss+05:30"
+      final timePart = timeStr.split('+')[0].split('-')[0];
+      final parts = timePart.split(':');
       return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
     } catch (_) {
       return const TimeOfDay(hour: 0, minute: 0);
     }
   }
 
-  Future<void> _loadAllWorkPolicies() async {
+  String _formatTimeWithZone(TimeOfDay time) {
+    final String hour = time.hour.toString().padLeft(2, '0');
+    final String minute = time.minute.toString().padLeft(2, '0');
+    // Appends local machine system timezone offset to safely write timetz
+    final DateTime now = DateTime.now();
+    final Duration offset = now.timeZoneOffset;
+    final String sign = offset.isNegative ? "-" : "+";
+    final String offsetHours = offset.inHours.abs().toString().padLeft(2, '0');
+    final String offsetMins = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
+
+    return "$hour:$minute:00$sign$offsetHours:$offsetMins";
+  }
+
+  Future<void> _loadAllWorkHours() async {
     setState(() => _isLoading = true);
     final supabase = ref.read(supabaseClientProvider);
-
     try {
       final List<dynamic> data = await supabase.from('work_hours').select();
       final List<dynamic> profilesData = await supabase.from('profiles').select('id, first_name, last_name');
+
       final Map<String, String> userNamesMap = {
         for (var p in profilesData) p['id'].toString(): "${p['first_name'] ?? ''} ${p['last_name'] ?? ''}".trim(),
       };
 
-      final List<_PolicyRowData> fetchedRows = [];
+      final Map<String, String> schoolNamesMap = {for (var s in _allSchools) s['id'].toString(): s['name'].toString()};
 
-      for (String systemRole in _systemRoles) {
-        final Map<String, dynamic>? existingRecord = data.cast<Map<String, dynamic>?>().firstWhere(
-          (element) => element?['role'] == systemRole,
-          orElse: () => null,
+      final List<WorkHoursRowData> fetchedRows = [];
+
+      // 1. Parse DB existing records (both universal configurations and school exceptions)
+      for (var row in data) {
+        final updaterUuid = row['updated_by']?.toString();
+        String formattedDate = "-";
+        if (row['updated_at'] != null) {
+          final localDate = DateTime.parse(row['updated_at'].toString()).toLocal();
+          formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(localDate);
+        }
+
+        final schId = row['school_id']?.toString();
+
+        fetchedRows.add(
+          WorkHoursRowData(
+            id: row['id']?.toString(),
+            role: row['role']?.toString() ?? '',
+            schoolId: schId,
+            schoolName: schId != null ? schoolNamesMap[schId] : null,
+            startTime: _parseTimeWithZone(row['start_time']?.toString()),
+            endTime: _parseTimeWithZone(row['end_time']?.toString()),
+            leewayLate: row['leeway_late_minutes'] ?? 0,
+            leewayEarly: row['leeway_early_minutes'] ?? 0,
+            updatedBy: userNamesMap[updaterUuid] ?? (updaterUuid ?? "-"),
+            updatedAt: formattedDate,
+          ),
         );
+      }
 
-        if (existingRecord != null) {
-          final updaterUuid = existingRecord['updated_by']?.toString();
-          String formattedDate = "-";
-
-          if (existingRecord['updated_at'] != null) {
-            final localDate = DateTime.parse(existingRecord['updated_at'].toString()).toLocal();
-            formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(localDate);
-          }
-
-          fetchedRows.add(
-            _PolicyRowData(
-              role: systemRole,
-              startTime: _parseTime(existingRecord['start_time']?.toString()),
-              endTime: _parseTime(existingRecord['end_time']?.toString()),
-              leewayLate: existingRecord['leeway_late_minutes'] ?? 0,
-              leewayEarly: existingRecord['leeway_early_minutes'] ?? 0,
-              updatedBy: userNamesMap[updaterUuid] ?? (updaterUuid ?? "-"),
-              updatedAt: formattedDate,
-            ),
-          );
-        } else {
-          fetchedRows.add(_PolicyRowData(role: systemRole));
+      // 2. Ensure every base system role has at least a fallback structural visual row
+      for (String systemRole in _systemRoles) {
+        bool hasUniversal = fetchedRows.any((r) => r.role == systemRole && r.isUniversal);
+        if (!hasUniversal) {
+          fetchedRows.add(WorkHoursRowData(role: systemRole));
         }
       }
+
+      // Sorting layout: Universal records on top, followed by alphabetized structural roles
+      fetchedRows.sort((a, b) {
+        if (a.role != b.role) return a.role.compareTo(b.role);
+        if (a.isUniversal) return -1;
+        if (b.isUniversal) return 1;
+        return (a.schoolName ?? '').compareTo(b.schoolName ?? '');
+      });
 
       setState(() {
         _tableRows = fetchedRows;
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint("Error pipeline execution: $e");
       setState(() => _isLoading = false);
     }
   }
 
-  String _formatTime(TimeOfDay time) {
-    final String hour = time.hour.toString().padLeft(2, '0');
-    final String minute = time.minute.toString().padLeft(2, '0');
-    return "$hour:$minute:00";
-  }
-
-  void _editRowPolicy(_PolicyRowData rowData) {
-    final lateController = TextEditingController(text: rowData.leewayLate.toString());
-    final earlyController = TextEditingController(text: rowData.leewayEarly.toString());
+  void _editOrAddWorkHours(WorkHoursRowData rowData, {bool isCreatingException = false}) {
+    final lateController = TextEditingController(text: isCreatingException ? "0" : rowData.leewayLate.toString());
+    final earlyController = TextEditingController(text: isCreatingException ? "0" : rowData.leewayEarly.toString());
     TimeOfDay localStart = rowData.startTime;
     TimeOfDay localEnd = rowData.endTime;
+    String? selectedSchoolId = isCreatingException ? null : rowData.schoolId;
+
+    // Filter down to exceptions that aren't declared yet on this specific role
+    final existingExceptions = _tableRows.where((r) => r.role == rowData.role && !r.isUniversal).map((r) => r.schoolId).toSet();
+    final availableSchoolsForException = _allSchools.where((s) => !existingExceptions.contains(s['id'].toString())).toList();
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text("Edit Rules: ${rowData.role}", style: const TextStyle(fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        await _selectTime(context, localStart, (t) {
-                          setModalState(() => localStart = t);
-                        });
-                      },
-                      child: Text("Start: ${localStart.format(context)}"),
+          title: Text(
+            isCreatingException ? "Add Exception for ${rowData.role}" : "Edit Work Hours: ${rowData.role}",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isCreatingException) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedSchoolId,
+                    hint: const Text("Select Exception School"),
+                    decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.all(10)),
+                    items: availableSchoolsForException.map((sch) {
+                      return DropdownMenuItem<String>(value: sch['id'].toString(), child: Text(sch['name'].toString()));
+                    }).toList(),
+                    onChanged: (val) => setModalState(() => selectedSchoolId = val),
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (!rowData.isUniversal) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
+                    child: Text(
+                      "Exception Target School: ${rowData.schoolName}",
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        await _selectTime(context, localEnd, (t) {
-                          setModalState(() => localEnd = t);
-                        });
-                      },
-                      child: Text("End: ${localEnd.format(context)}"),
-                    ),
-                  ),
+                  const SizedBox(height: 12),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: lateController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Late Mins", border: OutlineInputBorder()),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final picked = await showTimePicker(context: context, initialTime: localStart);
+                          if (picked != null) setModalState(() => localStart = picked);
+                        },
+                        child: Text("Start: ${localStart.format(context)}"),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: earlyController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "Early Mins", border: OutlineInputBorder()),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final picked = await showTimePicker(context: context, initialTime: localEnd);
+                          if (picked != null) setModalState(() => localEnd = picked);
+                        },
+                        child: Text("End: ${localEnd.format(context)}"),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: lateController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Late Mins", border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: earlyController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Early Mins", border: OutlineInputBorder()),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue, foregroundColor: Colors.white),
-              onPressed: () async {
-                final supabase = ref.read(supabaseClientProvider);
-                final currentAdminId = supabase.auth.currentUser?.id;
+              onPressed: (isCreatingException && selectedSchoolId == null)
+                  ? null
+                  : () async {
+                      final supabase = ref.read(supabaseClientProvider);
+                      final currentAdminId = supabase.auth.currentUser?.id;
 
-                try {
-                  await supabase.from('work_hours').upsert({
-                    'role': rowData.role,
-                    'start_time': _formatTime(localStart),
-                    'end_time': _formatTime(localEnd),
-                    'leeway_late_minutes': int.tryParse(lateController.text.trim()) ?? 0,
-                    'leeway_early_minutes': int.tryParse(earlyController.text.trim()) ?? 0,
-                    'updated_at': DateTime.now().toUtc().toIso8601String(),
-                    'updated_by': currentAdminId,
-                  });
-                  if (context.mounted) Navigator.pop(context);
-                  _loadAllWorkPolicies();
-                } catch (_) {}
-              },
-              child: const Text("Apply Updates"),
+                      try {
+                        final payload = {
+                          'role': rowData.role,
+                          'school_id': selectedSchoolId,
+                          'start_time': _formatTimeWithZone(localStart),
+                          'end_time': _formatTimeWithZone(localEnd),
+                          'leeway_late_minutes': int.tryParse(lateController.text.trim()) ?? 0,
+                          'leeway_early_minutes': int.tryParse(earlyController.text.trim()) ?? 0,
+                          'updated_at': DateTime.now().toUtc().toIso8601String(),
+                          'updated_by': currentAdminId,
+                        };
+
+                        if (!isCreatingException && rowData.id != null) {
+                          payload['id'] = rowData.id;
+                        }
+
+                        await supabase.from('work_hours').upsert(payload);
+
+                        if (context.mounted) Navigator.pop(context);
+                        _loadAllWorkHours();
+                      } catch (e) {
+                        debugPrint("Error upserting configuration: $e");
+                      }
+                    },
+              child: const Text("Apply Update"),
             ),
           ],
         ),
@@ -343,89 +433,124 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
     );
   }
 
+  Future<void> _deleteException(String id) async {
+    final supabase = ref.read(supabaseClientProvider);
+    try {
+      await supabase.from('work_hours').delete().eq('id', id);
+      _loadAllWorkHours();
+    } catch (e) {
+      debugPrint("Could not drop explicit structural Work Hours: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Role Work Policies Manager"),
+      title: const Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [Text("Role & School Work Hours Management")],
+      ),
       content: _isLoading
-          ? const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()))
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-                  columns: const [
-                    DataColumn(
-                      label: Text("Role", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("Start Time", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("End Time", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("Start Leeway", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("End Leeway", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("Modified By", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("Modified At", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                    DataColumn(
-                      label: Text("Action", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                  rows: _tableRows.map((row) {
-                    return DataRow(
-                      cells: [
-                        DataCell(Text(row.role, style: const TextStyle(fontWeight: FontWeight.w500))),
-                        DataCell(Text(row.startTime.format(context))),
-                        DataCell(Text(row.endTime.format(context))),
-                        DataCell(Text("${row.leewayLate} mins")),
-                        DataCell(Text("${row.leewayEarly} mins")),
-                        DataCell(Text(row.updatedBy, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-                        DataCell(Text(row.updatedAt, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-                        DataCell(
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: AppTheme.primaryBlue, size: 20),
-                            onPressed: () => _editRowPolicy(row),
-                          ),
+          ? const SizedBox(height: 250, width: 400, child: Center(child: CircularProgressIndicator()))
+          : SizedBox(
+              width: MediaQuery.of(context).size.width * 0.85,
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
+                          columns: const [
+                            DataColumn(
+                              label: Text("Role / Scope", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("Start Time", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("End Time", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("Start Leeway", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("End Leeway", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("Modified By", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("Modified At", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            DataColumn(
+                              label: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                          rows: _tableRows.map((row) {
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(row.role, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      Text(
+                                        row.isUniversal ? "Universal Default" : "Exception: ${row.schoolName}",
+                                        style: TextStyle(
+                                          color: row.isUniversal ? Colors.teal : Colors.deepOrange,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                DataCell(Text(row.startTime.format(context))),
+                                DataCell(Text(row.endTime.format(context))),
+                                DataCell(Text("${row.leewayLate} mins")),
+                                DataCell(Text("${row.leewayEarly} mins")),
+                                DataCell(Text(row.updatedBy, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+                                DataCell(Text(row.updatedAt, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: "Edit details",
+                                        icon: const Icon(Icons.edit, color: AppTheme.primaryBlue, size: 20),
+                                        onPressed: () => _editOrAddWorkHours(row),
+                                      ),
+                                      if (row.isUniversal)
+                                        IconButton(
+                                          tooltip: "Create custom school exception",
+                                          icon: const Icon(Icons.add_location_alt, color: Colors.green, size: 20),
+                                          onPressed: () => _editOrAddWorkHours(row, isCreatingException: true),
+                                        )
+                                      else
+                                        IconButton(
+                                          tooltip: "Remove school exception rule",
+                                          icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                                          onPressed: () => _deleteException(row.id!),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
                         ),
-                      ],
-                    );
-                  }).toList(),
-                ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close Panel"))],
     );
-  }
-
-  Future<void> _selectTime(BuildContext context, TimeOfDay initialTime, Function(TimeOfDay) onTimePicked) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-      builder: (BuildContext context, Widget? child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppTheme.primaryBlue,
-              onPrimary: Colors.white,
-              tertiaryContainer: AppTheme.primaryBlue.withAlpha(40),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      onTimePicked(picked);
-    }
   }
 }

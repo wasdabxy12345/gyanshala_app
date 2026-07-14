@@ -15,6 +15,7 @@ final employeeAttendanceProvider = StateNotifierProvider<EmployeeAttendanceContr
 
 class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
   final SupabaseClient _client;
+
   EmployeeAttendanceController(this._client) : super(const AsyncLoading<bool>()) {
     checkCurrentServerStatus();
   }
@@ -29,7 +30,6 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       final now = DateTime.now().toUtc();
       final start = DateTime.utc(now.year, now.month, now.day);
       final end = start.add(const Duration(days: 1));
-
       final data = await _client
           .from('employee_attendance')
           .select('status')
@@ -50,68 +50,88 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     }
   }
 
+  /// Parses Postgres 'time with time zone' (e.g. "08:00:00+05:30" or "17:30:00-04")
+  /// safely into absolute minutes from the beginning of the day.
   int _parseTimeToMinutes(String? timeStr) {
     if (timeStr == null) return 0;
     try {
-      final parts = timeStr.split(':');
-      return (int.parse(parts[0]) * 60) + int.parse(parts[1]);
-    } catch (_) {
+      // Strips offset if present (e.g. "08:00:00+05:30" -> "08:00:00")
+      final String timeWithoutOffset = timeStr.split('+')[0].split('-')[0].trim();
+      final parts = timeWithoutOffset.split(':');
+
+      final int hours = int.parse(parts[0]);
+      final int minutes = int.parse(parts[1]);
+      return (hours * 60) + minutes;
+    } catch (e) {
+      dev.log("Error parsing time string '$timeStr': $e");
       return 0;
     }
   }
 
+  /// Formats positive absolute minutes into standard interval format "HH:mm:00".
   String _formatIntervalString(int totalMinutes) {
-    final bool isNegative = totalMinutes < 0;
     final int absoluteMinutes = totalMinutes.abs();
     final int hours = absoluteMinutes ~/ 60;
     final int minutes = absoluteMinutes % 60;
-
     final String hh = hours.toString().padLeft(2, '0');
     final String mm = minutes.toString().padLeft(2, '0');
-
-    return "${isNegative ? '-' : ''}$hh:$mm:00";
+    return "$hh:$mm:00";
   }
 
   Future<String?> _calculateDeviation(String userId, bool isCheckingIn) async {
     try {
       final profile = await _client.from('profiles').select('role').eq('id', userId).maybeSingle();
-      if (profile == null || profile['role'] == null) return null;
-      final String userRole = profile['role'].toString();
+      if (profile == null || profile['role'] == null) return "00:00:00";
 
+      final String userRole = profile['role'].toString();
       String dbRoleKey = userRole;
       if (userRole == 'shikshaMitra38') dbRoleKey = 'Shiksha Mitra (3-8)';
       if (userRole == 'shikshaMitra910') dbRoleKey = 'Shiksha Mitra (9-10)';
       if (userRole == 'mentorBV8') dbRoleKey = 'Mentor (BV-8)';
 
-      final policy = await _client.from('work_hours').select().eq('role', dbRoleKey).maybeSingle();
-      if (policy == null) {
-        dev.log("Warning: Policy record not found for matched key: $dbRoleKey");
-        return null;
+      final profileSchool = await _client.from('profile_schools').select('school_id').eq('user_id', userId).maybeSingle();
+      final String? assignedSchoolId = profileSchool?['school_id']?.toString();
+
+      var query = _client.from('work_hours').select().eq('role', dbRoleKey);
+      query = assignedSchoolId != null
+          ? query.or('school_id.eq.$assignedSchoolId,school_id.is.null')
+          : query.isFilter('school_id', null);
+
+      final List<dynamic> workHours = await query.order('school_id', ascending: false);
+      if (workHours.isEmpty) {
+        dev.log("Warning: No work hours found for role: $dbRoleKey");
+        return "00:00:00"; // Safeguard to prevent sending null to DB
       }
 
+      final workHour = workHours.first;
       final nowLocal = DateTime.now();
       final int actualMinutes = (nowLocal.hour * 60) + nowLocal.minute;
 
       if (isCheckingIn) {
-        final int targetStart = _parseTimeToMinutes(policy['start_time']?.toString());
-        final int lateLeeway = (policy['leeway_late_minutes'] as num?)?.toInt() ?? 0;
+        final int targetStart = _parseTimeToMinutes(workHour['start_time']?.toString());
+        final int lateLeeway = (workHour['leeway_late_minutes'] as num?)?.toInt() ?? 0;
         final int lateness = actualMinutes - targetStart;
+
+        // If the user checked in late, beyond the leeway window
         if (lateness > lateLeeway) {
           return _formatIntervalString(lateness - lateLeeway);
         }
       } else {
-        final int targetEnd = _parseTimeToMinutes(policy['end_time']?.toString());
-        final int earlyLeeway = (policy['leeway_early_minutes'] as num?)?.toInt() ?? 0;
+        final int targetEnd = _parseTimeToMinutes(workHour['end_time']?.toString());
+        final int earlyLeeway = (workHour['leeway_early_minutes'] as num?)?.toInt() ?? 0;
         final int earlyDeparture = targetEnd - actualMinutes;
 
+        // If the user checked out early, beyond the leeway window
         if (earlyDeparture > earlyLeeway) {
-          return _formatIntervalString(-(earlyDeparture - earlyLeeway));
+          return _formatIntervalString(earlyDeparture - earlyLeeway);
         }
       }
+
+      // Default to exact on-time (no deviation) if within the leeway windows
       return "00:00:00";
-    } catch (e) {
-      dev.log("Policy calculation bypass:", error: e);
-      return null;
+    } catch (e, stack) {
+      dev.log("Work hours calculation bypass error:", error: e, stackTrace: stack);
+      return "00:00:00";
     }
   }
 
@@ -124,6 +144,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       if (position == null) {
         throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
       }
+
       final dynamic response = await _client.rpc(
         'get_school_at_location',
         params: {'lat': position.latitude, 'lon': position.longitude},
@@ -132,6 +153,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       if (detectedSchoolId == null || detectedSchoolId.trim().isEmpty) {
         detectedSchoolId = null;
       }
+
       final userId = _client.auth.currentUser?.id;
       if (userId == null) {
         throw Exception("User is not authenticated.");
@@ -146,7 +168,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
         'longitude': position.longitude,
         'status': checkingInThisAction ? 'check_in' : 'check_out',
         'school_id': detectedSchoolId,
-        'attendance_time_variance': deviationInterval,
+        'attendance_time_variance': deviationInterval, // Handled safely as "HH:mm:00"
       });
 
       state = AsyncData(checkingInThisAction);

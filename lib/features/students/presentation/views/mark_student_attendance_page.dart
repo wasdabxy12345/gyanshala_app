@@ -51,7 +51,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     try {
       if (!mounted) return;
       setState(() => _isFetchingStudents = true);
-
       final data = await _client
           .from('students')
           .select('id, student_id_local, grade')
@@ -60,13 +59,16 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
       if (mounted) {
         setState(() {
           _allStudents = List<Map<String, dynamic>>.from(data);
-
           final List<int> grades = _allStudents.where((s) => s['grade'] != null).map((s) => s['grade'] as int).toList();
           if (_selectedGrade != null && !grades.contains(_selectedGrade)) {
             _selectedGrade = null;
           }
           _isFetchingStudents = false;
         });
+
+        // Re-trigger attendance mapping so default 'P' statuses apply immediately
+        // to the newly fetched student list.
+        await _fetchAttendanceForSelectedDate();
       }
     } catch (e) {
       debugPrint("Error fetching students via RLS boundary: $e");
