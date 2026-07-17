@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/models/user_role.dart';
@@ -38,11 +39,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       final user = await authRepo.login(identifier: _identifierController.text.trim(), password: _passwordController.text);
+
       final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
-      if (!mounted) return;
-      Widget nextScreen;
       final userRole = UserRole.fromString(user.role);
 
+      // --- WEB ACCESS RESTRICTION ---
+      if (kIsWeb && !kDebugMode && userRole != UserRole.admin) {
+        // Log them out immediately so their session isn't saved in local storage
+        await authRepo.signOut();
+        throw Exception('Access Denied: Only Administrator accounts can log in via the web platform.');
+      }
+      // ------------------------------
+
+      if (!mounted) return;
+      Widget nextScreen;
       switch (userRole) {
         case UserRole.admin:
           nextScreen = AdminDashboardScreen(adminName: name);
@@ -55,9 +65,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           nextScreen = ShikshaMitraDashboardScreen(shikshaMitraName: name);
           break;
       }
-
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Welcome back, $name!')));
-
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => nextScreen), (route) => false);
     } catch (e) {
       if (!mounted) return;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
-import 'package:gyanshala_app/features/dashboard/presentation/widgets/action_grid1.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/widgets/mentor_action_grid.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
 import '../widgets/attendance_card.dart';
@@ -51,7 +51,7 @@ class HomeContent extends StatelessWidget {
             const SizedBox(height: 22),
             const AttendanceCard(),
             const SizedBox(height: 22),
-            ActionGrid1(),
+            MentorActionGrid(),
           ],
         ),
       ),

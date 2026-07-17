@@ -3,8 +3,8 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/available_forms_screen.dart';
 import 'package:gyanshala_app/features/students/presentation/views/mark_student_attendance_page.dart';
 
-class ActionGrid1 extends StatelessWidget {
-  ActionGrid1({super.key});
+class ShikshaMitraActionGrid extends StatelessWidget {
+  ShikshaMitraActionGrid({super.key});
 
   final List<MenuItem> menuItems = [
     const MenuItem(title: "Students", icon: Icons.group, color: Colors.red, targetScreen: MarkStudentAttendancePage()),

@@ -1,5 +1,6 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart'; // Imported for kIsWeb and kDebugMode
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,22 +39,25 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
 
-  UserRole _selectedRole = UserRole.shikshaMitra38;
+  // Set default role dynamically depending on environment
+  late UserRole _selectedRole;
   String? _selectedGender;
   bool _agreedToTerms = false;
-
   final List<LocationItem> _clusters = [];
   final List<LocationItem> _villages = [];
   final List<LocationItem> _schools = [];
-
   String? _selectedClusterId;
   String? _selectedVillageId;
   final List<String> _selectedSchoolIds = [];
   final List<LocationItem> _selectedSchoolObjects = [];
 
+  bool get _isProductionWeb => kIsWeb && !kDebugMode;
+
   @override
   void initState() {
     super.initState();
+    // Default to admin if on production web, otherwise default to shikshaMitra38
+    _selectedRole = _isProductionWeb ? UserRole.admin : UserRole.shikshaMitra38;
     _loadClusters();
   }
 
@@ -128,8 +132,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           children: [
             const Text('Select Position *', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
+
+            // Apply web environment restrictions to the role selection list
             RoleSelector(
               selectedRole: _selectedRole,
+              allowedRoles: _isProductionWeb ? const [UserRole.admin] : null, // Overrides selector choices if on prod web
               onRoleSelected: (role) => setState(() {
                 _selectedRole = role;
                 _selectedSchoolIds.clear();
@@ -392,7 +399,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   child: RichText(
                     text: TextSpan(
                       text: "I consent to ",
-                      style: TextStyle(color: Colors.black),
+                      style: const TextStyle(color: Colors.black),
                       children: [
                         TextSpan(
                           text: "data collection",
@@ -433,9 +440,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Future<void> _showConsentDialog() async {
     try {
       final String markdownData = await rootBundle.loadString('assets/legal/data_collection_consent.md');
-
       if (!mounted) return;
-
       showDialog(
         context: context,
         builder: (BuildContext context) {

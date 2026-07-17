@@ -45,17 +45,17 @@ copy /y "%ORIGINAL_APK%" "%RENAMED_APK%" >nul
 echo ✅ [Android] APK Ready!
 
 :: --- GIT & GITHUB RELEASE ---
-echo 🛠️ Creating GitHub Release and uploading assets...
-:: This creates the tag/release and pushes it to GitHub, triggering your Vercel Web Build automatically.
-gh release create "%VERSION%" "%RENAMED_APK%" --title "Release %VERSION%" --notes "%NOTES%" --target main
+echo 🛠️ Creating GitHub Release on Public Repository...
+:: Pushes the release and APK directly to the public repository gyanshala-dev/gyanshala_app
+gh release create "%VERSION%" "%RENAMED_APK%" --repo "gyanshala-dev/gyanshala_app" --title "Release %VERSION%" --notes "%NOTES%"
 
 if %ERRORLEVEL% NEQ 0 (
-  echo ❌ GitHub Release failed. Check if version tag already exists or if 'gh' CLI is authenticated.
-  ) else (
+  echo ❌ GitHub Release failed. Check if version tag already exists, or if 'gh' CLI is authenticated and has access to gyanshala-dev/gyanshala_app.
+) else (
   echo.
   echo ========================================================
   echo 🎉 PIPELINE SUCCESSFUL FOR %VERSION%!
-  echo ☁️ Vercel should now be building your Web deployment automatically.
+  echo 📦 APK successfully published to: https://github.com/gyanshala-dev/gyanshala_app
   echo ========================================================
 )
 

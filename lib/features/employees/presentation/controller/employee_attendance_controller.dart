@@ -50,12 +50,9 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     }
   }
 
-  /// Parses Postgres 'time with time zone' (e.g. "08:00:00+05:30" or "17:30:00-04")
-  /// safely into absolute minutes from the beginning of the day.
   int _parseTimeToMinutes(String? timeStr) {
     if (timeStr == null) return 0;
     try {
-      // Strips offset if present (e.g. "08:00:00+05:30" -> "08:00:00")
       final String timeWithoutOffset = timeStr.split('+')[0].split('-')[0].trim();
       final parts = timeWithoutOffset.split(':');
 
@@ -68,7 +65,6 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     }
   }
 
-  /// Formats positive absolute minutes into standard interval format "HH:mm:00".
   String _formatIntervalString(int totalMinutes) {
     final int absoluteMinutes = totalMinutes.abs();
     final int hours = absoluteMinutes ~/ 60;
@@ -100,7 +96,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       final List<dynamic> workHours = await query.order('school_id', ascending: false);
       if (workHours.isEmpty) {
         dev.log("Warning: No work hours found for role: $dbRoleKey");
-        return "00:00:00"; // Safeguard to prevent sending null to DB
+        return "00:00:00";
       }
 
       final workHour = workHours.first;
@@ -112,7 +108,6 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
         final int lateLeeway = (workHour['leeway_late_minutes'] as num?)?.toInt() ?? 0;
         final int lateness = actualMinutes - targetStart;
 
-        // If the user checked in late, beyond the leeway window
         if (lateness > lateLeeway) {
           return _formatIntervalString(lateness - lateLeeway);
         }
@@ -121,13 +116,11 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
         final int earlyLeeway = (workHour['leeway_early_minutes'] as num?)?.toInt() ?? 0;
         final int earlyDeparture = targetEnd - actualMinutes;
 
-        // If the user checked out early, beyond the leeway window
         if (earlyDeparture > earlyLeeway) {
           return _formatIntervalString(earlyDeparture - earlyLeeway);
         }
       }
 
-      // Default to exact on-time (no deviation) if within the leeway windows
       return "00:00:00";
     } catch (e, stack) {
       dev.log("Work hours calculation bypass error:", error: e, stackTrace: stack);
@@ -168,7 +161,7 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
         'longitude': position.longitude,
         'status': checkingInThisAction ? 'check_in' : 'check_out',
         'school_id': detectedSchoolId,
-        'attendance_time_variance': deviationInterval, // Handled safely as "HH:mm:00"
+        'attendance_time_variance': deviationInterval,
       });
 
       state = AsyncData(checkingInThisAction);

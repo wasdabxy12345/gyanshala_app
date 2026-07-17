@@ -26,7 +26,6 @@ class AuthRepositoryImpl implements AuthRepository {
     if (requestStatus == 'pending') {
       throw Exception('Your signup request is still pending admin approval.');
     }
-
     if (requestStatus == 'rejected') {
       throw Exception('Your signup request has been rejected.\n\nReason: $requestActionReason');
     }
@@ -40,20 +39,24 @@ class AuthRepositoryImpl implements AuthRepository {
       if (profileStatus == 'suspended') {
         throw Exception('Your account has been temporarily suspended\n\nReason: $profileActionReason');
       }
-
       if (profileStatus == 'removed') {
         throw Exception('Your account has been permanently removed\n\nReason: $profileActionReason');
       }
+
+      // --- WEB ACCESS REJECTION AT REPO LEVEL ---
+      final String role = profileData['role']?.toString() ?? '';
+      if (kIsWeb && !kDebugMode && role != 'admin') {
+        throw Exception('Web login is restricted to Administrator accounts only.');
+      }
+      // ------------------------------------------
     } else {
       throw Exception('No account found associated with the entered phone number');
     }
 
     final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
-
     if (response.user == null) {
       throw Exception("Login failed. Invalid credentials.");
     }
-
     return UserModel.fromJson(profileData);
   }
 

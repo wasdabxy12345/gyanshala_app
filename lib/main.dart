@@ -9,8 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'firebase_options.dart';
 
-const _supabaseUrl = 'https://ntrniclejneisdzepntv.supabase.co';
-const _supabasePublishableKey = 'sb_publishable_sTcOrSy3ODTZyPOjUHLlHg_j6uS7P9N';
+const _supabaseUrl = 'https://ufvdldcevxgnphddxznz.supabase.co';
+const _supabasePublishableKey = 'sb_publishable_qrmOEPPE6UFQOK_mN6SGYA_EwrIv4kx';
 
 final FlutterLocalNotificationsPlugin _localNotif = FlutterLocalNotificationsPlugin();
 

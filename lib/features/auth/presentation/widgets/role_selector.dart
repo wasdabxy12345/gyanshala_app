@@ -3,15 +3,21 @@ import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 
 class RoleSelector extends StatelessWidget {
-  const RoleSelector({super.key, required this.selectedRole, required this.onRoleSelected});
+  const RoleSelector({super.key, required this.selectedRole, required this.onRoleSelected, this.allowedRoles});
+
   final UserRole selectedRole;
   final ValueChanged<UserRole> onRoleSelected;
+  final List<UserRole>? allowedRoles;
+
   @override
   Widget build(BuildContext context) {
+    // Fallback to all roles if no specific allowed roles are provided
+    final rolesToDisplay = allowedRoles ?? UserRole.values;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: UserRole.values.map((role) {
+      children: rolesToDisplay.map((role) {
         final isSelected = role == selectedRole;
         return ChoiceChip(
           label: Text(role.label),

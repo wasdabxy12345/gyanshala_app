@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 
-import '../widgets/action_grid.dart';
 import '../widgets/attendance_card.dart';
+import '../widgets/shiksha_mitra_action_grid.dart';
 
 class ShikshaMitraDashboardScreen extends ConsumerWidget {
   final String shikshaMitraName;
@@ -47,7 +47,7 @@ class ShikshaMitraHome extends StatelessWidget {
             const SizedBox(height: 22),
             const AttendanceCard(),
             const SizedBox(height: 22),
-            ActionGrid(),
+            ShikshaMitraActionGrid(),
           ],
         ),
       ),

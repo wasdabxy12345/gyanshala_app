@@ -209,7 +209,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
   TimeOfDay _parseTimeWithZone(String? timeStr) {
     if (timeStr == null || timeStr.isEmpty) return const TimeOfDay(hour: 0, minute: 0);
     try {
-      // Handles both "HH:mm:ss" and full offset expressions "HH:mm:ss+05:30"
       final timePart = timeStr.split('+')[0].split('-')[0];
       final parts = timePart.split(':');
       return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
@@ -221,7 +220,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
   String _formatTimeWithZone(TimeOfDay time) {
     final String hour = time.hour.toString().padLeft(2, '0');
     final String minute = time.minute.toString().padLeft(2, '0');
-    // Appends local machine system timezone offset to safely write timetz
     final DateTime now = DateTime.now();
     final Duration offset = now.timeZoneOffset;
     final String sign = offset.isNegative ? "-" : "+";
@@ -246,7 +244,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
 
       final List<WorkHoursRowData> fetchedRows = [];
 
-      // 1. Parse DB existing records (both universal configurations and school exceptions)
       for (var row in data) {
         final updaterUuid = row['updated_by']?.toString();
         String formattedDate = "-";
@@ -273,7 +270,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
         );
       }
 
-      // 2. Ensure every base system role has at least a fallback structural visual row
       for (String systemRole in _systemRoles) {
         bool hasUniversal = fetchedRows.any((r) => r.role == systemRole && r.isUniversal);
         if (!hasUniversal) {
@@ -281,7 +277,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
         }
       }
 
-      // Sorting layout: Universal records on top, followed by alphabetized structural roles
       fetchedRows.sort((a, b) {
         if (a.role != b.role) return a.role.compareTo(b.role);
         if (a.isUniversal) return -1;
@@ -306,7 +301,6 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
     TimeOfDay localEnd = rowData.endTime;
     String? selectedSchoolId = isCreatingException ? null : rowData.schoolId;
 
-    // Filter down to exceptions that aren't declared yet on this specific role
     final existingExceptions = _tableRows.where((r) => r.role == rowData.role && !r.isUniversal).map((r) => r.schoolId).toSet();
     final availableSchoolsForException = _allSchools.where((s) => !existingExceptions.contains(s['id'].toString())).toList();
 

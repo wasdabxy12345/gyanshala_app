@@ -11,16 +11,18 @@ class MarkStudentAttendancePage extends StatefulWidget {
 
 class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
   final SupabaseClient _client = Supabase.instance.client;
-
   final DateTime _selectedDate = DateTime.now();
   String _searchQuery = "";
   int? _selectedGrade;
   bool _isLoading = false;
-
   Map<String, String> _statusMap = {};
   List<DateTime> _holidays = [];
   List<Map<String, dynamic>> _allStudents = [];
   bool _isFetchingStudents = true;
+
+  // Role-based configuration state
+  String? _userRole;
+  bool _isProfileLoading = true;
 
   @override
   void initState() {
@@ -29,9 +31,31 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
   }
 
   Future<void> _initializeData() async {
+    await _fetchUserProfile();
     await _loadHolidays();
     await _fetchMyStudents();
     await _fetchAttendanceForSelectedDate();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final data = await _client.from('profiles').select('role').eq('id', userId).maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _userRole = data?['role']?.toString();
+          _isProfileLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching user profile: $e");
+      if (mounted) {
+        setState(() => _isProfileLoading = false);
+      }
+    }
   }
 
   Future<void> _loadHolidays() async {
@@ -47,10 +71,32 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     }
   }
 
+  /// Evaluates if a student's grade is visible/accessible to the current user role
+  bool _isGradeAllowedForRole(int? grade) {
+    if (grade == null) return false;
+    if (_userRole == 'admin') return true;
+    if (_userRole == 'shikshaMitra38') return grade >= 3 && grade <= 8;
+    if (_userRole == 'shikshaMitra910') return grade == 9 || grade == 10;
+    if (_userRole == 'mentorBV8') return false; // Allowed to see no students
+    return false;
+  }
+
   Future<void> _fetchMyStudents() async {
+    // If user is a mentorBV8, they shouldn't query/load any students at all
+    if (_userRole == 'mentorBV8') {
+      if (mounted) {
+        setState(() {
+          _allStudents = [];
+          _isFetchingStudents = false;
+        });
+      }
+      return;
+    }
+
     try {
       if (!mounted) return;
       setState(() => _isFetchingStudents = true);
+
       final data = await _client
           .from('students')
           .select('id, student_id_local, grade')
@@ -58,16 +104,18 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
 
       if (mounted) {
         setState(() {
-          _allStudents = List<Map<String, dynamic>>.from(data);
+          final List<Map<String, dynamic>> rawList = List<Map<String, dynamic>>.from(data);
+
+          // Filter students on the frontend based on role-based grading constraints
+          _allStudents = rawList.where((s) => _isGradeAllowedForRole(s['grade'] as int?)).toList();
+
           final List<int> grades = _allStudents.where((s) => s['grade'] != null).map((s) => s['grade'] as int).toList();
+
           if (_selectedGrade != null && !grades.contains(_selectedGrade)) {
             _selectedGrade = null;
           }
           _isFetchingStudents = false;
         });
-
-        // Re-trigger attendance mapping so default 'P' statuses apply immediately
-        // to the newly fetched student list.
         await _fetchAttendanceForSelectedDate();
       }
     } catch (e) {
@@ -77,6 +125,8 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
   }
 
   Future<void> _fetchAttendanceForSelectedDate() async {
+    if (_allStudents.isEmpty) return;
+
     try {
       final targetDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final data = await _client
@@ -90,7 +140,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
         final studentUuid = row['student_id']?.toString();
         final dbStatus = row['status'].toString();
         if (studentUuid == null) continue;
-
         if (dbStatus == 'present') {
           existing[studentUuid] = 'P';
         } else if (dbStatus == 'absent') {
@@ -100,8 +149,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
         }
       }
 
-      // --- APPLY DEFAULT 'P' STATUS FOR NEW RECORDS ---
-      // Loop through all fetched students; if they aren't in the database yet, default them to 'P'
       for (var student in _allStudents) {
         final studentUuid = student['id']?.toString();
         if (studentUuid != null && !existing.containsKey(studentUuid)) {
@@ -144,7 +191,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     try {
       final targetDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final shikshaMitraId = _client.auth.currentUser?.id;
-
       final List<String> studentIdsToUpdate = _statusMap.keys.toList();
 
       await _client
@@ -158,12 +204,10 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
         String dbStatus = 'absent';
         if (e.value == 'P') dbStatus = 'present';
         if (e.value == 'L') dbStatus = 'late';
-
         return {'student_id': e.key, 'status': dbStatus, 'shiksha_mitra_id': shikshaMitraId};
       }).toList();
 
       await _client.from('student_attendance').insert(records);
-
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(
@@ -186,6 +230,7 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     final bool holidaySelected = _isHoliday(_selectedDate);
     final bool isCurrentDay = _isToday(_selectedDate);
 
+    // Extract dynamic dropdown options filtered by user role criteria
     final List<int> gradeOptions = _allStudents.where((s) => s['grade'] != null).map((s) => s['grade'] as int).toSet().toList();
     gradeOptions.sort((a, b) => a.compareTo(b));
 
@@ -197,45 +242,73 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
             return matchesSearch && s['grade'] == _selectedGrade;
           }).toList();
 
+    final bool pageLoading = _isFetchingStudents || _isProfileLoading;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Mark Student Attendance"),
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _initializeData)],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-            child: TextField(
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: "Search by Local Student ID...",
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Expanded(
-            child: _isFetchingStudents
-                ? const Center(child: CircularProgressIndicator())
-                : holidaySelected
-                ? _buildHolidayPlaceholder()
-                : _buildStudentListSection(gradeOptions, filteredStudents, isCurrentDay),
-          ),
-          if (!holidaySelected && isCurrentDay)
-            Padding(
-              padding: const EdgeInsets.all(13),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveAttendance,
-                  child: _isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text("Save Attendance"),
+      body: pageLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _userRole == 'mentorBV8'
+          ? _buildAccessDeniedPlaceholder()
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: "Search by Local Student ID...",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: holidaySelected
+                      ? _buildHolidayPlaceholder()
+                      : _buildStudentListSection(gradeOptions, filteredStudents, isCurrentDay),
+                ),
+                if (!holidaySelected && isCurrentDay && _selectedGrade != null && filteredStudents.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _saveAttendance,
+                        child: _isLoading
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Text("Save Attendance"),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
+    );
+  }
+
+  Widget _buildAccessDeniedPlaceholder() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.block, size: 80, color: Colors.red),
+            SizedBox(height: 16),
+            Text(
+              "Access Restrained",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "As a Mentor (BV-8), you do not have authorization to mark or view student attendance details.",
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -287,7 +360,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
                     final studentUuid = s['id'].toString();
                     final currentStatus = _statusMap[studentUuid];
                     final displayId = "Student ID: ${s['student_id_local'] ?? 'N/A'}";
-
                     return ListTile(
                       title: Text(displayId),
                       trailing: Row(
