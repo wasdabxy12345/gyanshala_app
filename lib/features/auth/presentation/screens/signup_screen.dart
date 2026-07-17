@@ -51,7 +51,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final List<String> _selectedSchoolIds = [];
   final List<LocationItem> _selectedSchoolObjects = [];
 
-  bool get _isProductionWeb => kIsWeb && !kDebugMode;
+  bool get _isProductionWeb => kIsWeb;
 
   @override
   void initState() {
