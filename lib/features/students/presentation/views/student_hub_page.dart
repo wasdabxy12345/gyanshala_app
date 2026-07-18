@@ -52,8 +52,19 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> with SingleTick
         await _studentListKey.currentState?.exportExcel();
       }
     } catch (e) {
+      // Error handling can be caught implicitly within tab implementations
     } finally {
       if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  void _triggerRefreshPipeline() {
+    if (_tabController.index == 0) {
+      // Calls the inner method to re-fetch data for the attendance pipeline
+      _attendanceTabKey.currentState?.refreshData();
+    } else {
+      // Calls the inner refresh or state update for the student list pipeline
+      _studentListKey.currentState?.refreshData();
     }
   }
 
@@ -63,9 +74,17 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> with SingleTick
       appBar: AppBar(
         title: const Text("Students Hub"),
         actions: [
+          // Action 1: Universal Refresh Button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Refresh Data",
+            onPressed: _isExporting ? null : _triggerRefreshPipeline,
+          ),
+
+          // Action 2: Export Button / Progress Indicator
           if (_isExporting)
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: 12.0),
               child: SizedBox(
                 height: 20,
                 width: 20,
@@ -73,26 +92,8 @@ class _StudentHubPageState extends ConsumerState<StudentHubPage> with SingleTick
               ),
             )
           else
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                if (value == 'export') {
-                  _triggerExportPipeline();
-                }
-              },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem<String>(
-                  value: 'export',
-                  child: Row(
-                    children: [
-                      Icon(Icons.download, size: 20, color: Colors.black54),
-                      SizedBox(width: 10),
-                      Text("Export to excel"),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            IconButton(icon: const Icon(Icons.download), tooltip: "Export to Excel", onPressed: _triggerExportPipeline),
+          const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),

@@ -17,6 +17,10 @@ class StudentAttendanceTab extends StatefulWidget {
 class StudentAttendanceTabState extends State<StudentAttendanceTab> {
   final GlobalKey<StudentAttendanceTableState> _tableKey = GlobalKey<StudentAttendanceTableState>();
 
+  void refreshData() {
+    _tableKey.currentState?.refreshData();
+  }
+
   Future<void> exportCurrentTable() async {
     await _tableKey.currentState?.exportExcel();
   }

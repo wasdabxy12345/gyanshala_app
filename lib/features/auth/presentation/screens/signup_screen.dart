@@ -39,7 +39,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
 
-  // Set default role dynamically depending on environment
   late UserRole _selectedRole;
   String? _selectedGender;
   bool _agreedToTerms = false;
@@ -51,12 +50,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final List<String> _selectedSchoolIds = [];
   final List<LocationItem> _selectedSchoolObjects = [];
 
-  bool get _isProductionWeb => kIsWeb;
+  bool get _isProductionWeb => kIsWeb && !kDebugMode;
 
   @override
   void initState() {
     super.initState();
-    // Default to admin if on production web, otherwise default to shikshaMitra38
     _selectedRole = _isProductionWeb ? UserRole.admin : UserRole.shikshaMitra38;
     _loadClusters();
   }
@@ -120,7 +118,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         _selectedRole == UserRole.shikshaMitra38 ||
         _selectedRole == UserRole.shikshaMitra910 ||
         _selectedRole == UserRole.mentorBV8;
-    final isMultiSchool = _selectedRole == UserRole.mentorBV8;
+    final isMultiSchool = (_selectedRole == UserRole.mentorBV8 || _selectedRole == UserRole.shikshaMitra910);
 
     return AuthShell(
       title: 'Signup',
@@ -133,10 +131,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const Text('Select Position *', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
 
-            // Apply web environment restrictions to the role selection list
             RoleSelector(
               selectedRole: _selectedRole,
-              allowedRoles: _isProductionWeb ? const [UserRole.admin] : null, // Overrides selector choices if on prod web
+              allowedRoles: _isProductionWeb ? const [UserRole.admin] : null,
               onRoleSelected: (role) => setState(() {
                 _selectedRole = role;
                 _selectedSchoolIds.clear();

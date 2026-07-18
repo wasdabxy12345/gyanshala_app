@@ -46,9 +46,13 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   bool _isMetadataLoaded = false;
   bool _isLoadingStudents = true;
 
-  // Edit Mode state tracking
   String? _editingStudentId;
   String _editingLocalIdText = "";
+
+  // Pagination fields
+  int _currentPage = 0;
+  int _rowsPerPage = 50;
+  final List<int> _availableRowsPerPage = [25, 50, 100, 200];
 
   List<Map<String, dynamic>> get filteredStudents => _filteredStudents;
   Set<String> get selectedStudentIds => _selectedStudentIds;
@@ -63,6 +67,11 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   void dispose() {
     _realtimeChannel?.unsubscribe();
     super.dispose();
+  }
+
+  void refreshData() {
+    // Explicitly trigger whatever logic resets or re-runs your Riverpod/Future provider data fetchers
+    setState(() {});
   }
 
   @override
@@ -84,7 +93,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
       final controller = ref.read(studentProvider.notifier);
       final clusters = await controller.getClusters();
       if (clusters.isEmpty || !mounted) return;
-
       final List<String> clusterIds = clusters.map((c) => c['id'].toString()).toList();
       final allVillages = await controller.getVillagesForClusters(clusterIds);
       final List<String> villageIds = allVillages.map((v) => v['id'].toString()).toList();
@@ -125,7 +133,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
               schema: 'public',
               table: 'students',
               callback: (payload) {
-                // Silently refetch background data when changes occur externally
                 _fetchStudents(isBackground: true);
               },
             )
@@ -138,13 +145,31 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
     }
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final data = await supabase
-          .from('students')
-          .select('*, schools(id, name, village_id, villages:village_id(id, name, cluster_id, clusters:cluster_id(id, name)))');
+      List<Map<String, dynamic>> completeStudentList = [];
+      bool hasMore = true;
+      int from = 0;
+      const int batchSize = 1000;
+
+      // Loop to chunk requests to bypass Supabase's max 1000 API limit
+      while (hasMore) {
+        final data = await supabase
+            .from('students')
+            .select('*, schools(id, name, village_id, villages:village_id(id, name, cluster_id, clusters:cluster_id(id, name)))')
+            .range(from, from + batchSize - 1);
+
+        final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(data as List);
+        completeStudentList.addAll(chunk);
+
+        if (chunk.length < batchSize) {
+          hasMore = false;
+        } else {
+          from += batchSize;
+        }
+      }
 
       if (!mounted) return;
       setState(() {
-        _rawStudents = List<Map<String, dynamic>>.from(data as List);
+        _rawStudents = completeStudentList;
         _applyAllFilters();
         _isLoadingStudents = false;
       });
@@ -179,8 +204,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
     return ["-"];
   }
 
-  // --- OPTIMISTIC UPDATES (Instant UI changes) ---
-
   void _updateStudentLocalField(String id, String field, dynamic value) {
     setState(() {
       for (var std in _rawStudents) {
@@ -198,20 +221,15 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
     Map<String, dynamic>? selectedVillage;
     Map<String, dynamic>? selectedCluster;
 
-    // Search cache metadata to reconstruct relations locally
     outerLoop:
     for (var villageId in _schoolsByVillage.keys) {
       for (var school in _schoolsByVillage[villageId] ?? []) {
         if (school['id'].toString() == targetSchoolId) {
           selectedSchool = school;
-
-          // Find parent village
           for (var clusterId in _villagesByCluster.keys) {
             for (var village in _villagesByCluster[clusterId] ?? []) {
               if (village['id'].toString() == villageId) {
                 selectedVillage = village;
-
-                // Find parent cluster
                 selectedCluster = _allClusters.firstWhere(
                   (c) => c['id'].toString() == clusterId,
                   orElse: () => <String, dynamic>{},
@@ -247,7 +265,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   }
 
   Future<void> _updateCell(String id, Map<String, dynamic> updateValue) async {
-    // 1. Run local optimistic update
     updateValue.forEach((key, value) {
       if (key == 'school_id') {
         _updateStudentLocalSchool(id, value.toString());
@@ -255,15 +272,13 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
         _updateStudentLocalField(id, key, value);
       }
     });
-
-    // 2. Perform background server update
     final controller = ref.read(studentProvider.notifier);
     final success = await controller.updateStudent(id, updateValue);
     if (!success && mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Sync failed. Check RLS or logs."), backgroundColor: Colors.red));
-      _fetchStudents(); // Revert back to database state on failure
+      _fetchStudents();
     }
   }
 
@@ -284,6 +299,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
         ],
       ),
     );
+
     if (confirmed == true) {
       final success = await ref.read(studentProvider.notifier).deleteStudents(_selectedStudentIds.toList());
       if (success) {
@@ -309,6 +325,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
       final targetedStudents = _selectedStudentIds.isNotEmpty
           ? _filteredStudents.where((e) => _selectedStudentIds.contains(e['id'].toString())).toList()
           : _filteredStudents;
+
       final excel = Excel.createExcel();
       if (excel.sheets.containsKey('Sheet1')) {
         excel.delete('Sheet1');
@@ -316,6 +333,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
       final Sheet sheet = excel['Sheet1'];
       final headers = ['Student Local ID', 'Grade', 'Gender', 'Cluster', 'Village', 'School'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
+
       for (final std in targetedStudents) {
         final loc = _extractLocationNames(std);
         sheet.appendRow([
@@ -327,10 +345,12 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
           TextCellValue(loc['school'] ?? "-"),
         ]);
       }
+
       final bytes = excel.encode();
       if (bytes == null) throw Exception('Failed to generate excel file');
       final dateSuffix = DateFormat('dd-MM-yyyy').format(DateTime.now());
       final String fileName = "Student_List_$dateSuffix.xlsx";
+
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         final url = html.Url.createObjectUrlFromBlob(blob);
@@ -431,6 +451,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
     final query = widget.searchQuery.toLowerCase().trim();
     _filteredStudents = _rawRequestsFilterPass(_rawStudents, query);
     _applySorting();
+    _currentPage = 0; // Reset pagination whenever filters or searches change
   }
 
   List<Map<String, dynamic>> _rawRequestsFilterPass(List<Map<String, dynamic>> source, String searchStr) {
@@ -495,6 +516,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
     Set<String> currentSelection;
+
     if (columnIndex == 0)
       currentSelection = _selectedLocalIdFilters != null ? Set.from(_selectedLocalIdFilters!) : Set.from(allValues);
     else if (columnIndex == 1)
@@ -617,6 +639,16 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
 
     bool isAllRowsSelected = _filteredStudents.isNotEmpty && _selectedStudentIds.length == _filteredStudents.length;
 
+    // UI Pagination logic slices
+    final totalRows = _filteredStudents.length;
+    final maxPages = (totalRows / _rowsPerPage).ceil();
+    if (_currentPage >= maxPages && maxPages > 0) {
+      _currentPage = maxPages - 1;
+    }
+    final int startIdx = _currentPage * _rowsPerPage;
+    final int endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+    final paginatedStudents = _filteredStudents.isEmpty ? <Map<String, dynamic>>[] : _filteredStudents.sublist(startIdx, endIdx);
+
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: isStudentLoading
@@ -638,7 +670,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(color: Colors.blue.shade50),
                   child: Text(
-                    '${_selectedStudentIds.length} Selected',
+                    '${_selectedStudentIds.length} Selected (Total: $totalRows)',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),
                   ),
                 ),
@@ -682,386 +714,437 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
           Expanded(
             child: _filteredStudents.isEmpty
                 ? const Center(child: Text('No students found matching configuration.'))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Table(
-                          defaultColumnWidth: const IntrinsicColumnWidth(),
-                          border: TableBorder(
-                            verticalInside: BorderSide(color: Colors.grey.shade300),
-                            horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
-                            bottom: BorderSide(color: Colors.grey.shade300),
-                            left: BorderSide(color: Colors.grey.shade300),
-                            right: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          children: [
-                            TableRow(
-                              decoration: BoxDecoration(color: Colors.grey.shade200),
-                              children: [
-                                TableCell(
-                                  verticalAlignment: TableCellVerticalAlignment.middle,
-                                  child: Center(
-                                    child: Checkbox(
-                                      value: isAllRowsSelected,
-                                      tristate: _selectedStudentIds.isNotEmpty && !isAllRowsSelected,
-                                      onChanged: (checked) {
-                                        setState(() {
-                                          if (checked == true) {
-                                            _selectedStudentIds.addAll(_filteredStudents.map((m) => m['id'].toString()));
-                                          } else {
-                                            _selectedStudentIds.clear();
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ),
+                : Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Table(
+                                defaultColumnWidth: const IntrinsicColumnWidth(),
+                                border: TableBorder(
+                                  verticalInside: BorderSide(color: Colors.grey.shade300),
+                                  horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                                  bottom: BorderSide(color: Colors.grey.shade300),
+                                  left: BorderSide(color: Colors.grey.shade300),
+                                  right: BorderSide(color: Colors.grey.shade300),
                                 ),
-                                _SortableHeader(
-                                  label: "Student Local ID",
-                                  onSort: () => _onSort(0),
-                                  onFilter: () => _showFilterMenu(0, "Student Local ID"),
-                                  isSorted: _sortColumnIndex == 0,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedLocalIdFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Grade",
-                                  onSort: () => _onSort(1),
-                                  onFilter: () => _showFilterMenu(1, "Grade"),
-                                  isSorted: _sortColumnIndex == 1,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedGradeFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Gender",
-                                  onSort: () => _onSort(2),
-                                  onFilter: () => _showFilterMenu(2, "Gender"),
-                                  isSorted: _sortColumnIndex == 2,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedGenderFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Cluster",
-                                  onSort: () => _onSort(3),
-                                  onFilter: () => _showFilterMenu(3, "Cluster"),
-                                  isSorted: _sortColumnIndex == 3,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedClusterFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "Village",
-                                  onSort: () => _onSort(4),
-                                  onFilter: () => _showFilterMenu(4, "Village"),
-                                  isSorted: _sortColumnIndex == 4,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedVillageFilters != null,
-                                ),
-                                _SortableHeader(
-                                  label: "School",
-                                  onSort: () => _onSort(5),
-                                  onFilter: () => _showFilterMenu(5, "School"),
-                                  isSorted: _sortColumnIndex == 5,
-                                  isAscending: _isAscending,
-                                  hasFilter: _selectedSchoolFilters != null,
-                                ),
-                                const TableCell(
-                                  verticalAlignment: TableCellVerticalAlignment.middle,
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                                    child: Text(
-                                      "Actions",
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            ..._filteredStudents.map((std) {
-                              final stdId = std['id'].toString();
-                              final isRowSelected = _selectedStudentIds.contains(stdId);
-                              final isEditing = _editingStudentId == stdId;
-
-                              final currentSchool = std['schools'] as Map<String, dynamic>?;
-                              final currentVillage = currentSchool?['villages'] as Map<String, dynamic>?;
-                              final currentCluster = currentVillage?['clusters'] as Map<String, dynamic>?;
-
-                              final clusterId = currentCluster?['id']?.toString();
-                              final villageId = currentVillage?['id']?.toString();
-                              final schoolId = currentSchool?['id']?.toString();
-
-                              final availableVillages = clusterId != null ? (_villagesByCluster[clusterId] ?? []) : [];
-                              final availableSchools = villageId != null ? (_schoolsByVillage[villageId] ?? []) : [];
-
-                              final loc = _extractLocationNames(std);
-                              final gradeVal = std['grade']?.toString() ?? "";
-                              final displayGrade = gradeVal == '0' ? 'BV' : gradeVal;
-
-                              return TableRow(
-                                decoration: BoxDecoration(color: isRowSelected ? Colors.blue.withAlpha(10) : null),
                                 children: [
-                                  // Checkbox
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Center(
-                                      child: Checkbox(
-                                        value: isRowSelected,
-                                        onChanged: (checked) {
-                                          setState(() {
-                                            if (checked == true) {
-                                              _selectedStudentIds.add(stdId);
-                                            } else {
-                                              _selectedStudentIds.remove(stdId);
-                                            }
-                                          });
-                                        },
+                                  TableRow(
+                                    decoration: BoxDecoration(color: Colors.grey.shade200),
+                                    children: [
+                                      TableCell(
+                                        verticalAlignment: TableCellVerticalAlignment.middle,
+                                        child: Center(
+                                          child: Checkbox(
+                                            value: isAllRowsSelected,
+                                            tristate: _selectedStudentIds.isNotEmpty && !isAllRowsSelected,
+                                            onChanged: (checked) {
+                                              setState(() {
+                                                if (checked == true) {
+                                                  _selectedStudentIds.addAll(_filteredStudents.map((m) => m['id'].toString()));
+                                                } else {
+                                                  _selectedStudentIds.clear();
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-
-                                  // Student Local ID
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                                      child: SizedBox(
-                                        width: 140,
-                                        child: isEditing
-                                            ? TextFormField(
-                                                initialValue: _editingLocalIdText,
-                                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                                decoration: const InputDecoration(
-                                                  border: OutlineInputBorder(),
-                                                  isDense: true,
-                                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                                ),
-                                                onChanged: (val) => _editingLocalIdText = val.trim(),
-                                              )
-                                            : Text(
-                                                std['student_id_local']?.toString() ?? "-",
-                                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                              ),
+                                      _SortableHeader(
+                                        label: "Student Local ID",
+                                        onSort: () => _onSort(0),
+                                        onFilter: () => _showFilterMenu(0, "Student Local ID"),
+                                        isSorted: _sortColumnIndex == 0,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedLocalIdFilters != null,
                                       ),
-                                    ),
+                                      _SortableHeader(
+                                        label: "Grade",
+                                        onSort: () => _onSort(1),
+                                        onFilter: () => _showFilterMenu(1, "Grade"),
+                                        isSorted: _sortColumnIndex == 1,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedGradeFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Gender",
+                                        onSort: () => _onSort(2),
+                                        onFilter: () => _showFilterMenu(2, "Gender"),
+                                        isSorted: _sortColumnIndex == 2,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedGenderFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Cluster",
+                                        onSort: () => _onSort(3),
+                                        onFilter: () => _showFilterMenu(3, "Cluster"),
+                                        isSorted: _sortColumnIndex == 3,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedClusterFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "Village",
+                                        onSort: () => _onSort(4),
+                                        onFilter: () => _showFilterMenu(4, "Village"),
+                                        isSorted: _sortColumnIndex == 4,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedVillageFilters != null,
+                                      ),
+                                      _SortableHeader(
+                                        label: "School",
+                                        onSort: () => _onSort(5),
+                                        onFilter: () => _showFilterMenu(5, "School"),
+                                        isSorted: _sortColumnIndex == 5,
+                                        isAscending: _isAscending,
+                                        hasFilter: _selectedSchoolFilters != null,
+                                      ),
+                                      const TableCell(
+                                        verticalAlignment: TableCellVerticalAlignment.middle,
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(horizontal: 16.0),
+                                          child: Text(
+                                            "Actions",
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  ...paginatedStudents.map((std) {
+                                    final stdId = std['id'].toString();
+                                    final isRowSelected = _selectedStudentIds.contains(stdId);
+                                    final isEditing = _editingStudentId == stdId;
 
-                                  // Grade
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? DropdownButton<int>(
-                                              value: std['grade'] != null ? int.parse(std['grade'].toString()) : 1,
-                                              isDense: true,
-                                              underline: const SizedBox(),
-                                              items: [
-                                                const DropdownMenuItem(value: 0, child: Text('BV')),
-                                                ...List.generate(
-                                                  10,
-                                                  (idx) => idx + 1,
-                                                ).map((g) => DropdownMenuItem(value: g, child: Text('$g'))),
-                                              ],
-                                              onChanged: (newGrade) {
-                                                if (newGrade != null) {
-                                                  _updateCell(stdId, {'grade': newGrade});
-                                                }
-                                              },
-                                            )
-                                          : Text(displayGrade),
-                                    ),
-                                  ),
+                                    final currentSchool = std['schools'] as Map<String, dynamic>?;
+                                    final currentVillage = currentSchool?['villages'] as Map<String, dynamic>?;
+                                    final currentCluster = currentVillage?['clusters'] as Map<String, dynamic>?;
 
-                                  // Gender
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? DropdownButton<String>(
-                                              value: ['Male', 'Female', 'Other'].contains(std['gender'])
-                                                  ? std['gender'].toString()
-                                                  : 'Male',
-                                              isDense: true,
-                                              underline: const SizedBox(),
-                                              items: [
-                                                'Male',
-                                                'Female',
-                                                'Other',
-                                              ].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                                              onChanged: (newGender) {
-                                                if (newGender != null) {
-                                                  _updateCell(stdId, {'gender': newGender});
-                                                }
-                                              },
-                                            )
-                                          : Text(std['gender']?.toString() ?? "-"),
-                                    ),
-                                  ),
+                                    final clusterId = currentCluster?['id']?.toString();
+                                    final villageId = currentVillage?['id']?.toString();
+                                    final schoolId = currentSchool?['id']?.toString();
 
-                                  // Cluster
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? DropdownButton<String>(
-                                              value: _allClusters.any((c) => c['id'].toString() == clusterId) ? clusterId : null,
-                                              isDense: true,
-                                              hint: const Text("-"),
-                                              underline: const SizedBox(),
-                                              items: _allClusters
-                                                  .map(
-                                                    (c) => DropdownMenuItem<String>(
-                                                      value: c['id'].toString(),
-                                                      child: Text(c['name']),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (newClusterId) async {
-                                                if (newClusterId != null && newClusterId != clusterId) {
-                                                  final replacementVils = _villagesByCluster[newClusterId] ?? [];
-                                                  final targetVilId = replacementVils.isNotEmpty
-                                                      ? replacementVils.first['id'].toString()
-                                                      : null;
-                                                  final replacementSchs = targetVilId != null
-                                                      ? (_schoolsByVillage[targetVilId] ?? [])
-                                                      : [];
-                                                  final targetSchId = replacementSchs.isNotEmpty
-                                                      ? replacementSchs.first['id'].toString()
-                                                      : null;
-                                                  if (targetSchId != null) {
-                                                    await _updateCell(stdId, {'school_id': targetSchId});
-                                                  }
-                                                }
-                                              },
-                                            )
-                                          : Text(loc['cluster'] ?? "-"),
-                                    ),
-                                  ),
+                                    final availableVillages = clusterId != null ? (_villagesByCluster[clusterId] ?? []) : [];
+                                    final availableSchools = villageId != null ? (_schoolsByVillage[villageId] ?? []) : [];
 
-                                  // Village
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? DropdownButton<String>(
-                                              value: availableVillages.any((v) => v['id'].toString() == villageId)
-                                                  ? villageId
-                                                  : null,
-                                              isDense: true,
-                                              hint: const Text("-"),
-                                              underline: const SizedBox(),
-                                              items: availableVillages
-                                                  .map(
-                                                    (v) => DropdownMenuItem<String>(
-                                                      value: v['id'].toString(),
-                                                      child: Text(v['name']),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (newVillageId) async {
-                                                if (newVillageId != null && newVillageId != villageId) {
-                                                  final replacementSchs = _schoolsByVillage[newVillageId] ?? [];
-                                                  final targetSchId = replacementSchs.isNotEmpty
-                                                      ? replacementSchs.first['id'].toString()
-                                                      : null;
-                                                  if (targetSchId != null) {
-                                                    await _updateCell(stdId, {'school_id': targetSchId});
-                                                  }
-                                                }
-                                              },
-                                            )
-                                          : Text(loc['village'] ?? "-"),
-                                    ),
-                                  ),
+                                    final loc = _extractLocationNames(std);
+                                    final gradeVal = std['grade']?.toString() ?? "";
+                                    final displayGrade = gradeVal == '0' ? 'BV' : gradeVal;
 
-                                  // School
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? DropdownButton<String>(
-                                              value: availableSchools.any((s) => s['id'].toString() == schoolId)
-                                                  ? schoolId
-                                                  : null,
-                                              isDense: true,
-                                              hint: const Text("-"),
-                                              underline: const SizedBox(),
-                                              items: availableSchools
-                                                  .map(
-                                                    (s) => DropdownMenuItem<String>(
-                                                      value: s['id'].toString(),
-                                                      child: Text(s['name']),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (newSchoolId) {
-                                                if (newSchoolId != null) {
-                                                  _updateCell(stdId, {'school_id': newSchoolId});
-                                                }
-                                              },
-                                            )
-                                          : Text(loc['school'] ?? "-"),
-                                    ),
-                                  ),
-
-                                  // Actions
-                                  TableCell(
-                                    verticalAlignment: TableCellVerticalAlignment.middle,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                      child: isEditing
-                                          ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(Icons.check, color: Colors.green, size: 20),
-                                                  tooltip: "Save Row changes",
-                                                  onPressed: () async {
-                                                    if (_editingLocalIdText != (std['student_id_local']?.toString() ?? "")) {
-                                                      await _updateCell(stdId, {'student_id_local': _editingLocalIdText});
-                                                    }
-                                                    setState(() {
-                                                      _editingStudentId = null;
-                                                    });
-                                                  },
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(Icons.close, color: Colors.red, size: 20),
-                                                  tooltip: "Cancel",
-                                                  onPressed: () {
-                                                    setState(() {
-                                                      _editingStudentId = null;
-                                                    });
-                                                  },
-                                                ),
-                                              ],
-                                            )
-                                          : IconButton(
-                                              icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                                              tooltip: "Edit Row",
-                                              onPressed: () {
+                                    return TableRow(
+                                      decoration: BoxDecoration(color: isRowSelected ? Colors.blue.withAlpha(10) : null),
+                                      children: [
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Center(
+                                            child: Checkbox(
+                                              value: isRowSelected,
+                                              onChanged: (checked) {
                                                 setState(() {
-                                                  _editingStudentId = stdId;
-                                                  _editingLocalIdText = std['student_id_local']?.toString() ?? "";
+                                                  if (checked == true) {
+                                                    _selectedStudentIds.add(stdId);
+                                                  } else {
+                                                    _selectedStudentIds.remove(stdId);
+                                                  }
                                                 });
                                               },
                                             ),
-                                    ),
-                                  ),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                                            child: SizedBox(
+                                              width: 140,
+                                              child: isEditing
+                                                  ? TextFormField(
+                                                      initialValue: _editingLocalIdText,
+                                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                                      decoration: const InputDecoration(
+                                                        border: OutlineInputBorder(),
+                                                        isDense: true,
+                                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                                      ),
+                                                      onChanged: (val) => _editingLocalIdText = val.trim(),
+                                                    )
+                                                  : Text(
+                                                      std['student_id_local']?.toString() ?? "-",
+                                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? DropdownButton<int>(
+                                                    value: std['grade'] != null ? int.parse(std['grade'].toString()) : 1,
+                                                    isDense: true,
+                                                    underline: const SizedBox(),
+                                                    items: [
+                                                      const DropdownMenuItem(value: 0, child: Text('BV')),
+                                                      ...List.generate(
+                                                        10,
+                                                        (idx) => idx + 1,
+                                                      ).map((g) => DropdownMenuItem(value: g, child: Text('$g'))),
+                                                    ],
+                                                    onChanged: (newGrade) {
+                                                      if (newGrade != null) {
+                                                        _updateCell(stdId, {'grade': newGrade});
+                                                      }
+                                                    },
+                                                  )
+                                                : Text(displayGrade),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? DropdownButton<String>(
+                                                    value: ['Male', 'Female', 'Other'].contains(std['gender'])
+                                                        ? std['gender'].toString()
+                                                        : 'Male',
+                                                    isDense: true,
+                                                    underline: const SizedBox(),
+                                                    items: [
+                                                      'Male',
+                                                      'Female',
+                                                      'Other',
+                                                    ].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                                                    onChanged: (newGender) {
+                                                      if (newGender != null) {
+                                                        _updateCell(stdId, {'gender': newGender});
+                                                      }
+                                                    },
+                                                  )
+                                                : Text(std['gender']?.toString() ?? "-"),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? DropdownButton<String>(
+                                                    value: _allClusters.any((c) => c['id'].toString() == clusterId)
+                                                        ? clusterId
+                                                        : null,
+                                                    isDense: true,
+                                                    hint: const Text("-"),
+                                                    underline: const SizedBox(),
+                                                    items: _allClusters
+                                                        .map(
+                                                          (c) => DropdownMenuItem<String>(
+                                                            value: c['id'].toString(),
+                                                            child: Text(c['name']),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (newClusterId) async {
+                                                      if (newClusterId != null && newClusterId != clusterId) {
+                                                        final replacementVils = _villagesByCluster[newClusterId] ?? [];
+                                                        final targetVilId = replacementVils.isNotEmpty
+                                                            ? replacementVils.first['id'].toString()
+                                                            : null;
+                                                        final replacementSchs = targetVilId != null
+                                                            ? (_schoolsByVillage[targetVilId] ?? [])
+                                                            : [];
+                                                        final targetSchId = replacementSchs.isNotEmpty
+                                                            ? replacementSchs.first['id'].toString()
+                                                            : null;
+                                                        if (targetSchId != null) {
+                                                          await _updateCell(stdId, {'school_id': targetSchId});
+                                                        }
+                                                      }
+                                                    },
+                                                  )
+                                                : Text(loc['cluster'] ?? "-"),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? DropdownButton<String>(
+                                                    value: availableVillages.any((v) => v['id'].toString() == villageId)
+                                                        ? villageId
+                                                        : null,
+                                                    isDense: true,
+                                                    hint: const Text("-"),
+                                                    underline: const SizedBox(),
+                                                    items: availableVillages
+                                                        .map(
+                                                          (v) => DropdownMenuItem<String>(
+                                                            value: v['id'].toString(),
+                                                            child: Text(v['name']),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (newVillageId) async {
+                                                      if (newVillageId != null && newVillageId != villageId) {
+                                                        final replacementSchs = _schoolsByVillage[newVillageId] ?? [];
+                                                        final targetSchId = replacementSchs.isNotEmpty
+                                                            ? replacementSchs.first['id'].toString()
+                                                            : null;
+                                                        if (targetSchId != null) {
+                                                          await _updateCell(stdId, {'school_id': targetSchId});
+                                                        }
+                                                      }
+                                                    },
+                                                  )
+                                                : Text(loc['village'] ?? "-"),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? DropdownButton<String>(
+                                                    value: availableSchools.any((s) => s['id'].toString() == schoolId)
+                                                        ? schoolId
+                                                        : null,
+                                                    isDense: true,
+                                                    hint: const Text("-"),
+                                                    underline: const SizedBox(),
+                                                    items: availableSchools
+                                                        .map(
+                                                          (s) => DropdownMenuItem<String>(
+                                                            value: s['id'].toString(),
+                                                            child: Text(s['name']),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (newSchoolId) {
+                                                      if (newSchoolId != null) {
+                                                        _updateCell(stdId, {'school_id': newSchoolId});
+                                                      }
+                                                    },
+                                                  )
+                                                : Text(loc['school'] ?? "-"),
+                                          ),
+                                        ),
+                                        TableCell(
+                                          verticalAlignment: TableCellVerticalAlignment.middle,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: isEditing
+                                                ? Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      IconButton(
+                                                        icon: const Icon(Icons.check, color: Colors.green, size: 20),
+                                                        tooltip: "Save Row changes",
+                                                        onPressed: () async {
+                                                          if (_editingLocalIdText !=
+                                                              (std['student_id_local']?.toString() ?? "")) {
+                                                            await _updateCell(stdId, {'student_id_local': _editingLocalIdText});
+                                                          }
+                                                          setState(() {
+                                                            _editingStudentId = null;
+                                                          });
+                                                        },
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                                                        tooltip: "Cancel",
+                                                        onPressed: () {
+                                                          setState(() {
+                                                            _editingStudentId = null;
+                                                          });
+                                                        },
+                                                      ),
+                                                    ],
+                                                  )
+                                                : IconButton(
+                                                    icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                                    tooltip: "Edit Row",
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _editingStudentId = stdId;
+                                                        _editingLocalIdText = std['student_id_local']?.toString() ?? "";
+                                                      });
+                                                    },
+                                                  ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
                                 ],
-                              );
-                            }),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // UI Pagination Controls Bar
+                      // UI Pagination Controls Bar
+                      Container(
+                        color: Colors.grey.shade100,
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Left side: Rows per page selection
+                            Row(
+                              children: [
+                                const Text("Rows per page: ", style: TextStyle(fontSize: 13)),
+                                DropdownButton<int>(
+                                  value: _rowsPerPage,
+                                  isDense: true,
+                                  items: _availableRowsPerPage
+                                      .map((e) => DropdownMenuItem<int>(value: e, child: Text("$e")))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() {
+                                        _rowsPerPage = val;
+                                        _currentPage = 0;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            // Center side: Navigation, page status, and global student tracking metrics
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left),
+                                  onPressed: _currentPage > 0 ? () => setState(() => _currentPage--) : null,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "Page ${_currentPage + 1} of ${maxPages == 0 ? 1 : maxPages}  •  "
+                                  "Students: ${totalRows == 0 ? 0 : startIdx + 1}-$endIdx of $totalRows",
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_right),
+                                  onPressed: _currentPage < maxPages - 1 ? () => setState(() => _currentPage++) : null,
+                                ),
+                              ],
+                            ),
+
+                            // Right side: Spacer layout balancer
+                            const SizedBox(width: 120),
                           ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
           ),
         ],

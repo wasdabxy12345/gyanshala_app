@@ -288,17 +288,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       final packageInfo = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          if (kIsWeb && (packageInfo.version.isEmpty || packageInfo.version.contains('undefined'))) {
+          if (kIsWeb && (packageInfo.version.isEmpty || packageInfo.version.contains('undefined')))
             _appVersion = '0.0.1';
-          } else {
+          else
             _appVersion = packageInfo.version;
-          }
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _appVersion = '0.0.1');
-      }
+      if (mounted) setState(() => _appVersion = '0.0.1');
     }
   }
 
@@ -309,10 +306,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isWeb = constraints.maxWidth > 800;
-
-            if (isWeb) {
-              return _buildWebLayout(context, constraints.maxWidth);
-            }
+            if (isWeb) return _buildWebLayout(context, constraints.maxWidth);
             return _buildMobileLayout(context);
           },
         ),
@@ -329,11 +323,8 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.03),
-
               Image.asset('assets/images/ss_logo.png', width: MediaQuery.of(context).size.width * 0.75, fit: BoxFit.contain),
-
               SizedBox(height: MediaQuery.of(context).size.height * 0.13),
-
               Text(
                 'Student Management System',
                 textAlign: TextAlign.center,
@@ -344,18 +335,14 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   color: AppTheme.textPrimary,
                 ),
               ),
-
               const SizedBox(height: 6),
               Container(width: 80, height: 3, color: const Color(0xFF0D47A1)),
               const SizedBox(height: 6),
-
               SizedBox(height: MediaQuery.of(context).size.height * 0.13),
-
               if (_state != ApprovalState.none) ...[
                 _buildStatusCard(),
                 SizedBox(height: MediaQuery.of(context).size.height * 0.13),
               ],
-
               if (_state == ApprovalState.none) ...[
                 SizedBox(
                   width: double.infinity,
@@ -371,7 +358,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

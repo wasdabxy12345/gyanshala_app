@@ -27,6 +27,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   late Future<Map<String, dynamic>> _attendanceFetchFuture;
   final ScrollController _horizontalHeaderController = ScrollController();
   final ScrollController _horizontalBodyController = ScrollController();
+  final ScrollController _horizontalFooterController = ScrollController();
+
+  // Pagination parameters
+  int _currentPage = 0;
+  int _rowsPerPage = 50;
+  final List<int> _availableRowsPerPage = [25, 50, 100, 200];
 
   @override
   void initState() {
@@ -36,6 +42,9 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
       if (_horizontalHeaderController.hasClients) {
         _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
       }
+      if (_horizontalFooterController.hasClients) {
+        _horizontalFooterController.jumpTo(_horizontalBodyController.offset);
+      }
     });
   }
 
@@ -43,7 +52,14 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   void dispose() {
     _horizontalHeaderController.dispose();
     _horizontalBodyController.dispose();
+    _horizontalFooterController.dispose();
     super.dispose();
+  }
+
+  void refreshData() {
+    setState(() {
+      _attendanceFetchFuture = _loadDataPipeline();
+    });
   }
 
   @override
@@ -52,6 +68,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
       setState(() {
         _attendanceFetchFuture = _loadDataPipeline();
+        _currentPage = 0; // Reset pagination when dates change
+      });
+    }
+    if (oldWidget.searchQuery != widget.searchQuery) {
+      setState(() {
+        _currentPage = 0; // Reset pagination when search changes
       });
     }
   }
@@ -60,12 +82,30 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     try {
       final supabase = ref.read(supabaseClientProvider);
 
-      final studentsRaw = (await supabase.from('students').select('id, student_id_local, grade, gender')) as List<dynamic>;
+      // 1. Paginated loop to fetch ALL students from DB completely bypassing 1k limit
+      List<Map<String, dynamic>> completeStudentList = [];
+      bool hasMoreStudents = true;
+      int fromIndex = 0;
+      const int studentBatchSize = 1000;
 
-      final convertedStudents = studentsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      while (hasMoreStudents) {
+        final studentsRaw = await supabase
+            .from('students')
+            .select('id, student_id_local, grade, gender')
+            .range(fromIndex, fromIndex + studentBatchSize - 1);
 
+        final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(studentsRaw as List);
+        completeStudentList.addAll(chunk);
+
+        if (chunk.length < studentBatchSize) {
+          hasMoreStudents = false;
+        } else {
+          fromIndex += studentBatchSize;
+        }
+      }
+
+      // 2. Fetch all attendance records for the window range
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
-
       final attendanceRecordsRaw =
           (await supabase
                   .from('student_attendance')
@@ -74,7 +114,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                   .lte('created_at', utcRange.end.toIso8601String()))
               as List<dynamic>;
 
-      return await compute(_processAttendanceData, {'students': convertedStudents, 'records': attendanceRecordsRaw});
+      return await compute(_processAttendanceData, {'students': completeStudentList, 'records': attendanceRecordsRaw});
     } catch (e) {
       rethrow;
     }
@@ -83,8 +123,8 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   static Map<String, dynamic> _processAttendanceData(Map<String, dynamic> rawPayload) {
     final List<Map<String, dynamic>> students = List<Map<String, dynamic>>.from(rawPayload['students']);
     final List<dynamic> attendanceRecords = rawPayload['records'];
-    Map<String, Map<String, dynamic>> studentData = {};
 
+    Map<String, Map<String, dynamic>> studentData = {};
     for (final student in students) {
       studentData[student['id']] = {
         'student_id': student['id'],
@@ -99,7 +139,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     for (final record in sortedRecords) {
       final studentId = record['student_id'];
       if (!studentData.containsKey(studentId)) continue;
-
       final createdAt = DateTime.parse(record['created_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(createdAt);
       final status = record['status']?.toString().toLowerCase() ?? 'absent';
@@ -119,7 +158,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
 
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
-
       final headers = ["Student Local ID", "Date", "Attendance Status"];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
@@ -130,7 +168,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
       final CellStyle lateStyle = CellStyle(backgroundColorHex: ExcelColor.amberAccent);
 
       int currentExcelRowIndex = 1;
-
       for (final record in sortedRecords) {
         final studentId = record['student_id'];
         final student = studentMap[studentId];
@@ -151,7 +188,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         } else if (status == 'late') {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = lateStyle;
         }
-
         currentExcelRowIndex++;
       }
 
@@ -173,7 +209,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         anchor.click();
         anchor.remove();
         html.Url.revokeObjectUrl(url);
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
         }
@@ -182,7 +217,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         if (!status.isGranted) {
           status = await Permission.manageExternalStorage.request();
         }
-
         Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
@@ -190,10 +224,8 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
         }
-
         final file = File('${downloadsDir.path}/$fileName');
         await file.writeAsBytes(bytes);
-
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -241,11 +273,16 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     final todayNormalized = DateTime(now.year, now.month, now.day);
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 600;
-
     const double dateCellWidth = 50;
     const double totalColumnWidth = 50;
     final double rowHeight = isMobile ? 42 : 31;
     const double headerHeight = 42;
+
+    // Stable, reliable calculation for the ID column width based on the longest format pattern
+    const TextStyle idStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
+    const String longestPossibleIdFormat = 'WWWWmmmm 888888'; // Matches 'AAAAaaaa nnnnnn' using wide characters
+    final Size calculatedSample = calcTextSize(context, longestPossibleIdFormat, idStyle);
+    final double maxNameWidth = calculatedSample.width + 32.0; // Added explicit side-padding safety margin
 
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
@@ -254,22 +291,27 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
 
-        final students =
+        // Global dataset filtered globally by text search match queries
+        final allFilteredStudents =
             ((snapshot.data!['students'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
                 .where((m) => m['student_id_local'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
                 .toList();
 
-        if (students.isEmpty) return const Center(child: Text("No students found"));
+        if (allFilteredStudents.isEmpty) return const Center(child: Text("No students found"));
 
-        double maxNameWidth = 0;
-        const TextStyle idStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
-
-        for (final std in students) {
-          final String textToMeasure = std['student_id_local'] ?? 'Unknown';
-          final Size size = calcTextSize(context, textToMeasure, idStyle);
-          final double totalNeeded = size.width + 26.0;
-          if (totalNeeded > maxNameWidth) maxNameWidth = totalNeeded;
+        // Evaluate Pagination Parameters dynamically
+        final totalRows = allFilteredStudents.length;
+        final maxPages = (totalRows / _rowsPerPage).ceil();
+        if (_currentPage >= maxPages && maxPages > 0) {
+          _currentPage = maxPages - 1;
         }
+        final int startIdx = _currentPage * _rowsPerPage;
+        final int endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+
+        // Sliced subset chunk strictly handled inside memory for the rendering layer
+        final paginatedStudents = allFilteredStudents.sublist(startIdx, endIdx);
+
+        // (Removed previous dynamic loop for maxNameWidth to maintain layout stability)
 
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
         final workingDaysCount = dates.where((d) {
@@ -277,20 +319,19 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
           return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
         }).length;
 
+        // Note: Footers metrics (daily summary calculations) computed strictly on the current page slice for precision data tracking
         List<int> dailyTotals = [];
         double grandTotalPresent = 0;
-
         for (final d in dates) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           final bool isFutureOrToday =
               cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
-
           if (_isHoliday(d) || isFutureOrToday) {
             dailyTotals.add(-1);
           } else {
             final key = DateFormat('yyyy-MM-dd').format(d);
             int count = 0;
-            for (final m in students) {
+            for (final m in paginatedStudents) {
               final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
               final record = attMap[key];
               if (record != null && (record['status'] == 'present' || record['status'] == 'late')) {
@@ -306,6 +347,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
           decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
           child: Column(
             children: [
+              // Header
               Container(
                 height: headerHeight,
                 color: Colors.grey[200],
@@ -368,6 +410,8 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                 ),
               ),
               Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+
+              // Body (Slices)
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.vertical,
@@ -381,7 +425,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                           border: Border(right: BorderSide(color: Colors.grey[300]!)),
                         ),
                         child: Column(
-                          children: students
+                          children: paginatedStudents
                               .map(
                                 (std) => Container(
                                   height: rowHeight,
@@ -402,7 +446,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                           scrollDirection: Axis.horizontal,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: students.map((student) {
+                            children: paginatedStudents.map((student) {
                               final attMap = student['attendance_map'] as Map<String, dynamic>? ?? {};
                               return Container(
                                 height: rowHeight,
@@ -415,12 +459,10 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                     final record = attMap[key];
                                     final holiday = _isHoliday(d);
                                     final String status = record != null ? record['status'].toString().toLowerCase() : '';
-
                                     final cellDateNormalized = DateTime(d.year, d.month, d.day);
                                     final bool isFutureOrToday =
                                         cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
                                         cellDateNormalized.isAfter(todayNormalized);
-
                                     return Container(
                                       width: dateCellWidth,
                                       height: double.infinity,
@@ -479,7 +521,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                           border: Border(left: BorderSide(color: Colors.grey[300]!)),
                         ),
                         child: Column(
-                          children: students.map((student) {
+                          children: paginatedStudents.map((student) {
                             final attMap = student['attendance_map'] as Map<String, dynamic>? ?? {};
                             int attendedCount = 0;
                             for (final d in dates) {
@@ -515,6 +557,8 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                 ),
               ),
               Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+
+              // Total Footer Row
               Container(
                 height: rowHeight,
                 color: Colors.blueGrey[50],
@@ -534,7 +578,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                     ),
                     Expanded(
                       child: SingleChildScrollView(
-                        controller: _horizontalHeaderController,
+                        controller: _horizontalFooterController,
                         scrollDirection: Axis.horizontal,
                         physics: const NeverScrollableScrollPhysics(),
                         child: Row(
@@ -563,13 +607,69 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                         border: Border(left: BorderSide(color: Colors.grey[300]!)),
                       ),
                       child: Text(
-                        workingDaysCount == 0 || students.isEmpty
+                        workingDaysCount == 0 || paginatedStudents.isEmpty
                             ? "0.0\n(0%)"
-                            : "${(grandTotalPresent / workingDaysCount).toStringAsFixed(1)}\n(${((grandTotalPresent / (students.length * workingDaysCount)) * 100).toStringAsFixed(0)}%)",
+                            : "${(grandTotalPresent / workingDaysCount).toStringAsFixed(1)}\n(${((grandTotalPresent / (paginatedStudents.length * workingDaysCount)) * 100).toStringAsFixed(0)}%)",
                         style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
                         textAlign: TextAlign.center,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, thickness: 1, color: Colors.grey[300]),
+
+              // UI Centered Pagination Control Bar
+              Container(
+                color: Colors.grey.shade100,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Left: Rows Selection Selection dropdown
+                    Row(
+                      children: [
+                        const Text("Rows per page: ", style: TextStyle(fontSize: 13)),
+                        DropdownButton<int>(
+                          value: _rowsPerPage,
+                          isDense: true,
+                          items: _availableRowsPerPage.map((e) => DropdownMenuItem<int>(value: e, child: Text("$e"))).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _rowsPerPage = val;
+                                _currentPage = 0;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // Center: Synchronized Tracking and Navigation Arrows
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _currentPage > 0 ? () => setState(() => _currentPage--) : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Page ${_currentPage + 1} of ${maxPages == 0 ? 1 : maxPages}  •  "
+                          "Students: ${totalRows == 0 ? 0 : startIdx + 1}-$endIdx of $totalRows",
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _currentPage < maxPages - 1 ? () => setState(() => _currentPage++) : null,
+                        ),
+                      ],
+                    ),
+
+                    // Balanced Anchor right Spacer layout setup
+                    const SizedBox(width: 120),
                   ],
                 ),
               ),
