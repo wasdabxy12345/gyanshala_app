@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +11,7 @@ final resetInactivityFlagProvider = Provider<void>((ref) {
 
 final inactivityTimeoutProvider = FutureProvider<int>((ref) async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt('inactivity_timeout_minutes') ?? 999;
+  return prefs.getInt('inactivity_timeout_minutes') ?? (kDebugMode ? 888 : 15);
 });
 
 final setInactivityTimeoutProvider = FutureProvider.family<void, int>((ref, minutes) async {

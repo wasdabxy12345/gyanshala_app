@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
@@ -9,7 +10,7 @@ class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   void _showInactivityTimeoutDialog(BuildContext context, WidgetRef ref, int currentTimeout) {
-    final timeoutOptions = [1, 2, 5, 10, 15, 20, 30, 999];
+    final timeoutOptions = [1, 2, 5, 10, 15, 20, (kDebugMode ? 888 : 30)];
 
     showDialog(
       context: context,
@@ -85,7 +86,7 @@ class SettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.schedule),
               title: const Text("Auto-Logout Timeout"),
               subtitle: const Text("Error loading setting"),
-              onTap: () => _showInactivityTimeoutDialog(context, ref, 999),
+              onTap: () => _showInactivityTimeoutDialog(context, ref, (kDebugMode ? 888 : 15)),
             ),
           ),
           const Divider(),

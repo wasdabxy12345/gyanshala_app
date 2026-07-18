@@ -7,7 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 class UpdateChecker {
-  static const String _repoUrl = 'https://api.github.com/repos/wasdabxy12345/gyanshala_app/releases/latest';
+  static const String _repoUrl = 'https://api.github.com/repos/gyanshala-dev/gyanshala_app/releases/latest';
   static Future<String?> checkForUpdate() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();

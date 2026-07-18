@@ -60,7 +60,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
   Future<void> _showInactivityLogoutMessage() async {
     final prefs = await SharedPreferences.getInstance();
-    final timeout = prefs.getInt('inactivity_timeout_minutes') ?? 999;
+    final timeout = prefs.getInt('inactivity_timeout_minutes') ?? (kDebugMode ? 888 : 15);
 
     if (!mounted) return;
 
