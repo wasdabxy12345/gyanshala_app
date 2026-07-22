@@ -88,12 +88,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
               validator: (value) {
                 final phone = value?.trim() ?? '';
-                if (phone.isEmpty) {
-                  return 'Phone Number is required';
-                }
-                if (!Validators.isValidPhone(phone)) {
-                  return 'Enter a valid phone number';
-                }
+                if (phone.isEmpty) return 'Phone Number is required';
+                if (!Validators.isValidPhone(phone)) return 'Enter a valid phone number';
                 return null;
               },
             ),

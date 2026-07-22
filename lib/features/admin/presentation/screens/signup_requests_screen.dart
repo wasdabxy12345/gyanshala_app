@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
@@ -7,58 +8,91 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SignupRequestsScreen extends ConsumerStatefulWidget {
-  const SignupRequestsScreen({super.key});
-  @override
-  ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
-}
+class ProcessedRequest {
+  final Map<String, dynamic> rawData;
+  final String id;
+  final String fullName;
+  final String phone;
+  final String role;
+  final String gender;
+  final String qualification;
+  final String cluster;
+  final String village;
+  final String school;
+  final DateTime date;
+  final String dateFormatted;
+  final String timeFormatted;
 
-class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
-  bool _isLoading = false;
-  final _searchController = TextEditingController();
-  int _sortColumnIndex = 8;
-  bool _isAscending = false;
-  Set<String>? _selectedNameFilters;
-  Set<String>? _selectedPhoneFilters;
-  Set<String>? _selectedRoleFilters;
-  Set<String>? _selectedGenderFilters;
-  Set<String>? _selectedClusterFilters;
-  Set<String>? _selectedVillageFilters;
-  Set<String>? _selectedSchoolFilters;
-  Set<String>? _selectedQualificationFilters;
-  late DateTimeRange _selectedDateRange;
-  Set<String>? _selectedTimeFilters;
-  List<Map<String, dynamic>> _rawRequests = [];
-  List<Map<String, dynamic>> _filteredRequests = [];
-  RealtimeChannel? _realtimeChannel;
-  @override
-  void initState() {
-    super.initState();
-    final startOfWeek = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
-    _selectedDateRange = DateTimeRange(start: startOfWeek, end: startOfWeek.add(const Duration(days: 6)));
+  final String searchKey;
+
+  ProcessedRequest({
+    required this.rawData,
+    required this.id,
+    required this.fullName,
+    required this.phone,
+    required this.role,
+    required this.gender,
+    required this.qualification,
+    required this.cluster,
+    required this.village,
+    required this.school,
+    required this.date,
+    required this.dateFormatted,
+    required this.timeFormatted,
+    required this.searchKey,
+  });
+
+  factory ProcessedRequest.fromRaw(Map<String, dynamic> req, bool isProfileTable) {
+    final firstName = req['first_name']?.toString() ?? '';
+    final lastName = req['last_name']?.toString() ?? '';
+    final fullName = '$firstName $lastName'.trim();
+    final phone = req['phone']?.toString() ?? '-';
+    final role = req['role']?.toString() ?? '-';
+    final gender = req['gender']?.toString() ?? '-';
+    final qualification = req['qualification']?.toString() ?? '-';
+
+    final loc = _extractLocationNames(req);
+    final cluster = loc['cluster']!;
+    final village = loc['village']!;
+    final school = loc['school']!;
+
+    final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
+    final parsedDate = _parseDateTimeSafely(dateField);
+    final dateFormatted = DateFormat('dd MMM yyyy').format(parsedDate);
+    final timeFormatted = DateFormat('hh:mm a').format(parsedDate);
+
+    final searchKey = '$fullName $phone $role $gender $cluster $village $school $qualification $timeFormatted'.toLowerCase();
+
+    return ProcessedRequest(
+      rawData: req,
+      id: req['id']?.toString() ?? '',
+      fullName: fullName,
+      phone: phone,
+      role: role,
+      gender: gender,
+      qualification: qualification,
+      cluster: cluster,
+      village: village,
+      school: school,
+      date: parsedDate,
+      dateFormatted: dateFormatted,
+      timeFormatted: timeFormatted,
+      searchKey: searchKey,
+    );
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _realtimeChannel?.unsubscribe();
-    super.dispose();
-  }
-
-  DateTime _parseDateTimeSafely(dynamic dateValue) {
+  static DateTime _parseDateTimeSafely(dynamic dateValue) {
     if (dateValue == null) return DateTime.now();
     String dateStr = dateValue.toString().trim();
     if (dateStr.isEmpty) return DateTime.now();
     if (!dateStr.contains('Z') && !dateStr.contains('+') && !dateStr.endsWith('Z')) {
-      if (dateStr.contains(' ') && !dateStr.contains('T')) {
-        dateStr = dateStr.replaceFirst(' ', 'T');
-      }
+      if (dateStr.contains(' ') && !dateStr.contains('T')) dateStr = dateStr.replaceFirst(' ', 'T');
       dateStr = '${dateStr}Z';
     }
     return DateTime.tryParse(dateStr)?.toLocal() ?? DateTime.now();
   }
 
-  Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
+  static Map<String, String> _extractLocationNames(Map<String, dynamic> row) {
     final requestSchoolsList = row['signup_request_schools'] as List<dynamic>?;
     final profileSchoolsList = row['profile_schools'] as List<dynamic>?;
     final schoolsRelations = [...(requestSchoolsList ?? []), ...(profileSchoolsList ?? [])];
@@ -77,6 +111,7 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
       structuralList.add({'cluster': clusterName, 'village': villageName, 'school': schoolName});
     }
+
     structuralList.sort((a, b) {
       int clusterCompare = a['cluster']!.compareTo(b['cluster']!);
       if (clusterCompare != 0) return clusterCompare;
@@ -101,21 +136,23 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       bool isNewCluster = currentCluster != lastCluster;
       bool isNewVillage = currentVillage != lastVillage;
       bool globalBlockChanged = !isFirstRow && (isNewCluster || isNewVillage);
+
       if (isNewCluster) {
         clusterLines.add(isFirstRow ? currentCluster : "[LINE]$currentCluster");
         lastCluster = currentCluster;
         lastVillage = "";
-      } else
+      } else {
         clusterLines.add(globalBlockChanged ? "[SPACE]" : "");
+      }
 
       if (currentVillage != lastVillage) {
         villageLines.add(isFirstRow ? currentVillage : "[LINE]$currentVillage");
         lastVillage = currentVillage;
-      } else
+      } else {
         villageLines.add(globalBlockChanged ? "[SPACE]" : "");
+      }
 
       schoolLines.add(globalBlockChanged ? "[LINE]$currentSchool" : currentSchool);
-
       isFirstRow = false;
     }
 
@@ -123,140 +160,198 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
 
     return {'cluster': clusterLines.join('\n'), 'village': villageLines.join('\n'), 'school': schoolLines.join('\n')};
   }
+}
 
-  Future<String?> _showActionReasonDialog({
-    required String name,
-    required String actionTitle,
-    required String explanationText,
-    Color confirmButtonColor = Colors.red,
-  }) async {
-    final reasonController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('$actionTitle Account'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(explanationText),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: reasonController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Reason for $actionTitle',
-                  hintText: 'Provide context or justification...',
-                  border: const OutlineInputBorder(),
-                ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Please enter a reason for this action';
-                  }
-                  return null;
-                },
-              ),
+class SignupRequestsScreen extends ConsumerStatefulWidget {
+  const SignupRequestsScreen({super.key});
+
+  @override
+  ConsumerState<SignupRequestsScreen> createState() => _SignupRequestsScreenState();
+}
+
+class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
+  final GlobalKey<_SignupTableTabViewState> _pendingKey = GlobalKey();
+  final GlobalKey<_SignupTableTabViewState> _activeKey = GlobalKey();
+  final GlobalKey<_SignupTableTabViewState> _suspendedKey = GlobalKey();
+
+  void _refreshAllTabs() {
+    _pendingKey.currentState?.fetchData();
+    _activeKey.currentState?.fetchData();
+    _suspendedKey.currentState?.fetchData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Signup Request Management"),
+          actions: [IconButton(icon: const Icon(Icons.refresh), tooltip: "Refresh Data", onPressed: _refreshAllTabs)],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: "Pending Requests"),
+              Tab(text: "Active Profiles"),
+              Tab(text: "Suspended Profiles"),
             ],
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(context, reasonController.text.trim());
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: confirmButtonColor, foregroundColor: Colors.white),
-            child: Text('Confirm $actionTitle'),
-          ),
-        ],
+        body: TabBarView(
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            SignupTableTabView(key: _pendingKey, statusFilter: 'pending', isProfileTable: false),
+            SignupTableTabView(key: _activeKey, statusFilter: 'active', isProfileTable: true),
+            SignupTableTabView(key: _suspendedKey, statusFilter: 'suspended', isProfileTable: true),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Future<void> _handleAction({
-    required String id,
-    required String currentStatus,
-    required String targetStatus,
-    required bool isProfileTable,
-    String? reason,
-  }) async {
-    setState(() => _isLoading = true);
-    final supabase = ref.read(supabaseClientProvider);
-    final currentAdminId = supabase.auth.currentUser?.id;
-    try {
-      if (isProfileTable) {
-        await supabase
-            .from('profiles')
-            .update({
-              'account_status': targetStatus,
-              'action_reason': reason,
-              'actioned_by': currentAdminId,
-              'actioned_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('id', id);
-      } else {
-        await supabase
-            .from('signup_requests')
-            .update({'status': targetStatus, 'action_reason': reason, 'actioned_at': DateTime.now().toUtc().toIso8601String()})
-            .eq('id', id);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully updated status to $targetStatus')));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    } finally {
-      setState(() => _isLoading = false);
+class SignupTableTabView extends ConsumerStatefulWidget {
+  final String statusFilter;
+  final bool isProfileTable;
+
+  const SignupTableTabView({super.key, required this.statusFilter, required this.isProfileTable});
+
+  @override
+  ConsumerState<SignupTableTabView> createState() => _SignupTableTabViewState();
+}
+
+class _SignupTableTabViewState extends ConsumerState<SignupTableTabView> {
+  bool _isLoading = true;
+  bool _isProcessingAction = false;
+
+  final TextEditingController _searchController = TextEditingController();
+  int _sortColumnIndex = 8;
+  bool _isAscending = false;
+
+  int _currentPage = 0;
+  int _rowsPerPage = 50;
+  final List<int> _availableRowsPerPage = [25, 50, 100, 200];
+
+  Set<String>? _selectedNameFilters;
+  Set<String>? _selectedPhoneFilters;
+  Set<String>? _selectedRoleFilters;
+  Set<String>? _selectedGenderFilters;
+  Set<String>? _selectedClusterFilters;
+  Set<String>? _selectedVillageFilters;
+  Set<String>? _selectedSchoolFilters;
+  Set<String>? _selectedQualificationFilters;
+  DateTimeRange? _selectedDateRange;
+  Set<String>? _selectedTimeFilters;
+
+  List<ProcessedRequest> _rawRequests = [];
+  List<ProcessedRequest> _filteredRequests = [];
+
+  RealtimeChannel? _realtimeChannel;
+  Timer? _pollingTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+    fetchData();
+
+    if (widget.statusFilter == 'pending') {
+      _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => fetchData(showLoading: false));
     }
   }
 
-  void _applyAllFilters() {
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _pollingTimer?.cancel();
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _currentPage = 0;
+    _applyAllFilters();
+  }
+
+  Future<void> fetchData({bool showLoading = true}) async {
+    if (showLoading && mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    final supabase = ref.read(supabaseClientProvider);
+    final table = widget.isProfileTable ? 'profiles' : 'signup_requests';
+    final column = widget.isProfileTable ? 'account_status' : 'status';
+
+    _setupRealtimeSubscription(table);
+
+    final String junctionSelect = widget.isProfileTable
+        ? 'profile_schools ( schools ( name, villages:village_id ( name, clusters:cluster_id (name) ) ) )'
+        : 'signup_request_schools ( schools ( name, villages:village_id ( name, clusters:cluster_id (name) ) ) )';
+
+    try {
+      final response = await supabase.from(table).select('*, $junctionSelect').eq(column, widget.statusFilter);
+      final List<Map<String, dynamic>> rawData = List<Map<String, dynamic>>.from(response as List);
+
+      _rawRequests = rawData.map((e) => ProcessedRequest.fromRaw(e, widget.isProfileTable)).toList();
+
+      if (mounted) {
+        await _applyAllFilters();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error loading data: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _setupRealtimeSubscription(String table) {
+    _realtimeChannel?.unsubscribe();
+    final supabase = ref.read(supabaseClientProvider);
+    _realtimeChannel =
+        supabase
+            .channel('realtime-$table-${widget.statusFilter}')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: table,
+              callback: (_) => fetchData(showLoading: false),
+            )
+          ..subscribe();
+  }
+
+  Future<void> _applyAllFilters() async {
+    await Future.delayed(Duration.zero);
     final query = _searchController.text.toLowerCase().trim();
-    final result = _rawRequests.where((req) {
-      final fullName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-      final phone = req['phone']?.toString() ?? "";
-      final role = req['role']?.toString() ?? "";
-      final gender = req['gender']?.toString() ?? "";
-      final qualification = req['qualification']?.toString() ?? "";
-      final loc = _extractLocationNames(req);
-      final cluster = loc['cluster']!;
-      final village = loc['village']!;
-      final school = loc['school']!;
-      final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
-      final createdAt = _parseDateTimeSafely(dateField);
-      if (createdAt.isBefore(_selectedDateRange.start) || createdAt.isAfter(_selectedDateRange.end)) return false;
-      final signupTime = DateFormat('hh:mm a').format(createdAt);
-      final matchesSearch =
-          query.isEmpty ||
-          fullName.toLowerCase().contains(query) ||
-          phone.toLowerCase().contains(query) ||
-          role.toLowerCase().contains(query) ||
-          gender.toLowerCase().contains(query) ||
-          cluster.toLowerCase().contains(query) ||
-          village.toLowerCase().contains(query) ||
-          school.toLowerCase().contains(query) ||
-          qualification.toLowerCase().contains(query) ||
-          signupTime.toLowerCase().contains(query);
-      if (!matchesSearch) return false;
-      if (_selectedNameFilters != null && !_selectedNameFilters!.contains(fullName)) return false;
-      if (_selectedPhoneFilters != null && !_selectedPhoneFilters!.contains(phone)) return false;
-      if (_selectedRoleFilters != null && !_selectedRoleFilters!.contains(role)) return false;
-      if (_selectedGenderFilters != null && !_selectedGenderFilters!.contains(gender)) return false;
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(cluster)) return false;
-      if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(village)) return false;
-      if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(school)) return false;
-      if (_selectedQualificationFilters != null && !_selectedQualificationFilters!.contains(qualification)) return false;
-      if (_selectedTimeFilters != null && !_selectedTimeFilters!.contains(signupTime)) return false;
-      return true;
-    }).toList();
-    setState(() {
-      _filteredRequests = result;
-      _applySorting();
-    });
+
+    final params = FilterParams(
+      requests: _rawRequests,
+      query: query,
+      dateRange: _selectedDateRange,
+      names: _selectedNameFilters,
+      phones: _selectedPhoneFilters,
+      roles: _selectedRoleFilters,
+      genders: _selectedGenderFilters,
+      clusters: _selectedClusterFilters,
+      villages: _selectedVillageFilters,
+      schools: _selectedSchoolFilters,
+      qualifications: _selectedQualificationFilters,
+      times: _selectedTimeFilters,
+      sortColumnIndex: _sortColumnIndex,
+      isAscending: _isAscending,
+    );
+
+    if (kIsWeb) await Future.delayed(const Duration(milliseconds: 16));
+
+    final result = await compute(_filterAndSortInIsolate, params);
+
+    if (mounted)
+      setState(() {
+        _filteredRequests = result;
+      });
   }
 
   void _applySorting() {
@@ -265,44 +360,40 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
       String valB = "";
       switch (_sortColumnIndex) {
         case 0:
-          valA = "${a['first_name'] ?? ''} ${a['last_name'] ?? ''}";
-          valB = "${b['first_name'] ?? ''} ${b['last_name'] ?? ''}";
+          valA = a.fullName;
+          valB = b.fullName;
           break;
         case 1:
-          valA = a['phone']?.toString() ?? "";
-          valB = b['phone']?.toString() ?? "";
+          valA = a.phone;
+          valB = b.phone;
           break;
         case 2:
-          valA = a['role']?.toString() ?? "";
-          valB = b['role']?.toString() ?? "";
+          valA = a.role;
+          valB = b.role;
           break;
         case 3:
-          valA = a['gender']?.toString() ?? "";
-          valB = b['gender']?.toString() ?? "";
+          valA = a.gender;
+          valB = b.gender;
           break;
         case 4:
-          valA = _extractLocationNames(a)['cluster']!;
-          valB = _extractLocationNames(b)['cluster']!;
+          valA = a.cluster;
+          valB = b.cluster;
           break;
         case 5:
-          valA = _extractLocationNames(a)['village']!;
-          valB = _extractLocationNames(b)['village']!;
+          valA = a.village;
+          valB = b.village;
           break;
         case 6:
-          valA = _extractLocationNames(a)['school']!;
-          valB = _extractLocationNames(b)['school']!;
+          valA = a.school;
+          valB = b.school;
           break;
         case 7:
-          valA = a['qualification']?.toString() ?? "";
-          valB = b['qualification']?.toString() ?? "";
+          valA = a.qualification;
+          valB = b.qualification;
           break;
         case 8:
         case 9:
-          final dateFieldA = a.containsKey('account_status') ? a['updated_at'] : a['created_at'];
-          final dateFieldB = b.containsKey('account_status') ? b['updated_at'] : b['created_at'];
-          final dateA = _parseDateTimeSafely(dateFieldA);
-          final dateB = _parseDateTimeSafely(dateFieldB);
-          return _isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+          return _isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date);
       }
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
       return _isAscending ? compare : -compare;
@@ -314,35 +405,31 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     for (final req in _rawRequests) {
       switch (columnIndex) {
         case 0:
-          values.add("${req['first_name'] ?? ''} ${req['last_name'] ?? ''}");
+          values.add(req.fullName);
           break;
         case 1:
-          if (req['phone'] != null) values.add(req['phone'].toString());
+          values.add(req.phone);
           break;
         case 2:
-          if (req['role'] != null) values.add(req['role'].toString());
+          values.add(req.role);
           break;
         case 3:
-          if (req['gender'] != null) values.add(req['gender'].toString());
+          values.add(req.gender);
           break;
         case 4:
-          values.add(_extractLocationNames(req)['cluster']!);
+          values.add(req.cluster);
           break;
         case 5:
-          values.add(_extractLocationNames(req)['village']!);
+          values.add(req.village);
           break;
         case 6:
-          values.add(_extractLocationNames(req)['school']!);
+          values.add(req.school);
           break;
         case 7:
-          if (req['qualification'] != null) values.add(req['qualification'].toString());
+          values.add(req.qualification);
           break;
         case 9:
-          final dateField = req.containsKey('account_status') ? req['updated_at'] : req['created_at'];
-          if (dateField != null) {
-            final date = _parseDateTimeSafely(dateField);
-            values.add(DateFormat('hh:mm a').format(date));
-          }
+          values.add(req.timeFormatted);
           break;
       }
     }
@@ -362,256 +449,10 @@ class _SignupRequestsScreenState extends ConsumerState<SignupRequestsScreen> {
     });
   }
 
-  void _setupRealtimeSubscription(String table) {
-    _realtimeChannel?.unsubscribe();
-    final supabase = ref.read(supabaseClientProvider);
-    _realtimeChannel =
-        supabase
-            .channel('signup-mgmt-channel')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: table,
-              callback: (payload) {
-                if (mounted) setState(() {});
-              },
-            )
-          ..subscribe();
-  }
-
-  Stream<List<Map<String, dynamic>>> _fetchDataStream({required String table, required String column, required String value}) {
-    final supabase = ref.watch(supabaseClientProvider);
-    _setupRealtimeSubscription(table);
-    final String junctionSelect = table == 'signup_requests'
-        ? '''
-signup_request_schools (
-schools (
-name,
-villages:village_id (name, clusters:cluster_id (name))
-)
-)
-'''
-        : '''
-profile_schools (
-schools (
-name,
-villages:village_id (name, clusters:cluster_id (name))
-)
-)
-''';
-    return Stream.fromFuture(
-      supabase
-          .from(table)
-          .select('*, $junctionSelect')
-          .eq(column, value)
-          .then((data) => List<Map<String, dynamic>>.from(data as List)),
-    );
-  }
-
-  Widget _buildDateControls() {
-    final now = DateTime.now();
-    Widget buildWeekControls() => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_left, size: 37),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () {
-            final newEnd = _selectedDateRange.start.subtract(const Duration(days: 1));
-            final newStart = newEnd.subtract(const Duration(days: 6));
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
-            });
-            _applyAllFilters();
-          },
-        ),
-        Expanded(
-          child: _quickBtn("This Week", () {
-            final start = now.subtract(Duration(days: now.weekday - 1));
-            final end = start.add(const Duration(days: 6));
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: start, end: end);
-            });
-            _applyAllFilters();
-          }),
-        ),
-        IconButton(
-          icon: const Icon(Icons.arrow_right, size: 37),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () {
-            final newStart = _selectedDateRange.end.add(const Duration(days: 1));
-            final newEnd = newStart.add(const Duration(days: 6));
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
-            });
-            _applyAllFilters();
-          },
-        ),
-      ],
-    );
-    Widget buildMonthControls() => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_left, size: 37),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () {
-            final newMonthEnd = DateTime(_selectedDateRange.start.year, _selectedDateRange.start.month, 0);
-            final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
-            });
-            _applyAllFilters();
-          },
-        ),
-        Expanded(
-          child: _quickBtn("This Month", () {
-            final start = DateTime(now.year, now.month, 1);
-            final end = DateTime(now.year, now.month + 1, 0);
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: start, end: end);
-            });
-            _applyAllFilters();
-          }),
-        ),
-        IconButton(
-          icon: const Icon(Icons.arrow_right, size: 37),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () {
-            final newMonthStart = DateTime(_selectedDateRange.end.year, _selectedDateRange.end.month + 1, 1);
-            final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
-            setState(() {
-              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
-            });
-            _applyAllFilters();
-          },
-        ),
-      ],
-    );
-    Widget buildDateSelectors() => Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _dateInkWell(date: _selectedDateRange.start, isStart: true),
-            const SizedBox(width: 13),
-            const Text("to", style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(width: 13),
-            _dateInkWell(date: _selectedDateRange.end, isStart: false),
-          ],
-        ),
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 600) {
-            return Column(
-              children: [
-                buildDateSelectors(),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(child: buildWeekControls()),
-                    const SizedBox(width: 8),
-                    Expanded(child: buildMonthControls()),
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: buildWeekControls()),
-              buildDateSelectors(),
-              Expanded(child: buildMonthControls()),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _quickBtn(String label, VoidCallback action) {
-    return TextButton(
-      style: TextButton.styleFrom(
-        backgroundColor: AppTheme.primaryBlue,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 37),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      onPressed: action,
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  Widget _dateInkWell({required DateTime date, required bool isStart}) {
-    return InkWell(
-      onTap: () => isStart ? _pickStartDate() : _pickEndDate(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 13),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppTheme.primaryBlue),
-          color: Colors.white,
-        ),
-        child: Text(
-          _formatDateWithMonth(date),
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickStartDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDateRange.start,
-      firstDate: DateTime(1970),
-      lastDate: _selectedDateRange.end,
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDateRange = DateTimeRange(start: picked, end: _selectedDateRange.end);
-      });
-      _applyAllFilters();
-    }
-  }
-
-  Future<void> _pickEndDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDateRange.end,
-      firstDate: _selectedDateRange.start,
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDateRange = DateTimeRange(start: _selectedDateRange.start, end: picked);
-      });
-      _applyAllFilters();
-    }
-  }
-
-  String _formatDateWithMonth(DateTime date) {
-    final dayName = DateFormat('EEE').format(date);
-    final formatted = DateFormat('dd-MM-yyyy').format(date);
-    return '$formatted ($dayName)';
-  }
-
   Future<void> _showFilterMenu(int columnIndex, String label) async {
     final allValues = _getUniqueValuesForColumn(columnIndex);
     Set<String> currentSelection;
+
     if (columnIndex == 0)
       currentSelection = _selectedNameFilters != null ? Set.from(_selectedNameFilters!) : Set.from(allValues);
     else if (columnIndex == 1)
@@ -630,8 +471,11 @@ villages:village_id (name, clusters:cluster_id (name))
       currentSelection = _selectedQualificationFilters != null ? Set.from(_selectedQualificationFilters!) : Set.from(allValues);
     else
       currentSelection = _selectedTimeFilters != null ? Set.from(_selectedTimeFilters!) : Set.from(allValues);
+
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
+    bool isApplying = false;
+
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -683,25 +527,35 @@ villages:village_id (name, clusters:cluster_id (name))
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            TextButton(onPressed: isApplying ? null : () => Navigator.pop(ctx), child: const Text("Cancel")),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  final noFilter = currentSelection.isEmpty || currentSelection.length == allValues.length;
-                  if (columnIndex == 0) _selectedNameFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 1) _selectedPhoneFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 2) _selectedRoleFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 3) _selectedGenderFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 4) _selectedClusterFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 5) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 6) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 7) _selectedQualificationFilters = noFilter ? null : Set.from(currentSelection);
-                  if (columnIndex == 9) _selectedTimeFilters = noFilter ? null : Set.from(currentSelection);
-                  _applyAllFilters();
-                });
-                Navigator.pop(ctx);
-              },
-              child: const Text("Apply"),
+              onPressed: isApplying
+                  ? null
+                  : () async {
+                      setStateDialog(() => isApplying = true);
+
+                      final noFilter = currentSelection.isEmpty || currentSelection.length == allValues.length;
+
+                      setState(() {
+                        if (columnIndex == 0) _selectedNameFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 1) _selectedPhoneFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 2) _selectedRoleFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 3) _selectedGenderFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 4) _selectedClusterFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 5) _selectedVillageFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 6) _selectedSchoolFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 7) _selectedQualificationFilters = noFilter ? null : Set.from(currentSelection);
+                        if (columnIndex == 9) _selectedTimeFilters = noFilter ? null : Set.from(currentSelection);
+                        _currentPage = 0;
+                      });
+
+                      await _applyAllFilters();
+
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+              child: isApplying
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Apply"),
             ),
           ],
         ),
@@ -709,175 +563,326 @@ villages:village_id (name, clusters:cluster_id (name))
     );
   }
 
-  Widget _buildTable({required String statusFilter, required bool isProfileTable}) {
-    final table = isProfileTable ? 'profiles' : 'signup_requests';
-    final statusColumn = isProfileTable ? 'account_status' : 'status';
-    return Column(
-      children: [
-        _buildDateControls(),
-        Expanded(
-          child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _fetchDataStream(table: table, column: statusColumn, value: statusFilter),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text('Error resolving rows: ${snapshot.error}'));
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              _rawRequests = snapshot.data!;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _applyAllFilters();
-                }
-              });
-              final defaultStart = DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
-              final defaultEnd = defaultStart.add(const Duration(days: 6));
-              return Column(
-                children: [
-                  Expanded(
-                    child: _filteredRequests.isEmpty
-                        ? const Center(child: Text("No records match your filters"))
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Table(
-                                defaultColumnWidth: const IntrinsicColumnWidth(),
-                                border: TableBorder(
-                                  verticalInside: BorderSide(color: Colors.grey.shade300),
-                                  horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
-                                  bottom: BorderSide(color: Colors.grey.shade300),
-                                  left: BorderSide(color: Colors.grey.shade300),
-                                  right: BorderSide(color: Colors.grey.shade300),
-                                ),
-                                children: [
-                                  TableRow(
-                                    decoration: BoxDecoration(color: Colors.grey.shade200),
-                                    children: [
-                                      _SortableHeader(
-                                        label: "Full Name",
-                                        onSort: () => _onSort(0),
-                                        onFilter: () => _showFilterMenu(0, "Name"),
-                                        isSorted: _sortColumnIndex == 0,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedNameFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Phone",
-                                        onSort: () => _onSort(1),
-                                        onFilter: () => _showFilterMenu(1, "Phone"),
-                                        isSorted: _sortColumnIndex == 1,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedPhoneFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Role",
-                                        onSort: () => _onSort(2),
-                                        onFilter: () => _showFilterMenu(2, "Role"),
-                                        isSorted: _sortColumnIndex == 2,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedRoleFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Gender",
-                                        onSort: () => _onSort(3),
-                                        onFilter: () => _showFilterMenu(3, "Gender"),
-                                        isSorted: _sortColumnIndex == 3,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedGenderFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Cluster",
-                                        onSort: () => _onSort(4),
-                                        onFilter: () => _showFilterMenu(4, "Cluster"),
-                                        isSorted: _sortColumnIndex == 4,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedClusterFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Village",
-                                        onSort: () => _onSort(5),
-                                        onFilter: () => _showFilterMenu(5, "Village"),
-                                        isSorted: _sortColumnIndex == 5,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedVillageFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "School",
-                                        onSort: () => _onSort(6),
-                                        onFilter: () => _showFilterMenu(6, "School"),
-                                        isSorted: _sortColumnIndex == 6,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedSchoolFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Qualification",
-                                        onSort: () => _onSort(7),
-                                        onFilter: () => _showFilterMenu(7, "Qualification"),
-                                        isSorted: _sortColumnIndex == 7,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedQualificationFilters != null,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Date",
-                                        onSort: () => _onSort(8),
-                                        onFilter: () => _pickStartDate(),
-                                        isSorted: _sortColumnIndex == 8,
-                                        isAscending: _isAscending,
-                                        hasFilter:
-                                            _selectedDateRange.start != defaultStart || _selectedDateRange.end != defaultEnd,
-                                      ),
-                                      _SortableHeader(
-                                        label: "Time",
-                                        onSort: () => _onSort(9),
-                                        onFilter: () => _showFilterMenu(9, "Time"),
-                                        isSorted: _sortColumnIndex == 9,
-                                        isAscending: _isAscending,
-                                        hasFilter: _selectedTimeFilters != null,
-                                      ),
-                                      const Padding(
-                                        padding: EdgeInsets.all(12),
-                                        child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                  ),
-                                  ..._filteredRequests.map((req) {
-                                    final String currentName = "${req['first_name'] ?? ''} ${req['last_name'] ?? ''}";
-                                    final dateField = isProfileTable ? req['updated_at'] : req['created_at'];
-                                    final parsedDate = _parseDateTimeSafely(dateField);
-                                    final locationInfo = _extractLocationNames(req);
-                                    return TableRow(
-                                      children: [
-                                        _DataCell(text: currentName, isBold: true),
-                                        _DataCell(text: req['phone']?.toString() ?? "-"),
-                                        _DataCell(text: req['role']?.toString() ?? "-"),
-                                        _DataCell(text: req['gender']?.toString() ?? "-"),
-                                        _DataCell(text: locationInfo['cluster']!),
-                                        _DataCell(text: locationInfo['village']!),
-                                        _DataCell(text: locationInfo['school']!),
-                                        _DataCell(text: req['qualification']?.toString() ?? "-"),
-                                        _DataCell(text: DateFormat('dd MMM yyyy').format(parsedDate)),
-                                        _DataCell(text: DateFormat('hh:mm a').format(parsedDate)),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          child: _buildActionButtons(statusFilter, req, currentName),
-                                        ),
-                                      ],
-                                    );
-                                  }),
-                                ],
-                              ),
-                            ),
-                          ),
-                  ),
-                ],
-              );
-            },
+  Future<void> _handleAction({
+    required String id,
+    required String targetStatus,
+    required bool isProfileTable,
+    String? reason,
+  }) async {
+    setState(() => _isProcessingAction = true);
+    final supabase = ref.read(supabaseClientProvider);
+    final currentAdminId = supabase.auth.currentUser?.id;
+
+    try {
+      if (isProfileTable) {
+        await supabase
+            .from('profiles')
+            .update({
+              'account_status': targetStatus,
+              'action_reason': reason,
+              'actioned_by': currentAdminId,
+              'actioned_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', id);
+      } else {
+        await supabase
+            .from('signup_requests')
+            .update({'status': targetStatus, 'action_reason': reason, 'actioned_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('id', id);
+      }
+
+      // Local mutations for responsive UI
+      _rawRequests.removeWhere((element) => element.id == id);
+      await _applyAllFilters();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully updated status to $targetStatus')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingAction = false);
+      }
+    }
+  }
+
+  Future<String?> _showActionReasonDialog({
+    required String name,
+    required String actionTitle,
+    required String explanationText,
+    Color confirmButtonColor = Colors.red,
+  }) async {
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('$actionTitle Account'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(explanationText),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Reason for $actionTitle',
+                  hintText: 'Provide context or justification...',
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Please enter a reason for this action';
+                  return null;
+                },
+              ),
+            ],
           ),
         ),
-      ],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.pop(context, reasonController.text.trim());
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: confirmButtonColor, foregroundColor: Colors.white),
+            child: Text('Confirm $actionTitle'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildActionButtons(String statusFilter, Map<String, dynamic> req, String currentName) {
-    if (statusFilter == 'pending') {
+  Widget _buildDateControls() {
+    final now = DateTime.now();
+
+    Widget buildWeekControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_left, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () async {
+            final newEnd = (_selectedDateRange?.start ?? now).subtract(const Duration(days: 1));
+            final newStart = newEnd.subtract(const Duration(days: 6));
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          },
+        ),
+        Expanded(
+          child: _quickBtn("This Week", () async {
+            final start = now.subtract(Duration(days: now.weekday - 1));
+            final end = start.add(const Duration(days: 6));
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: start, end: end);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          }),
+        ),
+        IconButton(
+          icon: const Icon(Icons.arrow_right, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () async {
+            final newStart = (_selectedDateRange?.end ?? now).add(const Duration(days: 1));
+            final newEnd = newStart.add(const Duration(days: 6));
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newStart, end: newEnd);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          },
+        ),
+      ],
+    );
+
+    Widget buildMonthControls() => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_left, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () async {
+            final base = _selectedDateRange?.start ?? now;
+            final newMonthEnd = DateTime(base.year, base.month, 0);
+            final newMonthStart = DateTime(newMonthEnd.year, newMonthEnd.month, 1);
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          },
+        ),
+        Expanded(
+          child: _quickBtn("This Month", () async {
+            final start = DateTime(now.year, now.month, 1);
+            final end = DateTime(now.year, now.month + 1, 0);
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: start, end: end);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          }),
+        ),
+        IconButton(
+          icon: const Icon(Icons.arrow_right, size: 37),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () async {
+            final base = _selectedDateRange?.end ?? now;
+            final newMonthStart = DateTime(base.year, base.month + 1, 1);
+            final newMonthEnd = DateTime(newMonthStart.year, newMonthStart.month + 1, 0);
+            setState(() {
+              _selectedDateRange = DateTimeRange(start: newMonthStart, end: newMonthEnd);
+              _currentPage = 0;
+            });
+            await _applyAllFilters();
+          },
+        ),
+      ],
+    );
+
+    Widget buildDateSelectors() => Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dateInkWell(date: _selectedDateRange?.start, isStart: true),
+            const SizedBox(width: 13),
+            const Text("to", style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(width: 13),
+            _dateInkWell(date: _selectedDateRange?.end, isStart: false),
+            if (_selectedDateRange != null) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.clear, color: Colors.redAccent, size: 20),
+                onPressed: () async {
+                  setState(() {
+                    _selectedDateRange = null;
+                    _currentPage = 0;
+                  });
+                  await _applyAllFilters();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 600) {
+            return Column(
+              children: [
+                buildDateSelectors(),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: buildWeekControls()),
+                    const SizedBox(width: 8),
+                    Expanded(child: buildMonthControls()),
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: buildWeekControls()),
+              buildDateSelectors(),
+              Expanded(child: buildMonthControls()),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _quickBtn(String label, VoidCallback action) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 37),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: action,
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _dateInkWell({required DateTime? date, required bool isStart}) {
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: date ?? DateTime.now(),
+          firstDate: DateTime(1970),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) {
+          setState(() {
+            if (isStart) {
+              _selectedDateRange = DateTimeRange(
+                start: picked,
+                end: _selectedDateRange?.end ?? picked.add(const Duration(days: 6)),
+              );
+            } else {
+              _selectedDateRange = DateTimeRange(
+                start: _selectedDateRange?.start ?? picked.subtract(const Duration(days: 6)),
+                end: picked,
+              );
+            }
+            _currentPage = 0;
+          });
+          await _applyAllFilters();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 13),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppTheme.primaryBlue),
+          color: Colors.white,
+        ),
+        child: Text(
+          date == null ? (isStart ? "Start Date" : "End Date") : _formatDateWithMonth(date),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+        ),
+      ),
+    );
+  }
+
+  String _formatDateWithMonth(DateTime date) {
+    final dayName = DateFormat('EEE').format(date);
+    final formatted = DateFormat('dd-MM-yyyy').format(date);
+    return '$formatted ($dayName)';
+  }
+
+  Widget _buildActionButtons(ProcessedRequest req) {
+    if (widget.statusFilter == 'pending') {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -885,9 +890,9 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 75,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
-                  : () => _handleAction(id: req['id'], currentStatus: 'pending', targetStatus: 'approved', isProfileTable: false),
+                  : () => _handleAction(id: req.id, targetStatus: 'approved', isProfileTable: false),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
@@ -901,22 +906,16 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 75,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
                   : () async {
                       final reason = await _showActionReasonDialog(
-                        name: currentName,
+                        name: req.fullName,
                         actionTitle: 'Reject',
-                        explanationText: 'Are you sure you want to reject the signup request for $currentName?',
+                        explanationText: 'Are you sure you want to reject the signup request for ${req.fullName}?',
                       );
                       if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'pending',
-                          targetStatus: 'rejected',
-                          isProfileTable: false,
-                          reason: reason,
-                        );
+                        _handleAction(id: req.id, targetStatus: 'rejected', isProfileTable: false, reason: reason);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -929,7 +928,7 @@ villages:village_id (name, clusters:cluster_id (name))
           ),
         ],
       );
-    } else if (statusFilter == 'active') {
+    } else if (widget.statusFilter == 'active') {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -937,23 +936,17 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 80,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
                   : () async {
                       final reason = await _showActionReasonDialog(
-                        name: currentName,
+                        name: req.fullName,
                         actionTitle: 'Suspend',
-                        explanationText: 'Provide a reason to temporarily suspend $currentName account access.',
+                        explanationText: 'Provide a reason to temporarily suspend ${req.fullName}\'s account access.',
                         confirmButtonColor: Colors.orange,
                       );
                       if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'active',
-                          targetStatus: 'suspended',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
+                        _handleAction(id: req.id, targetStatus: 'suspended', isProfileTable: true, reason: reason);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -969,22 +962,16 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 75,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
                   : () async {
                       final reason = await _showActionReasonDialog(
-                        name: currentName,
+                        name: req.fullName,
                         actionTitle: 'Remove',
-                        explanationText: 'Are you completely sure you want to permanently remove $currentName?',
+                        explanationText: 'Are you completely sure you want to permanently remove ${req.fullName}?',
                       );
                       if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'active',
-                          targetStatus: 'removed',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
+                        _handleAction(id: req.id, targetStatus: 'removed', isProfileTable: true, reason: reason);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -1005,23 +992,17 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 90,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
                   : () async {
                       final reason = await _showActionReasonDialog(
-                        name: currentName,
+                        name: req.fullName,
                         actionTitle: 'Unsuspend',
-                        explanationText: 'Provide a reason to reinstate $currentName to active status.',
+                        explanationText: 'Provide a reason to reinstate ${req.fullName} to active status.',
                         confirmButtonColor: Colors.blue,
                       );
                       if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'suspended',
-                          targetStatus: 'active',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
+                        _handleAction(id: req.id, targetStatus: 'active', isProfileTable: true, reason: reason);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -1037,22 +1018,16 @@ villages:village_id (name, clusters:cluster_id (name))
             height: 32,
             width: 75,
             child: ElevatedButton(
-              onPressed: _isLoading
+              onPressed: _isProcessingAction
                   ? null
                   : () async {
                       final reason = await _showActionReasonDialog(
-                        name: currentName,
+                        name: req.fullName,
                         actionTitle: 'Remove',
-                        explanationText: 'Permanently remove $currentName? This action is irreversible.',
+                        explanationText: 'Permanently remove ${req.fullName}? This action is irreversible.',
                       );
                       if (reason != null) {
-                        _handleAction(
-                          id: req['id'],
-                          currentStatus: 'suspended',
-                          targetStatus: 'removed',
-                          isProfileTable: true,
-                          reason: reason,
-                        );
+                        _handleAction(id: req.id, targetStatus: 'removed', isProfileTable: true, reason: reason);
                       }
                     },
               style: ElevatedButton.styleFrom(
@@ -1070,28 +1045,245 @@ villages:village_id (name, clusters:cluster_id (name))
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Signup Request Management"),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: "Pending Requests"),
-              Tab(text: "Active Profiles"),
-              Tab(text: "Suspended Profiles"),
-            ],
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final totalRows = _filteredRequests.length;
+    final maxPages = (totalRows / _rowsPerPage).ceil();
+
+    if (_currentPage >= maxPages && maxPages > 0) _currentPage = maxPages - 1;
+
+    final int startIdx = _currentPage * _rowsPerPage;
+    final int endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
+
+    final paginatedRequests = (_filteredRequests.isEmpty || startIdx >= totalRows)
+        ? <ProcessedRequest>[]
+        : _filteredRequests.sublist(startIdx, endIdx);
+
+    return Column(
+      children: [
+        _buildDateControls(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: "Search records...",
+              prefixIcon: Icon(Icons.search),
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
-        body: TabBarView(
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildTable(statusFilter: 'pending', isProfileTable: false),
-            _buildTable(statusFilter: 'active', isProfileTable: true),
-            _buildTable(statusFilter: 'suspended', isProfileTable: true),
-          ],
+        Expanded(
+          child: _filteredRequests.isEmpty
+              ? const Center(child: Text("No records match your filters"))
+              : SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Table(
+                      // Explicit fixed widths prevent UI thread bottlenecks caused by IntrinsicColumnWidth measurements
+                      columnWidths: const {
+                        0: FixedColumnWidth(160),
+                        1: FixedColumnWidth(120),
+                        2: FixedColumnWidth(110),
+                        3: FixedColumnWidth(90),
+                        4: FixedColumnWidth(140),
+                        5: FixedColumnWidth(140),
+                        6: FixedColumnWidth(160),
+                        7: FixedColumnWidth(130),
+                        8: FixedColumnWidth(120),
+                        9: FixedColumnWidth(100),
+                        10: FixedColumnWidth(177),
+                      },
+                      border: TableBorder(
+                        verticalInside: BorderSide(color: Colors.grey.shade300),
+                        horizontalInside: BorderSide(color: Colors.grey.shade300, width: 1.0),
+                        bottom: BorderSide(color: Colors.grey.shade300),
+                        left: BorderSide(color: Colors.grey.shade300),
+                        right: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      children: [
+                        TableRow(
+                          decoration: BoxDecoration(color: Colors.grey.shade200),
+                          children: [
+                            _SortableHeader(
+                              label: "Full Name",
+                              onSort: () => _onSort(0),
+                              onFilter: () => _showFilterMenu(0, "Name"),
+                              isSorted: _sortColumnIndex == 0,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedNameFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Phone",
+                              onSort: () => _onSort(1),
+                              onFilter: () => _showFilterMenu(1, "Phone"),
+                              isSorted: _sortColumnIndex == 1,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedPhoneFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Role",
+                              onSort: () => _onSort(2),
+                              onFilter: () => _showFilterMenu(2, "Role"),
+                              isSorted: _sortColumnIndex == 2,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedRoleFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Gender",
+                              onSort: () => _onSort(3),
+                              onFilter: () => _showFilterMenu(3, "Gender"),
+                              isSorted: _sortColumnIndex == 3,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedGenderFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Cluster",
+                              onSort: () => _onSort(4),
+                              onFilter: () => _showFilterMenu(4, "Cluster"),
+                              isSorted: _sortColumnIndex == 4,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedClusterFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Village",
+                              onSort: () => _onSort(5),
+                              onFilter: () => _showFilterMenu(5, "Village"),
+                              isSorted: _sortColumnIndex == 5,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedVillageFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "School",
+                              onSort: () => _onSort(6),
+                              onFilter: () => _showFilterMenu(6, "School"),
+                              isSorted: _sortColumnIndex == 6,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedSchoolFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Qualification",
+                              onSort: () => _onSort(7),
+                              onFilter: () => _showFilterMenu(7, "Qualification"),
+                              isSorted: _sortColumnIndex == 7,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedQualificationFilters != null,
+                            ),
+                            _SortableHeader(
+                              label: "Date",
+                              onSort: () => _onSort(8),
+                              onFilter: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDateRange?.start ?? DateTime.now(),
+                                  firstDate: DateTime(1970),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setState(() {
+                                    _selectedDateRange = DateTimeRange(
+                                      start: picked,
+                                      end: _selectedDateRange?.end ?? picked.add(const Duration(days: 6)),
+                                    );
+                                    _currentPage = 0;
+                                  });
+                                  await _applyAllFilters();
+                                }
+                              },
+                              isSorted: _sortColumnIndex == 8,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedDateRange != null,
+                            ),
+                            _SortableHeader(
+                              label: "Time",
+                              onSort: () => _onSort(9),
+                              onFilter: () => _showFilterMenu(9, "Time"),
+                              isSorted: _sortColumnIndex == 9,
+                              isAscending: _isAscending,
+                              hasFilter: _selectedTimeFilters != null,
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Text("Actions", style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        ...paginatedRequests.map((req) {
+                          return TableRow(
+                            children: [
+                              _DataCell(text: req.fullName, isBold: true),
+                              _DataCell(text: req.phone),
+                              _DataCell(text: req.role),
+                              _DataCell(text: req.gender),
+                              _DataCell(text: req.cluster),
+                              _DataCell(text: req.village),
+                              _DataCell(text: req.school),
+                              _DataCell(text: req.qualification),
+                              _DataCell(text: req.dateFormatted),
+                              _DataCell(text: req.timeFormatted),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                child: _buildActionButtons(req),
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
         ),
-      ),
+
+        if (_filteredRequests.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text("Rows per page: "),
+                    DropdownButton<int>(
+                      items: _availableRowsPerPage.map((e) => DropdownMenuItem<int>(value: e, child: Text("$e"))).toList(),
+                      onChanged: (val) async {
+                        if (val != null) {
+                          setState(() {
+                            _rowsPerPage = val;
+                            _currentPage = 0;
+                          });
+                          await _applyAllFilters();
+                        }
+                      },
+                      value: _rowsPerPage,
+                      isDense: true,
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: _currentPage > 0 ? () => setState(() => _currentPage--) : null,
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Text(
+                      "Page ${_currentPage + 1} of ${maxPages == 0 ? 1 : maxPages}  •  "
+                      "Entries: ${totalRows == 0 ? 0 : startIdx + 1}-$endIdx of $totalRows",
+                    ),
+                    IconButton(
+                      onPressed: _currentPage < maxPages - 1 ? () => setState(() => _currentPage++) : null,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1103,6 +1295,7 @@ class _SortableHeader extends StatelessWidget {
   final bool isSorted;
   final bool isAscending;
   final bool hasFilter;
+
   const _SortableHeader({
     required this.label,
     required this.onSort,
@@ -1111,6 +1304,7 @@ class _SortableHeader extends StatelessWidget {
     required this.isAscending,
     required this.hasFilter,
   });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1209,4 +1403,111 @@ class _DataCell extends StatelessWidget {
       }).toList(),
     );
   }
+}
+
+class FilterParams {
+  final List<ProcessedRequest> requests;
+  final String query;
+  final DateTimeRange? dateRange;
+  final Set<String>? names;
+  final Set<String>? phones;
+  final Set<String>? roles;
+  final Set<String>? genders;
+  final Set<String>? clusters;
+  final Set<String>? villages;
+  final Set<String>? schools;
+  final Set<String>? qualifications;
+  final Set<String>? times;
+  final int sortColumnIndex;
+  final bool isAscending;
+
+  FilterParams({
+    required this.requests,
+    required this.query,
+    this.dateRange,
+    this.names,
+    this.phones,
+    this.roles,
+    this.genders,
+    this.clusters,
+    this.villages,
+    this.schools,
+    this.qualifications,
+    this.times,
+    required this.sortColumnIndex,
+    required this.isAscending,
+  });
+}
+
+List<ProcessedRequest> _filterAndSortInIsolate(FilterParams params) {
+  final query = params.query;
+
+  final filtered = params.requests.where((req) {
+    if (params.dateRange != null &&
+        (req.date.isBefore(params.dateRange!.start) || req.date.isAfter(params.dateRange!.end.add(const Duration(days: 1))))) {
+      return false;
+    }
+
+    if (query.isNotEmpty && !req.searchKey.contains(query)) {
+      return false;
+    }
+
+    if (params.names != null && !params.names!.contains(req.fullName)) return false;
+    if (params.phones != null && !params.phones!.contains(req.phone)) return false;
+    if (params.roles != null && !params.roles!.contains(req.role)) return false;
+    if (params.genders != null && !params.genders!.contains(req.gender)) return false;
+    if (params.clusters != null && !params.clusters!.contains(req.cluster)) return false;
+    if (params.villages != null && !params.villages!.contains(req.village)) return false;
+    if (params.schools != null && !params.schools!.contains(req.school)) return false;
+    if (params.qualifications != null && !params.qualifications!.contains(req.qualification)) return false;
+    if (params.times != null && !params.times!.contains(req.timeFormatted)) return false;
+
+    return true;
+  }).toList();
+
+  filtered.sort((a, b) {
+    String valA = "";
+    String valB = "";
+    switch (params.sortColumnIndex) {
+      case 0:
+        valA = a.fullName;
+        valB = b.fullName;
+        break;
+      case 1:
+        valA = a.phone;
+        valB = b.phone;
+        break;
+      case 2:
+        valA = a.role;
+        valB = b.role;
+        break;
+      case 3:
+        valA = a.gender;
+        valB = b.gender;
+        break;
+      case 4:
+        valA = a.cluster;
+        valB = b.cluster;
+        break;
+      case 5:
+        valA = a.village;
+        valB = b.village;
+        break;
+      case 6:
+        valA = a.school;
+        valB = b.school;
+        break;
+      case 7:
+        valA = a.qualification;
+        valB = b.qualification;
+        break;
+      case 8:
+      case 9:
+        return params.isAscending ? a.date.compareTo(b.date) : b.date.compareTo(a.date);
+    }
+    int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
+    return params.isAscending ? compare : -compare;
+  });
+
+  return filtered;
 }

@@ -616,7 +616,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                                 const Icon(Icons.alt_route, color: Colors.blueGrey, size: 20),
                                 const SizedBox(width: 8),
                                 const Text(
-                                  "Conditional Visibility (Skip Logic)",
+                                  "Conditional Visibility",
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey),
                                 ),
                                 const Spacer(),
@@ -855,12 +855,12 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text("Building: ${widget.formTitle}"),
+        title: Text("Editing Form: ${widget.formTitle}"),
         actions: [
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Center(child: CircularProgressIndicator(color: Colors.white)),
+              child: Center(child: CircularProgressIndicator()),
             )
           else
             Padding(

@@ -29,7 +29,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   final ScrollController _horizontalBodyController = ScrollController();
   final ScrollController _horizontalFooterController = ScrollController();
 
-  // Pagination parameters
   int _currentPage = 0;
   int _rowsPerPage = 50;
   final List<int> _availableRowsPerPage = [25, 50, 100, 200];
@@ -39,12 +38,9 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     super.initState();
     _attendanceFetchFuture = _loadDataPipeline();
     _horizontalBodyController.addListener(() {
-      if (_horizontalHeaderController.hasClients) {
-        _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
-      }
-      if (_horizontalFooterController.hasClients) {
-        _horizontalFooterController.jumpTo(_horizontalBodyController.offset);
-      }
+      if (_horizontalHeaderController.hasClients) _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
+
+      if (_horizontalFooterController.hasClients) _horizontalFooterController.jumpTo(_horizontalBodyController.offset);
     });
   }
 
@@ -65,24 +61,22 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   @override
   void didUpdateWidget(covariant StudentAttendanceTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
+    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate)
       setState(() {
         _attendanceFetchFuture = _loadDataPipeline();
-        _currentPage = 0; // Reset pagination when dates change
+        _currentPage = 0;
       });
-    }
-    if (oldWidget.searchQuery != widget.searchQuery) {
+
+    if (oldWidget.searchQuery != widget.searchQuery)
       setState(() {
-        _currentPage = 0; // Reset pagination when search changes
+        _currentPage = 0;
       });
-    }
   }
 
   Future<Map<String, dynamic>> _loadDataPipeline() async {
     try {
       final supabase = ref.read(supabaseClientProvider);
 
-      // 1. Paginated loop to fetch ALL students from DB completely bypassing 1k limit
       List<Map<String, dynamic>> completeStudentList = [];
       bool hasMoreStudents = true;
       int fromIndex = 0;
@@ -97,14 +91,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(studentsRaw as List);
         completeStudentList.addAll(chunk);
 
-        if (chunk.length < studentBatchSize) {
+        if (chunk.length < studentBatchSize)
           hasMoreStudents = false;
-        } else {
+        else
           fromIndex += studentBatchSize;
-        }
       }
 
-      // 2. Fetch all attendance records for the window range
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
       final attendanceRecordsRaw =
           (await supabase
@@ -173,9 +165,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         final student = studentMap[studentId];
         final String localId = student != null ? student['student_id_local'] : 'Unknown';
 
-        if (widget.searchQuery.isNotEmpty && !localId.toLowerCase().contains(widget.searchQuery.toLowerCase())) {
-          continue;
-        }
+        if (widget.searchQuery.isNotEmpty && !localId.toLowerCase().contains(widget.searchQuery.toLowerCase())) continue;
 
         final DateTime localTime = DateTime.parse(record['created_at']).toLocal();
         final String dateStr = DateFormat('dd-MM-yyyy').format(localTime);
@@ -183,11 +173,11 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
 
         sheet.appendRow([TextCellValue(localId), TextCellValue(dateStr), TextCellValue(status.toUpperCase())]);
 
-        if (status == 'absent') {
+        if (status == 'absent')
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = absentStyle;
-        } else if (status == 'late') {
+        else if (status == 'late')
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = lateStyle;
-        }
+
         currentExcelRowIndex++;
       }
 
@@ -209,14 +199,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         anchor.click();
         anchor.remove();
         html.Url.revokeObjectUrl(url);
-        if (mounted) {
+        if (mounted)
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
-        }
       } else {
         var status = await Permission.manageExternalStorage.status;
-        if (!status.isGranted) {
-          status = await Permission.manageExternalStorage.request();
-        }
+        if (!status.isGranted) status = await Permission.manageExternalStorage.request();
+
         Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
@@ -278,11 +266,10 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     final double rowHeight = isMobile ? 42 : 31;
     const double headerHeight = 42;
 
-    // Stable, reliable calculation for the ID column width based on the longest format pattern
     const TextStyle idStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
-    const String longestPossibleIdFormat = 'WWWWmmmm 888888'; // Matches 'AAAAaaaa nnnnnn' using wide characters
+    const String longestPossibleIdFormat = 'WWWWmmmm 888888';
     final Size calculatedSample = calcTextSize(context, longestPossibleIdFormat, idStyle);
-    final double maxNameWidth = calculatedSample.width + 32.0; // Added explicit side-padding safety margin
+    final double maxNameWidth = calculatedSample.width + 32.0;
 
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
@@ -291,7 +278,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
 
-        // Global dataset filtered globally by text search match queries
         final allFilteredStudents =
             ((snapshot.data!['students'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
                 .where((m) => m['student_id_local'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
@@ -299,19 +285,14 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
 
         if (allFilteredStudents.isEmpty) return const Center(child: Text("No students found"));
 
-        // Evaluate Pagination Parameters dynamically
         final totalRows = allFilteredStudents.length;
         final maxPages = (totalRows / _rowsPerPage).ceil();
-        if (_currentPage >= maxPages && maxPages > 0) {
-          _currentPage = maxPages - 1;
-        }
+        if (_currentPage >= maxPages && maxPages > 0) _currentPage = maxPages - 1;
+
         final int startIdx = _currentPage * _rowsPerPage;
         final int endIdx = (startIdx + _rowsPerPage) > totalRows ? totalRows : (startIdx + _rowsPerPage);
 
-        // Sliced subset chunk strictly handled inside memory for the rendering layer
         final paginatedStudents = allFilteredStudents.sublist(startIdx, endIdx);
-
-        // (Removed previous dynamic loop for maxNameWidth to maintain layout stability)
 
         final dates = _getDatesInRange(widget.startDate, widget.endDate);
         final workingDaysCount = dates.where((d) {
@@ -319,24 +300,21 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
           return !_isHoliday(d) && cellDateNormalized.isBefore(todayNormalized);
         }).length;
 
-        // Note: Footers metrics (daily summary calculations) computed strictly on the current page slice for precision data tracking
         List<int> dailyTotals = [];
         double grandTotalPresent = 0;
         for (final d in dates) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           final bool isFutureOrToday =
               cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
-          if (_isHoliday(d) || isFutureOrToday) {
+          if (_isHoliday(d) || isFutureOrToday)
             dailyTotals.add(-1);
-          } else {
+          else {
             final key = DateFormat('yyyy-MM-dd').format(d);
             int count = 0;
             for (final m in paginatedStudents) {
               final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
               final record = attMap[key];
-              if (record != null && (record['status'] == 'present' || record['status'] == 'late')) {
-                count++;
-              }
+              if (record != null && (record['status'] == 'present' || record['status'] == 'late')) count++;
             }
             dailyTotals.add(count);
             grandTotalPresent += count;
@@ -347,7 +325,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
           decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
           child: Column(
             children: [
-              // Header
               Container(
                 height: headerHeight,
                 color: Colors.grey[200],
@@ -411,7 +388,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
               ),
               Divider(height: 1, thickness: 1, color: Colors.grey[300]),
 
-              // Body (Slices)
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.vertical,
@@ -476,7 +452,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                             : isFutureOrToday && status.isEmpty
                                             ? const SizedBox.shrink()
                                             : (() {
-                                                if (status == 'present') {
+                                                if (status == 'present')
                                                   return const Text(
                                                     'P',
                                                     style: TextStyle(
@@ -485,7 +461,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
-                                                } else if (status == 'late') {
+                                                else if (status == 'late')
                                                   return const Text(
                                                     'L',
                                                     style: TextStyle(
@@ -494,7 +470,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
-                                                } else {
+                                                else
                                                   return const Text(
                                                     'A',
                                                     style: TextStyle(
@@ -503,7 +479,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
-                                                }
                                               }()),
                                       ),
                                     );
@@ -532,9 +507,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                 final key = DateFormat('yyyy-MM-dd').format(d);
                                 final record = attMap[key];
                                 final String status = record != null ? record['status'].toString().toLowerCase() : '';
-                                if (status == 'present' || status == 'late') {
-                                  attendedCount++;
-                                }
+                                if (status == 'present' || status == 'late') attendedCount++;
                               }
                             }
                             return Container(
@@ -558,7 +531,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
               ),
               Divider(height: 1, thickness: 1, color: Colors.grey[300]),
 
-              // Total Footer Row
               Container(
                 height: rowHeight,
                 color: Colors.blueGrey[50],
@@ -619,14 +591,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
               ),
               Divider(height: 1, thickness: 1, color: Colors.grey[300]),
 
-              // UI Centered Pagination Control Bar
               Container(
                 color: Colors.grey.shade100,
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Left: Rows Selection Selection dropdown
                     Row(
                       children: [
                         const Text("Rows per page: ", style: TextStyle(fontSize: 13)),
@@ -635,18 +605,16 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                           isDense: true,
                           items: _availableRowsPerPage.map((e) => DropdownMenuItem<int>(value: e, child: Text("$e"))).toList(),
                           onChanged: (val) {
-                            if (val != null) {
+                            if (val != null)
                               setState(() {
                                 _rowsPerPage = val;
                                 _currentPage = 0;
                               });
-                            }
                           },
                         ),
                       ],
                     ),
 
-                    // Center: Synchronized Tracking and Navigation Arrows
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -668,7 +636,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                       ],
                     ),
 
-                    // Balanced Anchor right Spacer layout setup
                     const SizedBox(width: 120),
                   ],
                 ),

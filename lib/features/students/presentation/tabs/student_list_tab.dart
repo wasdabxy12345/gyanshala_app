@@ -49,7 +49,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   String? _editingStudentId;
   String _editingLocalIdText = "";
 
-  // Pagination fields
   int _currentPage = 0;
   int _rowsPerPage = 50;
   final List<int> _availableRowsPerPage = [25, 50, 100, 200];
@@ -70,7 +69,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
   }
 
   void refreshData() {
-    // Explicitly trigger whatever logic resets or re-runs your Riverpod/Future provider data fetchers
     setState(() {});
   }
 
@@ -150,7 +148,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
       int from = 0;
       const int batchSize = 1000;
 
-      // Loop to chunk requests to bypass Supabase's max 1000 API limit
       while (hasMore) {
         final data = await supabase
             .from('students')
@@ -451,7 +448,7 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
     final query = widget.searchQuery.toLowerCase().trim();
     _filteredStudents = _rawRequestsFilterPass(_rawStudents, query);
     _applySorting();
-    _currentPage = 0; // Reset pagination whenever filters or searches change
+    _currentPage = 0;
   }
 
   List<Map<String, dynamic>> _rawRequestsFilterPass(List<Map<String, dynamic>> source, String searchStr) {
@@ -639,7 +636,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
 
     bool isAllRowsSelected = _filteredStudents.isNotEmpty && _selectedStudentIds.length == _filteredStudents.length;
 
-    // UI Pagination logic slices
     final totalRows = _filteredStudents.length;
     final maxPages = (totalRows / _rowsPerPage).ceil();
     if (_currentPage >= maxPages && maxPages > 0) {
@@ -1087,15 +1083,12 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
                           ),
                         ),
                       ),
-                      // UI Pagination Controls Bar
-                      // UI Pagination Controls Bar
                       Container(
                         color: Colors.grey.shade100,
                         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Left side: Rows per page selection
                             Row(
                               children: [
                                 const Text("Rows per page: ", style: TextStyle(fontSize: 13)),
@@ -1117,7 +1110,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
                               ],
                             ),
 
-                            // Center side: Navigation, page status, and global student tracking metrics
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -1139,7 +1131,6 @@ class StudentListTabState extends ConsumerState<StudentListTab> {
                               ],
                             ),
 
-                            // Right side: Spacer layout balancer
                             const SizedBox(width: 120),
                           ],
                         ),

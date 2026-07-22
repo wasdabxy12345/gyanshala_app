@@ -38,11 +38,10 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     setState(() => _timerSeconds = 60);
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timerSeconds == 0) {
+      if (_timerSeconds == 0)
         timer.cancel();
-      } else {
+      else
         setState(() => _timerSeconds--);
-      }
     });
   }
 
@@ -85,9 +84,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
     try {
       if (AppConfig.useDevBypass) {
-        if (mounted) {
-          await widget.onVerified();
-        }
+        if (mounted) await widget.onVerified();
         return;
       }
       await ref.read(authRepositoryProvider).verifyOtp(identifier: widget.identifier, otp: _otpController.text.trim());
@@ -115,9 +112,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'OTP', prefixIcon: Icon(Icons.password_outlined)),
               validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'OTP is required';
-                }
+                if (value == null || value.trim().isEmpty) return 'OTP is required';
                 return null;
               },
             ),
