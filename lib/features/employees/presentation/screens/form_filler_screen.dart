@@ -431,11 +431,13 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
       ),
     );
 
-    switch (type) {
-      case 'text':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    // Wrap the entire question layout in a SingleChildScrollView so the whole card scrolls
+    return SingleChildScrollView(
+      key: ValueKey('scroll_question_$qId'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (type == 'text') ...[
             fieldLabel,
             TextFormField(
               key: ValueKey('text_field_$qId'),
@@ -445,54 +447,49 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
               validator: (val) => isRequired && (val == null || val.trim().isEmpty) ? 'This field is required' : null,
               onSaved: (val) => _formAnswers[qId] = val?.trim(),
             ),
-          ],
-        );
+          ] else if (type == 'radio') ...[
+            Builder(
+              builder: (context) {
+                final rawOptions = _resolvedOptions[qId] ?? [];
+                final List<String> options = List<String>.from(rawOptions);
+                if (allowOther && !options.contains(otherChoiceString)) {
+                  options.add(otherChoiceString);
+                }
 
-      case 'radio':
-        final rawOptions = _resolvedOptions[qId] ?? [];
-        final List<String> options = List<String>.from(rawOptions);
-        if (allowOther && !options.contains(otherChoiceString)) {
-          options.add(otherChoiceString);
-        }
+                final filteredOptions = options.where((opt) {
+                  if (currentQuery.isEmpty) return true;
+                  return opt.toLowerCase().contains(currentQuery);
+                }).toList();
 
-        final filteredOptions = options.where((opt) {
-          if (currentQuery.isEmpty) return true;
-          return opt.toLowerCase().contains(currentQuery);
-        }).toList();
+                final String otherTextKey = "${qId}_other_text";
 
-        final String otherTextKey = "${qId}_other_text";
-        return FormField<String>(
-          key: ValueKey('radio_formfield_$qId'),
-          initialValue: _formAnswers[qId],
-          validator: (val) {
-            if (isRequired && val == null) return 'Please select an option to proceed';
-            if (val == otherChoiceString) {
-              final textVal = _formAnswers[otherTextKey]?.toString().trim();
-              if (textVal == null || textVal.isEmpty) return 'Please specify your other answer';
-            }
-            return null;
-          },
-          onSaved: (val) {
-            if (val == otherChoiceString) {
-              _formAnswers[qId] = _formAnswers[otherTextKey]?.toString().trim() ?? otherChoiceString;
-            } else {
-              _formAnswers[qId] = val;
-            }
-          },
-          builder: (FormFieldState<String> state) {
-            final isOtherSelected = state.value == otherChoiceString;
+                return FormField<String>(
+                  key: ValueKey('radio_formfield_$qId'),
+                  initialValue: _formAnswers[qId],
+                  validator: (val) {
+                    if (isRequired && val == null) return 'Please select an option to proceed';
+                    if (val == otherChoiceString) {
+                      final textVal = _formAnswers[otherTextKey]?.toString().trim();
+                      if (textVal == null || textVal.isEmpty) return 'Please specify your other answer';
+                    }
+                    return null;
+                  },
+                  onSaved: (val) {
+                    if (val == otherChoiceString) {
+                      _formAnswers[qId] = _formAnswers[otherTextKey]?.toString().trim() ?? otherChoiceString;
+                    } else {
+                      _formAnswers[qId] = val;
+                    }
+                  },
+                  builder: (FormFieldState<String> state) {
+                    final isOtherSelected = state.value == otherChoiceString;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                fieldLabel,
-                _buildSearchField(qId, "Search options..."),
-                const SizedBox(height: 3),
-                Expanded(
-                  child: SingleChildScrollView(
-                    key: ValueKey('scroll_options_$qId'),
-                    child: Column(
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        fieldLabel,
+                        _buildSearchField(qId, "Search options..."),
+                        const SizedBox(height: 3),
                         RadioGroup<String>(
                           groupValue: state.value,
                           onChanged: (String? val) {
@@ -545,74 +542,68 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                               },
                             ),
                           ),
+                        if (state.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, left: 3),
+                            child: Text(state.errorText ?? '', style: const TextStyle(color: Colors.red, fontSize: 13)),
+                          ),
                       ],
-                    ),
-                  ),
-                ),
-                if (state.hasError)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 3),
-                    child: Text(state.errorText ?? '', style: const TextStyle(color: Colors.red, fontSize: 13)),
-                  ),
-              ],
-            );
-          },
-        );
+                    );
+                  },
+                );
+              },
+            ),
+          ] else if (type == 'checkbox_search') ...[
+            Builder(
+              builder: (context) {
+                final rawOptions = _resolvedOptions[qId] ?? [];
+                final List<String> options = List<String>.from(rawOptions);
+                if (allowOther && !options.contains(otherChoiceString)) {
+                  options.add(otherChoiceString);
+                }
 
-      case 'checkbox_search':
-        final rawOptions = _resolvedOptions[qId] ?? [];
-        final List<String> options = List<String>.from(rawOptions);
-        if (allowOther && !options.contains(otherChoiceString)) {
-          options.add(otherChoiceString);
-        }
+                final filteredOptions = options.where((opt) {
+                  if (currentQuery.isEmpty) return true;
+                  return opt.toLowerCase().contains(currentQuery);
+                }).toList();
 
-        final filteredOptions = options.where((opt) {
-          if (currentQuery.isEmpty) return true;
-          return opt.toLowerCase().contains(currentQuery);
-        }).toList();
+                _formAnswers[qId] ??= <String>[];
+                final String otherTextKey = "${qId}_other_text";
 
-        _formAnswers[qId] ??= <String>[];
-        final String otherTextKey = "${qId}_other_text";
+                return FormField<List<String>>(
+                  key: ValueKey('checkbox_formfield_$qId'),
+                  initialValue: List<String>.from(_formAnswers[qId]),
+                  validator: (val) {
+                    if (isRequired && (val == null || val.isEmpty)) return 'Please choose at least one';
+                    if (val != null && val.contains(otherChoiceString)) {
+                      final textVal = _formAnswers[otherTextKey]?.toString().trim();
+                      if (textVal == null || textVal.isEmpty) return 'Please specify your other choices';
+                    }
+                    return null;
+                  },
+                  onSaved: (val) {
+                    if (val != null) {
+                      final savedList = List<String>.from(val);
+                      if (savedList.contains(otherChoiceString)) {
+                        savedList.remove(otherChoiceString);
+                        final customWriteIn = _formAnswers[otherTextKey]?.toString().trim() ?? '';
+                        if (customWriteIn.isNotEmpty) savedList.add("Other: $customWriteIn");
+                      }
+                      _formAnswers[qId] = savedList;
+                    }
+                  },
+                  builder: (FormFieldState<List<String>> state) {
+                    final selectedItems = state.value ?? [];
+                    final isOtherSelected = selectedItems.contains(otherChoiceString);
 
-        return FormField<List<String>>(
-          key: ValueKey('checkbox_formfield_$qId'),
-          initialValue: List<String>.from(_formAnswers[qId]),
-          validator: (val) {
-            if (isRequired && (val == null || val.isEmpty)) return 'Please choose at least one';
-            if (val != null && val.contains(otherChoiceString)) {
-              final textVal = _formAnswers[otherTextKey]?.toString().trim();
-              if (textVal == null || textVal.isEmpty) return 'Please specify your other choices';
-            }
-            return null;
-          },
-          onSaved: (val) {
-            if (val != null) {
-              final savedList = List<String>.from(val);
-              if (savedList.contains(otherChoiceString)) {
-                savedList.remove(otherChoiceString);
-                final customWriteIn = _formAnswers[otherTextKey]?.toString().trim() ?? '';
-                if (customWriteIn.isNotEmpty) savedList.add("Other: $customWriteIn");
-              }
-              _formAnswers[qId] = savedList;
-            }
-          },
-          builder: (FormFieldState<List<String>> state) {
-            final selectedItems = state.value ?? [];
-            final isOtherSelected = selectedItems.contains(otherChoiceString);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                fieldLabel,
-                _buildSearchField(qId, "Search and filter listings..."),
-                const SizedBox(height: 4),
-                const Text("Select all that apply:", style: TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    key: ValueKey('scroll_options_$qId'),
-                    child: Column(
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        fieldLabel,
+                        _buildSearchField(qId, "Search and filter listings..."),
+                        const SizedBox(height: 4),
+                        const Text("Select all that apply:", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        const SizedBox(height: 12),
                         Column(
                           children: filteredOptions.isEmpty
                               ? [
@@ -667,23 +658,23 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                               },
                             ),
                           ),
+                        if (state.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, left: 4),
+                            child: Text(state.errorText ?? '', style: const TextStyle(color: Colors.red, fontSize: 13)),
+                          ),
                       ],
-                    ),
-                  ),
-                ),
-                if (state.hasError)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, left: 4),
-                    child: Text(state.errorText ?? '', style: const TextStyle(color: Colors.red, fontSize: 13)),
-                  ),
-              ],
-            );
-          },
-        );
-
-      default:
-        return const SizedBox.shrink();
-    }
+                    );
+                  },
+                );
+              },
+            ),
+          ] else ...[
+            const SizedBox.shrink(),
+          ],
+        ],
+      ),
+    );
   }
 
   void _showLocationRequiredDialog({required bool isPermanent}) {

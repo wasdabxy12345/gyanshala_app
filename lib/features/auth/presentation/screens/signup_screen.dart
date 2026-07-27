@@ -19,10 +19,6 @@ import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
 
-class AppConfig {
-  static const bool useDevBypass = false;
-}
-
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
