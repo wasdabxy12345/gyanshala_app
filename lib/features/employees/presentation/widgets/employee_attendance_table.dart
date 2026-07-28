@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide TextDirection;
 import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/employee_attendance_details_page.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -27,6 +28,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   late Future<Map<String, dynamic>> _attendanceFetchFuture;
   final ScrollController _horizontalHeaderController = ScrollController();
   final ScrollController _horizontalBodyController = ScrollController();
+
+  bool _isAscending = true;
+  Set<String>? _selectedEmployeeNameFilters;
 
   @override
   void initState() {
@@ -141,15 +145,22 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final data = await _loadDataPipeline();
       final employeeMap = data['employees'] as Map<String, dynamic>;
       final List<dynamic> rawRecords = data['records'];
-
       final excel = Excel.createExcel();
       final sheet = excel['Sheet1'];
 
-      final headers = ["Name", "Date", "Check In Time", "Check Out Time", "Check In Location", "Check Out Location"];
+      final headers = [
+        "Name",
+        "Date",
+        "Check In Time",
+        "Check Out Time",
+        "Check In Location",
+        "Check Out Location",
+        "Check In Coordinates",
+        "Check Out Coordinates",
+      ];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
 
       Map<String, Map<String, dynamic>> structuredRows = {};
-
       final sortedRecords = List.from(rawRecords)
         ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
 
@@ -157,21 +168,26 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         final userId = record['user_id'];
         final employee = employeeMap[userId];
         final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
-
         if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) {
           continue;
         }
-
+        if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) {
+          continue;
+        }
         final DateTime localTime = DateTime.parse(record['recorded_at']).toLocal();
         final String dateKey = DateFormat('dd-MM-yyyy').format(localTime);
         final String timeStr = DateFormat('HH:mm:ss').format(localTime);
         final String status = record['status'] ?? '';
+
         final schoolData = record['schools'];
         final String schoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
         final String variance = record['attendance_time_variance']?.toString() ?? "99:99:99";
 
-        final String rowCompositeKey = "${userId}_$dateKey";
+        final lat = record['latitude'];
+        final lon = record['longitude'];
+        final String coordinatesStr = (lat != null && lon != null) ? "$lat, $lon" : '';
 
+        final String rowCompositeKey = "${userId}_$dateKey";
         if (!structuredRows.containsKey(rowCompositeKey)) {
           structuredRows[rowCompositeKey] = {
             'name': fullName,
@@ -179,9 +195,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
             'check_in_time': '',
             'check_in_variance': '99:99:99',
             'check_in_loc': 'off-site',
+            'check_in_coords': '',
             'check_out_time': '',
             'check_out_variance': '99:99:99',
             'check_out_loc': 'off-site',
+            'check_out_coords': '',
           };
         }
 
@@ -189,17 +207,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           structuredRows[rowCompositeKey]!['check_in_time'] = timeStr;
           structuredRows[rowCompositeKey]!['check_in_variance'] = variance;
           structuredRows[rowCompositeKey]!['check_in_loc'] = schoolName;
+          structuredRows[rowCompositeKey]!['check_in_coords'] = coordinatesStr;
         } else if (status == 'check_out') {
           structuredRows[rowCompositeKey]!['check_out_time'] = timeStr;
           structuredRows[rowCompositeKey]!['check_out_variance'] = variance;
           structuredRows[rowCompositeKey]!['check_out_loc'] = schoolName;
+          structuredRows[rowCompositeKey]!['check_out_coords'] = coordinatesStr;
         }
       }
 
       final CellStyle offSiteAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
-
       final CellStyle varianceAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
-
       int currentExcelRowIndex = 1;
 
       for (final rowKey in structuredRows.keys) {
@@ -212,6 +230,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           TextCellValue(r['check_out_time']),
           TextCellValue(r['check_in_loc']),
           TextCellValue(r['check_out_loc']),
+          TextCellValue(r['check_in_coords']),
+          TextCellValue(r['check_out_coords']),
         ]);
 
         final String checkInVar = r['check_in_variance'];
@@ -228,7 +248,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         if (isCheckOutEarly && r['check_out_time'].isNotEmpty) {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
         }
-
         if (checkInLoc == "off-site") {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
         }
@@ -241,6 +260,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       final bytes = excel.encode();
       if (bytes == null) throw Exception('Failed to generate excel file');
+
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
       final fileName = 'Employee_Attendance_Summary_[$startRange to $endRange].xlsx';
@@ -313,6 +333,82 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     return textPainter.size;
   }
 
+  Future<void> _showFilterMenu(List<String> allEmployeeNames) async {
+    Set<String> currentSelection = _selectedEmployeeNameFilters != null
+        ? Set.from(_selectedEmployeeNameFilters!)
+        : Set.from(allEmployeeNames);
+
+    final dialogSearchController = TextEditingController();
+    List<String> filteredValues = List.from(allEmployeeNames);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text("Filter by Employee Name"),
+          content: SizedBox(
+            width: 320,
+            height: 450,
+            child: Column(
+              children: [
+                TextField(
+                  controller: dialogSearchController,
+                  decoration: const InputDecoration(hintText: "Search names...", prefixIcon: Icon(Icons.search)),
+                  onChanged: (value) {
+                    setStateDialog(() {
+                      filteredValues = allEmployeeNames.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  dense: true,
+                  value: currentSelection.length == allEmployeeNames.length,
+                  title: const Text("Select All"),
+                  onChanged: (checked) {
+                    setStateDialog(() {
+                      currentSelection = checked == true ? Set.from(allEmployeeNames) : {};
+                    });
+                  },
+                ),
+                const Divider(),
+                Expanded(
+                  child: ListView(
+                    children: filteredValues.map((value) {
+                      return CheckboxListTile(
+                        dense: true,
+                        value: currentSelection.contains(value),
+                        title: Text(value),
+                        onChanged: (checked) {
+                          setStateDialog(() {
+                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  final isAllSelected = currentSelection.length == allEmployeeNames.length;
+                  _selectedEmployeeNameFilters = isAllSelected ? null : Set.from(currentSelection);
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -331,12 +427,28 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
 
-        final employees =
-            ((snapshot.data!['employees'] as Map<String, dynamic>).values
-                    .map((e) => Map<String, dynamic>.from(e as Map))
-                    .toList())
-                .where((m) => m['full_name'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
-                .toList();
+        final allEmployees = ((snapshot.data!['employees'] as Map<String, dynamic>).values
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList());
+
+        final allEmployeeNames = allEmployees.map((e) => e['full_name']?.toString() ?? 'Unknown').toSet().toList()..sort();
+
+        var employees = allEmployees.where((m) {
+          final fullName = m['full_name'].toString();
+          final matchesSearch = widget.searchQuery.isEmpty || fullName.toLowerCase().contains(widget.searchQuery.toLowerCase());
+          if (!matchesSearch) return false;
+          if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) {
+            return false;
+          }
+          return true;
+        }).toList();
+
+        employees.sort((a, b) {
+          final valA = (a['full_name'] ?? '').toString().toLowerCase();
+          final valB = (b['full_name'] ?? '').toString().toLowerCase();
+          int compare = valA.compareTo(valB);
+          return _isAscending ? compare : -compare;
+        });
 
         if (employees.isEmpty) return const Center(child: Text("No employees found"));
 
@@ -349,7 +461,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     : (emp['last_name'] ?? ''))
               : (emp['full_name'] ?? 'Unknown');
           final Size size = calcTextSize(context, textToMeasure, nameStyle);
-          final double totalNeeded = size.width + 26.0;
+          final double totalNeeded = size.width + 48.0; // Added padding for sort/filter icons in header
           if (totalNeeded > maxNameWidth) maxNameWidth = totalNeeded;
         }
 
@@ -391,6 +503,26 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
           child: Column(
             children: [
+              if (_selectedEmployeeNameFilters != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  color: Colors.blue.shade50,
+                  child: Row(
+                    children: [
+                      Text(
+                        'Filtered by ${_selectedEmployeeNameFilters!.length} Employee(s)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => setState(() => _selectedEmployeeNameFilters = null),
+                        icon: const Icon(Icons.filter_alt_off, size: 16),
+                        label: const Text('Clear Table Filters'),
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
               Container(
                 height: headerHeight,
                 color: Colors.grey[200],
@@ -399,13 +531,55 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     Container(
                       width: maxNameWidth,
                       alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 13),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
                         border: Border(right: BorderSide(color: Colors.grey[300]!)),
                       ),
-                      child: const Text(
-                        'Employee',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isAscending = !_isAscending;
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  const Flexible(
+                                    child: Text(
+                                      'Employee',
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                    size: 13,
+                                    color: AppTheme.primaryBlue,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _showFilterMenu(allEmployeeNames),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: _selectedEmployeeNameFilters != null
+                                    ? AppTheme.primaryBlue.withAlpha(33)
+                                    : Colors.transparent,
+                              ),
+                              child: Icon(
+                                Icons.filter_alt,
+                                size: 13,
+                                color: _selectedEmployeeNameFilters != null ? AppTheme.primaryBlue : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(

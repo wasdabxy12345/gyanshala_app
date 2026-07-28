@@ -7,32 +7,40 @@ class EmployeeAttendanceTab extends StatefulWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
-
   const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
-
   @override
   State<EmployeeAttendanceTab> createState() => EmployeeAttendanceTabState();
 }
 
 class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
   final GlobalKey<EmployeeAttendanceTableState> _tableKey = GlobalKey<EmployeeAttendanceTableState>();
-
   Future<void> exportCurrentTable() async {
     await _tableKey.currentState?.exportExcel();
   }
 
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
+    final DateTime firstDate = DateTime(1970);
+    final DateTime lastDate = DateTime.now();
+    DateTime initialDate = isStart ? widget.range.start : widget.range.end;
+    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
+    if (initialDate.isAfter(lastDate)) initialDate = lastDate;
+    final DateTime pickerFirstDate = isStart ? firstDate : widget.range.start;
+    final DateTime pickerLastDate = isStart ? widget.range.end : lastDate;
+    if (initialDate.isBefore(pickerFirstDate)) initialDate = pickerFirstDate;
+    if (initialDate.isAfter(pickerLastDate)) initialDate = pickerLastDate;
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isStart ? widget.range.start : widget.range.end,
-      firstDate: DateTime(1970),
-      lastDate: isStart ? widget.range.end : DateTime.now(),
+      initialDate: initialDate,
+      firstDate: pickerFirstDate,
+      lastDate: pickerLastDate,
     );
     if (picked != null) {
       if (isStart) {
-        widget.onRangeChanged(DateTimeRange(start: picked, end: widget.range.end));
+        final newEnd = picked.isAfter(widget.range.end) ? picked : widget.range.end;
+        widget.onRangeChanged(DateTimeRange(start: picked, end: newEnd));
       } else {
-        widget.onRangeChanged(DateTimeRange(start: widget.range.start, end: picked));
+        final newStart = picked.isBefore(widget.range.start) ? picked : widget.range.start;
+        widget.onRangeChanged(DateTimeRange(start: newStart, end: picked));
       }
     }
   }
@@ -40,7 +48,6 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-
     Widget buildWeekControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -74,7 +81,6 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         ),
       ],
     );
-
     Widget buildMonthControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -109,7 +115,6 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         ),
       ],
     );
-
     Widget buildDateSelectors() => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -127,7 +132,6 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         ),
       ),
     );
-
     return Column(
       children: [
         Padding(
