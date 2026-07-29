@@ -68,6 +68,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     'shikshaMitra38',
                     'shikshaMitra910',
                     'mentorBV8',
+                    'designTeamSS',
+                    'designTeamGS',
+                    'fieldCoordinator',
                   ]))
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))

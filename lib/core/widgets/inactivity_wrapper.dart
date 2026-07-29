@@ -18,24 +18,35 @@ class InactivityWrapper extends ConsumerStatefulWidget {
 class _InactivityWrapperState extends ConsumerState<InactivityWrapper> {
   Timer? _timer;
   Duration _getDuration(int minutes) => Duration(minutes: minutes);
+
   void _resetTimer() async {
     _timer?.cancel();
 
     final timeoutMinutes = await ref.read(inactivityTimeoutProvider.future);
 
-    _timer = Timer(_getDuration(timeoutMinutes), _logoutUser);
+    if (mounted) {
+      _timer = Timer(_getDuration(timeoutMinutes), _logoutUser);
+    }
   }
 
   void _logoutUser() async {
+    // 1. Remove focus from all text fields / dropdowns to safely dispose FocusNodes
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    // 2. Set inactive state and sign out
     ref.read(inactivityLogoutProvider.notifier).state = true;
     await ref.read(authRepositoryProvider).signOut();
 
-    if (mounted) {
-      navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen(showInactivityLogoutMessage: true)),
-        (_) => false,
-      );
-    }
+    // 3. Schedule navigation AFTER the current frame to prevent layout/build scope crashes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navState = navigatorKey.currentState;
+      if (navState != null && navState.mounted) {
+        navState.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen(showInactivityLogoutMessage: true)),
+          (_) => false,
+        );
+      }
+    });
   }
 
   @override

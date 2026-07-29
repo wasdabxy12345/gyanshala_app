@@ -71,25 +71,26 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     }
   }
 
-  /// Evaluates if a student's grade is visible/accessible to the current user role
   bool _isGradeAllowedForRole(int? grade) {
     if (grade == null) return false;
     if (_userRole == 'admin') return true;
     if (_userRole == 'shikshaMitra38') return grade >= 3 && grade <= 8;
     if (_userRole == 'shikshaMitra910') return grade == 9 || grade == 10;
-    if (_userRole == 'mentorBV8') return false; // Allowed to see no students
+    if (_userRole == 'mentorBV8' || _userRole == 'designTeamSS' || _userRole == 'designTeamGS' || _userRole == 'fieldCoordinator')
+      return false;
     return false;
   }
 
   Future<void> _fetchMyStudents() async {
-    // If user is a mentorBV8, they shouldn't query/load any students at all
-    if (_userRole == 'mentorBV8') {
-      if (mounted) {
+    if (_userRole == 'mentorBV8' ||
+        _userRole == 'designTeamSS' ||
+        _userRole == 'designTeamGS' ||
+        _userRole == 'fieldCoordinator') {
+      if (mounted)
         setState(() {
           _allStudents = [];
           _isFetchingStudents = false;
         });
-      }
       return;
     }
 
@@ -106,7 +107,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
         setState(() {
           final List<Map<String, dynamic>> rawList = List<Map<String, dynamic>>.from(data);
 
-          // Filter students on the frontend based on role-based grading constraints
           _allStudents = rawList.where((s) => _isGradeAllowedForRole(s['grade'] as int?)).toList();
 
           final List<int> grades = _allStudents.where((s) => s['grade'] != null).map((s) => s['grade'] as int).toList();
@@ -151,16 +151,13 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
 
       for (var student in _allStudents) {
         final studentUuid = student['id']?.toString();
-        if (studentUuid != null && !existing.containsKey(studentUuid)) {
-          existing[studentUuid] = 'P';
-        }
+        if (studentUuid != null && !existing.containsKey(studentUuid)) existing[studentUuid] = 'P';
       }
 
-      if (mounted) {
+      if (mounted)
         setState(() {
           _statusMap = existing;
         });
-      }
     } catch (e) {
       debugPrint("Error fetching attendance: $e");
     }
@@ -251,7 +248,10 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
       ),
       body: pageLoading
           ? const Center(child: CircularProgressIndicator())
-          : _userRole == 'mentorBV8'
+          : (_userRole == 'mentorBV8' ||
+                _userRole == 'designTeamSS' ||
+                _userRole == 'designTeamGS' ||
+                _userRole == 'fieldCoordinator')
           ? _buildAccessDeniedPlaceholder()
           : Column(
               children: [

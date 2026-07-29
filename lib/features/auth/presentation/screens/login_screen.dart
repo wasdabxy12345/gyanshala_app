@@ -43,13 +43,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
       final userRole = UserRole.fromString(user.role);
 
-      // --- WEB ACCESS RESTRICTION ---
       if (kIsWeb && !kDebugMode && userRole != UserRole.admin) {
-        // Log them out immediately so their session isn't saved in local storage
         await authRepo.signOut();
         throw Exception('Access Denied: Only Administrator accounts can log in via the web platform.');
       }
-      // ------------------------------
 
       if (!mounted) return;
       Widget nextScreen;
@@ -57,6 +54,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         case UserRole.admin:
           nextScreen = AdminDashboardScreen(adminName: name);
           break;
+        case UserRole.designTeamSS:
+        case UserRole.designTeamGS:
+        case UserRole.fieldCoordinator:
         case UserRole.mentorBV8:
           nextScreen = MentorBv8DashboardScreen(mentorName: name);
           break;

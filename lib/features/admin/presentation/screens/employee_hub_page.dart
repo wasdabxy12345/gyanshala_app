@@ -183,7 +183,14 @@ class _TimingSettingsOverlayState extends ConsumerState<_TimingSettingsOverlay> 
   List<WorkHoursRowData> _tableRows = [];
   List<Map<String, dynamic>> _allSchools = [];
 
-  final List<String> _systemRoles = ['Shiksha Mitra (3-8)', 'Shiksha Mitra (9-10)', 'Mentor (BV-8)'];
+  final List<String> _systemRoles = [
+    'Shiksha Mitra (3-8)',
+    'Shiksha Mitra (9-10)',
+    'Mentor (BV-8)',
+    'designTeamSS',
+    'designTeamGS',
+    'fieldCoordinator',
+  ];
 
   @override
   void initState() {

@@ -84,6 +84,9 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       if (userRole == 'shikshaMitra38') dbRoleKey = 'Shiksha Mitra (3-8)';
       if (userRole == 'shikshaMitra910') dbRoleKey = 'Shiksha Mitra (9-10)';
       if (userRole == 'mentorBV8') dbRoleKey = 'Mentor (BV-8)';
+      if (userRole == 'designTeamSS') dbRoleKey = 'Design Team (Shiksha Setu)';
+      if (userRole == 'designTeamGS') dbRoleKey = 'Design Team (Gyanshala)';
+      if (userRole == 'fieldCoordinator') dbRoleKey = 'Field Coordinator';
 
       final profileSchool = await _client.from('profile_schools').select('school_id').eq('user_id', userId).maybeSingle();
       final String? assignedSchoolId = profileSchool?['school_id']?.toString();

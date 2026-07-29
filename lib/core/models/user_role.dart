@@ -2,6 +2,9 @@ enum UserRole {
   shikshaMitra38,
   shikshaMitra910,
   mentorBV8,
+  designTeamSS,
+  designTeamGS,
+  fieldCoordinator,
   admin;
 
   static UserRole fromString(String? value) {
@@ -21,6 +24,12 @@ extension UserRoleLabel on UserRole {
         return 'Shiksha Mitra (9-10)';
       case UserRole.mentorBV8:
         return 'Mentor (BV-8)';
+      case UserRole.designTeamSS:
+        return 'Design Team (Shiksha Setu)';
+      case UserRole.designTeamGS:
+        return 'Design Team (Gyanshala)';
+      case UserRole.fieldCoordinator:
+        return 'Field Coordinator';
       case UserRole.admin:
         return 'Admin';
     }

@@ -74,7 +74,9 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       supabase
           .from('profiles')
           .select('*, profile_schools(schools(name, villages:village_id(name, clusters:cluster_id(name))))')
-          .or('role.eq.shikshaMitra38,role.eq.shikshaMitra910,role.eq.mentorBV8')
+          .or(
+            'role.eq.shikshaMitra38,role.eq.shikshaMitra910,role.eq.mentorBV8,role.eq.designTeamSS,role.eq.designTeamGS,role.eq.fieldCoordinator',
+          )
           .then((data) => List<Map<String, dynamic>>.from(data as List)),
     );
   }
