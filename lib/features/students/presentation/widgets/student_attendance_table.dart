@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide TextDirection;
 import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
+import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -33,14 +34,20 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   int _rowsPerPage = 50;
   final List<int> _availableRowsPerPage = [25, 50, 100, 200];
 
+  bool _isAscending = true;
+  Set<String> _selectedStudentIds = {};
+
   @override
   void initState() {
     super.initState();
     _attendanceFetchFuture = _loadDataPipeline();
     _horizontalBodyController.addListener(() {
-      if (_horizontalHeaderController.hasClients) _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
-
-      if (_horizontalFooterController.hasClients) _horizontalFooterController.jumpTo(_horizontalBodyController.offset);
+      if (_horizontalHeaderController.hasClients) {
+        _horizontalHeaderController.jumpTo(_horizontalBodyController.offset);
+      }
+      if (_horizontalFooterController.hasClients) {
+        _horizontalFooterController.jumpTo(_horizontalBodyController.offset);
+      }
     });
   }
 
@@ -61,16 +68,18 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   @override
   void didUpdateWidget(covariant StudentAttendanceTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate)
+    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
       setState(() {
         _attendanceFetchFuture = _loadDataPipeline();
         _currentPage = 0;
       });
+    }
 
-    if (oldWidget.searchQuery != widget.searchQuery)
+    if (oldWidget.searchQuery != widget.searchQuery) {
       setState(() {
         _currentPage = 0;
       });
+    }
   }
 
   Future<Map<String, dynamic>> _loadDataPipeline() async {
@@ -91,10 +100,11 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(studentsRaw as List);
         completeStudentList.addAll(chunk);
 
-        if (chunk.length < studentBatchSize)
+        if (chunk.length < studentBatchSize) {
           hasMoreStudents = false;
-        else
+        } else {
           fromIndex += studentBatchSize;
+        }
       }
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
@@ -142,6 +152,118 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     return {'students': studentData, 'records': attendanceRecords};
   }
 
+  Future<void> _showIdFilterDialog(List<String> allAvailableIds) async {
+    final Set<String> tempSelected = Set.from(_selectedStudentIds.isEmpty ? allAvailableIds : _selectedStudentIds);
+    String dialogSearchQuery = '';
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredList = allAvailableIds
+                .where((id) => id.toLowerCase().contains(dialogSearchQuery.toLowerCase()))
+                .toList();
+
+            final bool isAllSelected = filteredList.isNotEmpty && filteredList.every((id) => tempSelected.contains(id));
+
+            return AlertDialog(
+              title: const Text("Filter Student Local ID", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              content: SizedBox(
+                width: 320,
+                height: 380,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search Student ID...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          dialogSearchQuery = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
+                    CheckboxListTile(
+                      title: const Text("Select All", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      value: isAllSelected,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (checked) {
+                        setDialogState(() {
+                          if (checked == true) {
+                            tempSelected.addAll(filteredList);
+                          } else {
+                            tempSelected.removeAll(filteredList);
+                          }
+                        });
+                      },
+                    ),
+                    const Divider(height: 1),
+
+                    Expanded(
+                      child: filteredList.isEmpty
+                          ? const Center(
+                              child: Text("No IDs found", style: TextStyle(color: Colors.grey)),
+                            )
+                          : ListView.builder(
+                              itemCount: filteredList.length,
+                              itemBuilder: (context, index) {
+                                final id = filteredList[index];
+                                final isChecked = tempSelected.contains(id);
+                                return CheckboxListTile(
+                                  title: Text(id, style: const TextStyle(fontSize: 13)),
+                                  value: isChecked,
+                                  dense: true,
+                                  controlAffinity: ListTileControlAffinity.leading,
+                                  contentPadding: EdgeInsets.zero,
+                                  onChanged: (checked) {
+                                    setDialogState(() {
+                                      if (checked == true) {
+                                        tempSelected.add(id);
+                                      } else {
+                                        tempSelected.remove(id);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
+                  onPressed: () {
+                    setState(() {
+                      if (tempSelected.length == allAvailableIds.length) {
+                        _selectedStudentIds.clear();
+                      } else {
+                        _selectedStudentIds = Set.from(tempSelected);
+                      }
+                      _currentPage = 0;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Apply", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> exportExcel() async {
     try {
       final data = await _loadDataPipeline();
@@ -166,6 +288,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         final String localId = student != null ? student['student_id_local'] : 'Unknown';
 
         if (widget.searchQuery.isNotEmpty && !localId.toLowerCase().contains(widget.searchQuery.toLowerCase())) continue;
+        if (_selectedStudentIds.isNotEmpty && !_selectedStudentIds.contains(localId)) continue;
 
         final DateTime localTime = DateTime.parse(record['created_at']).toLocal();
         final String dateStr = DateFormat('dd-MM-yyyy').format(localTime);
@@ -173,10 +296,11 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
 
         sheet.appendRow([TextCellValue(localId), TextCellValue(dateStr), TextCellValue(status.toUpperCase())]);
 
-        if (status == 'absent')
+        if (status == 'absent') {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = absentStyle;
-        else if (status == 'late')
+        } else if (status == 'late') {
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = lateStyle;
+        }
 
         currentExcelRowIndex++;
       }
@@ -199,8 +323,9 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         anchor.click();
         anchor.remove();
         html.Url.revokeObjectUrl(url);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
+        }
       } else {
         var status = await Permission.manageExternalStorage.status;
         if (!status.isGranted) status = await Permission.manageExternalStorage.request();
@@ -269,7 +394,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     const TextStyle idStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
     const String longestPossibleIdFormat = 'WWWWmmmm 888888';
     final Size calculatedSample = calcTextSize(context, longestPossibleIdFormat, idStyle);
-    final double maxNameWidth = calculatedSample.width + 32.0;
+    final double maxNameWidth = calculatedSample.width + 48.0;
 
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
@@ -278,10 +403,27 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
         if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
         if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
 
-        final allFilteredStudents =
-            ((snapshot.data!['students'] as Map<String, dynamic>).values.map((e) => Map<String, dynamic>.from(e as Map)).toList())
-                .where((m) => m['student_id_local'].toString().toLowerCase().contains(widget.searchQuery.toLowerCase()))
-                .toList();
+        final allStudentsRaw = (snapshot.data!['students'] as Map<String, dynamic>).values
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        final List<String> availableStudentIds =
+            allStudentsRaw.map((s) => (s['student_id_local'] ?? '').toString()).where((id) => id.isNotEmpty).toSet().toList()
+              ..sort();
+
+        final allFilteredStudents = allStudentsRaw.where((m) {
+          final localId = m['student_id_local'].toString();
+          final matchesGlobal = widget.searchQuery.isEmpty || localId.toLowerCase().contains(widget.searchQuery.toLowerCase());
+          final matchesIdFilter = _selectedStudentIds.isEmpty || _selectedStudentIds.contains(localId);
+          return matchesGlobal && matchesIdFilter;
+        }).toList();
+
+        allFilteredStudents.sort((a, b) {
+          final idA = (a['student_id_local'] ?? '').toString();
+          final idB = (b['student_id_local'] ?? '').toString();
+          final comp = idA.compareTo(idB);
+          return _isAscending ? comp : -comp;
+        });
 
         if (allFilteredStudents.isEmpty) return const Center(child: Text("No students found"));
 
@@ -306,9 +448,9 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           final bool isFutureOrToday =
               cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
-          if (_isHoliday(d) || isFutureOrToday)
+          if (_isHoliday(d) || isFutureOrToday) {
             dailyTotals.add(-1);
-          else {
+          } else {
             final key = DateFormat('yyyy-MM-dd').format(d);
             int count = 0;
             for (final m in paginatedStudents) {
@@ -333,13 +475,54 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                     Container(
                       width: maxNameWidth,
                       alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 13),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
                         border: Border(right: BorderSide(color: Colors.grey[300]!)),
                       ),
-                      child: const Text(
-                        'Student ID',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isAscending = !_isAscending;
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  const Flexible(
+                                    child: Text(
+                                      'Student ID',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                    size: 13,
+                                    color: AppTheme.primaryBlue,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _showIdFilterDialog(availableStudentIds),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: _selectedStudentIds.isNotEmpty ? AppTheme.primaryBlue.withAlpha(33) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Icon(
+                                Icons.filter_alt,
+                                size: 16,
+                                color: _selectedStudentIds.isNotEmpty ? AppTheme.primaryBlue : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -452,7 +635,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                             : isFutureOrToday && status.isEmpty
                                             ? const SizedBox.shrink()
                                             : (() {
-                                                if (status == 'present')
+                                                if (status == 'present') {
                                                   return const Text(
                                                     'P',
                                                     style: TextStyle(
@@ -461,7 +644,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
-                                                else if (status == 'late')
+                                                } else if (status == 'late') {
                                                   return const Text(
                                                     'L',
                                                     style: TextStyle(
@@ -470,7 +653,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
-                                                else
+                                                } else {
                                                   return const Text(
                                                     'A',
                                                     style: TextStyle(
@@ -479,6 +662,7 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                                                       fontSize: 14,
                                                     ),
                                                   );
+                                                }
                                               }()),
                                       ),
                                     );
@@ -605,11 +789,12 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
                           isDense: true,
                           items: _availableRowsPerPage.map((e) => DropdownMenuItem<int>(value: e, child: Text("$e"))).toList(),
                           onChanged: (val) {
-                            if (val != null)
+                            if (val != null) {
                               setState(() {
                                 _rowsPerPage = val;
                                 _currentPage = 0;
                               });
+                            }
                           },
                         ),
                       ],
