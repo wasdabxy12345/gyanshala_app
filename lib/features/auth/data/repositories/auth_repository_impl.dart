@@ -13,27 +13,57 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<UserModel> login({required String identifier, required String password}) async {
     final normalizedPhone = _normalizePhone(identifier);
+
     final requestData = await _supabase
         .from('signup_requests')
         .select('status, action_reason')
         .eq('phone', normalizedPhone)
         .maybeSingle();
+
     final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
     final requestActionReason = requestData?['action_reason']?.toString() ?? 'No explicit reason specified.';
+
     if (requestStatus == 'pending') throw Exception('Your signup request is still pending admin approval.');
     if (requestStatus == 'rejected') throw Exception('Your signup request has been rejected.\n\nReason: $requestActionReason');
+
     final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
+
     if (profileData != null) {
       final profileStatus = (profileData['account_status'].toString()).toLowerCase();
       final profileActionReason = profileData['action_reason']?.toString() ?? 'No reason specified';
-      if (profileStatus == 'suspended' || profileStatus == 'removed')
+
+      if (profileStatus == 'suspended' || profileStatus == 'removed') {
         throw Exception('Your account has been $profileStatus\n\nReason: $profileActionReason');
+      }
+
       final String role = profileData['role']?.toString() ?? '';
-      if (kIsWeb && !kDebugMode && role != 'admin') throw Exception('Web login is restricted to Administrator accounts only.');
-    } else
+      if (kIsWeb && !kDebugMode && role != 'admin') {
+        throw Exception('Web login is restricted to Administrator accounts only.');
+      }
+    } else {
       throw Exception('No account found associated with the entered phone number');
-    final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
-    if (response.user == null) throw Exception("Login failed. Invalid credentials.");
+    }
+
+    // --- Added Try-Catch for Password Validation ---
+    try {
+      final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
+
+      if (response.user == null) {
+        throw Exception("Login failed. Invalid credentials.");
+      }
+    } on AuthException catch (e) {
+      // Supabase typically returns 'Invalid login credentials' for wrong passwords
+      if (e.message.toLowerCase().contains('invalid login credentials')) {
+        throw Exception(
+          'error: The password you have entered is incorrect. Please try again. If the problem persists, tap on "Forgot password?" to reset your password.\n\nભૂલ: તમે દાખલ કરેલો પાસવર્ડ ખોટો છે. કૃપા કરીને ફરી પ્રયાસ કરો. જો સમસ્યા યથાવત રહે, તો તમારા એકાઉન્ટનો પાસવર્ડ રીસેટ કરવા માટે "Forgot password?" પર ટેપ કરો.',
+        );
+      }
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('An unexpected error occurred during login: $e');
+    }
+    // ----------------------------------------------
+
     return UserModel.fromJson(profileData);
   }
 
