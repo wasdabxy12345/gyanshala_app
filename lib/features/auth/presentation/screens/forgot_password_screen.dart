@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 
-import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import 'otp_verification_screen.dart';
 import 'reset_password_screen.dart';
@@ -17,6 +17,7 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
+  String _fullPhoneNumber = '';
 
   @override
   void dispose() {
@@ -29,7 +30,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       return;
     }
     try {
-      final identifier = _phoneController.text.trim();
+      final identifier = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
       if (AppConfig.useDevBypass) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
@@ -82,14 +83,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         key: _formKey,
         child: Column(
           children: [
-            TextFormField(
+            IntlPhoneField(
               controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
-              validator: (value) {
-                final phone = value?.trim() ?? '';
-                if (phone.isEmpty) return 'Phone Number is required';
-                if (!Validators.isValidPhone(phone)) return 'Enter a valid phone number';
+              initialCountryCode: 'IN',
+              decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+              onChanged: (phone) {
+                _fullPhoneNumber = phone.completeNumber;
+              },
+              onCountryChanged: (country) {
+                if (_phoneController.text.isNotEmpty) {
+                  _fullPhoneNumber = '+${country.dialCode}${_phoneController.text.trim()}';
+                }
+              },
+              validator: (phone) {
+                if (phone == null || phone.number.trim().isEmpty) {
+                  return 'Phone Number is required';
+                }
                 return null;
               },
             ),

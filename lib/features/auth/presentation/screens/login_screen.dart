@@ -6,8 +6,8 @@ import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/mentor_bv8_dashboard_screen.dart';
 import 'package:gyanshala_app/features/dashboard/presentation/screens/shiksha_mitra_dashboard_screen.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 
-import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
@@ -23,6 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
+  String _fullPhoneNumber = '';
   bool _isLoading = false;
 
   @override
@@ -39,7 +40,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).clearSnackBars();
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      final user = await authRepo.login(identifier: _identifierController.text.trim(), password: _passwordController.text);
+      final identifierToUse = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _identifierController.text.trim();
+      final user = await authRepo.login(identifier: identifierToUse, password: _passwordController.text);
 
       final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
       final userRole = UserRole.fromString(user.role);
@@ -97,14 +99,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextFormField(
+            IntlPhoneField(
               controller: _identifierController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
-              validator: (value) {
-                final phone = value?.trim() ?? '';
-                if (phone.isEmpty) return 'Phone Number is required';
-                if (!Validators.isValidPhone(phone)) return 'Enter a valid phone number';
+              initialCountryCode: 'IN',
+              decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+              onChanged: (phone) {
+                _fullPhoneNumber = phone.completeNumber;
+              },
+              onCountryChanged: (country) {
+                if (_identifierController.text.isNotEmpty) {
+                  _fullPhoneNumber = '+${country.dialCode}${_identifierController.text.trim()}';
+                }
+              },
+              validator: (phone) {
+                if (phone == null || phone.number.trim().isEmpty) {
+                  return 'Phone Number is required';
+                }
                 return null;
               },
             ),

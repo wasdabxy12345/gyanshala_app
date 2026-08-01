@@ -1,6 +1,6 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart'; // Imported for kIsWeb and kDebugMode
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,9 +13,9 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:gyanshala_app/features/location/controller/location_controller.dart' as controller;
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../core/utils/validators.dart';
 import '../widgets/auth_shell.dart';
 import '../widgets/role_selector.dart';
 
@@ -34,7 +34,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
-
+  String _fullPhoneNumber = '';
   late UserRole _selectedRole;
   String? _selectedGender;
   bool _agreedToTerms = false;
@@ -82,12 +82,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     try {
       String? pushToken = await FirebaseMessaging.instance.getToken();
+      final phoneNumberToSave = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
       await ref
           .read(authRepositoryProvider)
           .signup(
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            identifier: _phoneController.text.trim(),
+            identifier: phoneNumberToSave,
             password: _passwordController.text,
             role: _selectedRole.name,
             gender: _selectedGender,
@@ -96,7 +97,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             schoolIds: _selectedSchoolIds,
           );
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('pending_id', _phoneController.text.trim());
+      await prefs.setString('pending_id', phoneNumberToSave);
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(builder: (_) => const WelcomeScreen(showPendingMessage: true)),
@@ -175,14 +176,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               validator: (value) => (value == null || value.isEmpty) ? 'Gender Selection Required' : null,
             ),
             const SizedBox(height: 13),
-            TextFormField(
+            IntlPhoneField(
               controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Phone Number *', prefixIcon: Icon(Icons.phone_outlined)),
-              validator: (value) {
-                final phone = value?.trim() ?? '';
-                if (phone.isEmpty) return 'Required';
-                if (!Validators.isValidPhone(phone)) return 'Invalid phone';
+              initialCountryCode: 'IN',
+              decoration: const InputDecoration(labelText: 'Phone Number *', border: OutlineInputBorder()),
+              onChanged: (phone) {
+                _fullPhoneNumber = phone.completeNumber;
+              },
+              onCountryChanged: (country) {
+                if (_phoneController.text.isNotEmpty) {
+                  _fullPhoneNumber = '+${country.dialCode}${_phoneController.text.trim()}';
+                }
+              },
+              validator: (phone) {
+                if (phone == null || phone.number.trim().isEmpty) {
+                  return 'Required';
+                }
                 return null;
               },
             ),

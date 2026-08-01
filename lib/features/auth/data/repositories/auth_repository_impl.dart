@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/utils/validators.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -12,21 +11,24 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<UserModel> login({required String identifier, required String password}) async {
-    final normalizedPhone = _normalizePhone(identifier);
+    final candidates = _phoneCandidates(identifier);
 
-    final requestData = await _supabase
-        .from('signup_requests')
-        .select('status, action_reason')
-        .eq('phone', normalizedPhone)
-        .maybeSingle();
+    Map<String, dynamic>? requestData;
+    for (final candidate in candidates) {
+      requestData = await _supabase.from('signup_requests').select('status, action_reason').eq('phone', candidate).maybeSingle();
+      if (requestData != null) break;
+    }
 
     final requestStatus = (requestData?['status']?.toString() ?? 'not_found').toLowerCase();
     final requestActionReason = requestData?['action_reason']?.toString() ?? 'No explicit reason specified.';
 
     if (requestStatus == 'pending') throw Exception('Your signup request is still pending admin approval.');
     if (requestStatus == 'rejected') throw Exception('Your signup request has been rejected.\n\nReason: $requestActionReason');
-
-    final profileData = await _supabase.from('profiles').select().eq('phone', normalizedPhone).maybeSingle();
+    Map<String, dynamic>? profileData;
+    for (final candidate in candidates) {
+      profileData = await _supabase.from('profiles').select().eq('phone', candidate).maybeSingle();
+      if (profileData != null) break;
+    }
 
     if (profileData != null) {
       final profileStatus = (profileData['account_status'].toString()).toLowerCase();
@@ -43,27 +45,10 @@ class AuthRepositoryImpl implements AuthRepository {
     } else {
       throw Exception('No account found associated with the entered phone number');
     }
+    final normalizedPhone = profileData['phone']?.toString() ?? identifier;
+    final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
 
-    // --- Added Try-Catch for Password Validation ---
-    try {
-      final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
-
-      if (response.user == null) {
-        throw Exception("Login failed. Invalid credentials.");
-      }
-    } on AuthException catch (e) {
-      // Supabase typically returns 'Invalid login credentials' for wrong passwords
-      if (e.message.toLowerCase().contains('invalid login credentials')) {
-        throw Exception(
-          'error: The password you have entered is incorrect. Please try again. If the problem persists, tap on "Forgot password?" to reset your password.\n\nભૂલ: તમે દાખલ કરેલો પાસવર્ડ ખોટો છે. કૃપા કરીને ફરી પ્રયાસ કરો. જો સમસ્યા યથાવત રહે, તો તમારા એકાઉન્ટનો પાસવર્ડ રીસેટ કરવા માટે "Forgot password?" પર ટેપ કરો.',
-        );
-      }
-      throw Exception(e.message);
-    } catch (e) {
-      throw Exception('An unexpected error occurred during login: $e');
-    }
-    // ----------------------------------------------
-
+    if (response.user == null) throw Exception("Login failed. Invalid credentials.");
     return UserModel.fromJson(profileData);
   }
 
@@ -79,7 +64,7 @@ class AuthRepositoryImpl implements AuthRepository {
     List<String>? schoolIds,
     String? pushToken,
   }) async {
-    final phone = _normalizePhone(identifier);
+    final phone = identifier;
     final authResponse = await _auth.signUp(
       phone: phone,
       password: password,
@@ -93,20 +78,11 @@ class AuthRepositoryImpl implements AuthRepository {
         'qualification': qualification,
       },
     );
+
     if (authResponse.user == null) throw Exception("Signup registration sequence failed.");
     final userId = authResponse.user!.id;
-    await _supabase.from('signup_requests').insert({
-      'id': userId,
-      'phone': phone,
-      'first_name': firstName.trim(),
-      'last_name': lastName.trim(),
-      'role': role,
-      'gender': gender,
-      'status': 'pending',
-      'push_token': pushToken,
-      'qualification': qualification,
-    });
     if (schoolIds != null && schoolIds.isNotEmpty) {
+      await _supabase.from('signup_request_schools').delete().eq('user_id', userId);
       await _supabase
           .from('signup_request_schools')
           .insert(schoolIds.map((sid) => {'user_id': userId, 'school_id': sid}).toList());
@@ -115,10 +91,10 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> sendOtp({required String identifier, bool requireApprovedSignup = true}) async {
-    final phone = _normalizePhone(identifier);
+    final phone = identifier;
     final signupData = await getSignupStatus(identifier);
     final status = signupData['status'];
-    if (status == 'pending' || status == 'rejected') throw Exception('Your signup request is still $status. OTP cannot be sent.');
+    if (status == 'pending' || status == 'rejected') throw Exception('Your signup request is $status. OTP cannot be sent.');
     try {
       await _auth.signInWithOtp(phone: phone, shouldCreateUser: false);
     } on AuthException catch (e) {
@@ -162,7 +138,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> updatePassword({required String password, String? identifier, String? oldPassword}) async {
     try {
       if (identifier != null) {
-        final phone = _normalizePhone(identifier);
+        final phone = identifier;
         final requestRows = await _fetchSignupRequestsByPhone(phone, columns: 'first_name,last_name,role');
         Map<String, dynamic> metadata = {};
         if (requestRows.isNotEmpty)
@@ -174,6 +150,9 @@ class AuthRepositoryImpl implements AuthRepository {
         await _auth.updateUser(UserAttributes(password: password, data: metadata));
         await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
       }
+    } on AuthApiException catch (e) {
+      if (e.message.contains('Invalid login credentials')) throw Exception("The current password you entered is incorrect.");
+      throw Exception(e.message);
     } on AuthException catch (e) {
       if (e.message.contains('Invalid login credentials')) throw Exception("The current password you entered is incorrect.");
       throw Exception(e.message);
@@ -184,18 +163,11 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Map<String, String?>> getSignupStatus(String identifier) async {
-    final phone = _normalizePhone(identifier);
+    final phone = identifier;
     final rows = await _fetchSignupRequestsByPhone(phone, columns: 'status, action_reason');
     if (rows.isEmpty) return {'status': 'not_found', 'rejection_reason': null};
     final firstRow = rows.first;
     return {'status': (firstRow['status'] as String?)?.toLowerCase(), 'rejection_reason': firstRow['action_reason'] as String?};
-  }
-
-  String _normalizePhone(String value) {
-    final trimmed = value.trim();
-    final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
-    if (Validators.isValidPhone(trimmed)) return digitsOnly;
-    throw Exception('Enter a valid phone number.');
   }
 
   Future<List<Map<String, dynamic>>> _fetchSignupRequestsByPhone(String phone, {String columns = 'status'}) async {
@@ -208,11 +180,14 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   Set<String> _phoneCandidates(String phone) {
-    final candidates = <String>{phone};
-    if (phone.length > 10)
-      candidates.add(phone.substring(phone.length - 10));
-    else if (phone.length == 10)
-      candidates.add('91$phone');
+    final cleaned = phone.replaceAll(RegExp(r'\D'), '');
+    final candidates = <String>{phone, cleaned};
+    if (cleaned.length > 10)
+      candidates.add(cleaned.substring(cleaned.length - 10));
+    else if (cleaned.length == 10) {
+      candidates.add('91$cleaned');
+      candidates.add('+91$cleaned');
+    }
     return candidates;
   }
 
