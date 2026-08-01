@@ -1,3 +1,4 @@
+import 'dart:core';
 import 'dart:io';
 
 import 'package:excel/excel.dart' hide TextSpan, Border;
@@ -85,7 +86,6 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
   Future<Map<String, dynamic>> _loadDataPipeline() async {
     try {
       final supabase = ref.read(supabaseClientProvider);
-
       List<Map<String, dynamic>> completeStudentList = [];
       bool hasMoreStudents = true;
       int fromIndex = 0;
@@ -96,10 +96,8 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
             .from('students')
             .select('id, student_id_local, grade, gender')
             .range(fromIndex, fromIndex + studentBatchSize - 1);
-
         final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(studentsRaw as List);
         completeStudentList.addAll(chunk);
-
         if (chunk.length < studentBatchSize) {
           hasMoreStudents = false;
         } else {
@@ -108,13 +106,29 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
       }
 
       final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
-      final attendanceRecordsRaw =
-          (await supabase
-                  .from('student_attendance')
-                  .select('id, student_id, status, created_at')
-                  .gte('created_at', utcRange.start.toIso8601String())
-                  .lte('created_at', utcRange.end.toIso8601String()))
-              as List<dynamic>;
+
+      List<Map<String, dynamic>> attendanceRecordsRaw = [];
+      bool hasMoreAttendance = true;
+      int attFromIndex = 0;
+      const int attendanceBatchSize = 1000;
+
+      while (hasMoreAttendance) {
+        final chunkRaw = await supabase
+            .from('student_attendance')
+            .select('id, student_id, status, created_at')
+            .gte('created_at', utcRange.start.toIso8601String())
+            .lte('created_at', utcRange.end.toIso8601String())
+            .range(attFromIndex, attFromIndex + attendanceBatchSize - 1);
+
+        final List<Map<String, dynamic>> chunk = List<Map<String, dynamic>>.from(chunkRaw as List);
+        attendanceRecordsRaw.addAll(chunk);
+
+        if (chunk.length < attendanceBatchSize) {
+          hasMoreAttendance = false;
+        } else {
+          attFromIndex += attendanceBatchSize;
+        }
+      }
 
       return await compute(_processAttendanceData, {'students': completeStudentList, 'records': attendanceRecordsRaw});
     } catch (e) {
@@ -141,11 +155,15 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
     for (final record in sortedRecords) {
       final studentId = record['student_id'];
       if (!studentData.containsKey(studentId)) continue;
-      final createdAt = DateTime.parse(record['created_at']).toLocal();
-      final dateKey = DateFormat('yyyy-MM-dd').format(createdAt);
-      final status = record['status']?.toString().toLowerCase() ?? 'absent';
 
+      final parsedDate = DateTime.parse(record['created_at'].toString());
+      final localTime = parsedDate.toLocal();
+      final dateKey =
+          "${localTime.year.toString().padLeft(4, '0')}-${localTime.month.toString().padLeft(2, '0')}-${localTime.day.toString().padLeft(2, '0')}";
+
+      final status = record['status']?.toString().toLowerCase() ?? 'absent';
       final currentMap = studentData[studentId]!['attendance_map'] as Map<String, dynamic>;
+
       currentMap[dateKey] = {'status': status};
     }
 
@@ -368,8 +386,11 @@ class StudentAttendanceTableState extends ConsumerState<StudentAttendanceTable> 
 
   bool _isHoliday(DateTime date) => date.weekday == DateTime.sunday;
 
-  List<DateTime> _getDatesInRange(DateTime start, DateTime end) =>
-      List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
+  List<DateTime> _getDatesInRange(DateTime start, DateTime end) {
+    final normalizedStart = DateTime(start.year, start.month, start.day);
+    final normalizedEnd = DateTime(end.year, end.month, end.day);
+    return List.generate(normalizedEnd.difference(normalizedStart).inDays + 1, (i) => normalizedStart.add(Duration(days: i)));
+  }
 
   Size calcTextSize(BuildContext context, String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
