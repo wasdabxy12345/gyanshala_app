@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_response_hub.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/form_filler_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'form_builder_canvas.dart';
@@ -43,7 +44,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
   Future<void> _deleteFormDocument(String formId, String formTitle) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-
     final bool confirmDelete =
         await showDialog<bool>(
           context: context,
@@ -77,11 +77,9 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
     try {
       final supabase = Supabase.instance.client;
       await supabase.from('forms').delete().eq('id', formId);
-
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text("\"$formTitle\" successfully removed from database."), backgroundColor: Colors.green),
       );
-
       await _fetchFormsFromSupabase();
     } catch (e) {
       scaffoldMessenger.showSnackBar(
@@ -94,7 +92,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
   void _createNewForm() {
     final titleController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -115,13 +112,10 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
               if (text.isEmpty) return;
               Navigator.pop(dialogContext);
               setState(() => _isLoading = true);
-
               try {
                 final supabase = Supabase.instance.client;
                 final newFormRow = await supabase.from('forms').insert({'title': text}).select('id, title').single();
-
                 await _fetchFormsFromSupabase();
-
                 if (!mounted) return;
                 Navigator.push(
                   context,
@@ -167,7 +161,6 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                 final form = _formsList[index];
                 final String currentFormId = form['id'].toString();
                 final String currentFormTitle = form['title'] ?? '[no title]';
-
                 return Card(
                   margin: const EdgeInsets.only(bottom: 13),
                   child: Padding(
@@ -177,6 +170,19 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          IconButton(
+                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.orange),
+                            tooltip: "Test Fill Form",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      FormFillerScreen(formId: currentFormId, formTitle: currentFormTitle, isTestMode: true),
+                                ),
+                              );
+                            },
+                          ),
                           IconButton(
                             icon: const Icon(Icons.visibility, color: Colors.green),
                             tooltip: "View Form's Responses",

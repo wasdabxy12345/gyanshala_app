@@ -210,7 +210,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               actions: isDownloading
                   ? []
                   : [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
                       ElevatedButton(
                         onPressed: () async {
                           setDialogState(() {

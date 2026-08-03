@@ -7,8 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class FormFillerScreen extends StatefulWidget {
   final String formId;
   final String formTitle;
+  final bool isTestMode;
 
-  const FormFillerScreen({super.key, required this.formId, required this.formTitle});
+  const FormFillerScreen({super.key, required this.formId, required this.formTitle, this.isTestMode = false});
 
   @override
   State<FormFillerScreen> createState() => _FormFillerScreenState();
@@ -193,6 +194,17 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
 
   Future<void> _submitFormEntries() async {
     setState(() => _isLoading = true);
+
+    if (widget.isTestMode) {
+      await Future.delayed(const Duration(milliseconds: 500)); // Simulate network latency
+      _showSnackbar("[TEST MODE] Evaluation simulated successfully! Data was not saved.", Colors.orange);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.pop(context);
+      }
+      return;
+    }
+
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;

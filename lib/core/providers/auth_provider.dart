@@ -7,7 +7,7 @@ import 'supabase_provider.dart';
 
 class AppConfig {
   // enable/disable otp bypass
-  static const bool useDevBypass = false;
+  static const bool useDevBypass = true;
 }
 
 final authStateProvider = StreamProvider<User?>((ref) {
