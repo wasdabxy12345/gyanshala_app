@@ -1,22 +1,167 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/widgets/employee_attendance_table.dart';
 import 'package:intl/intl.dart';
 
-class EmployeeAttendanceTab extends StatefulWidget {
+class EmployeeAttendanceTab extends ConsumerStatefulWidget {
   final DateTimeRange range;
   final String searchQuery;
   final Function(DateTimeRange) onRangeChanged;
   const EmployeeAttendanceTab({super.key, required this.range, required this.searchQuery, required this.onRangeChanged});
+
   @override
-  State<EmployeeAttendanceTab> createState() => EmployeeAttendanceTabState();
+  ConsumerState<EmployeeAttendanceTab> createState() => EmployeeAttendanceTabState();
 }
 
-class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
+class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
   final GlobalKey<EmployeeAttendanceTableState> _tableKey = GlobalKey<EmployeeAttendanceTableState>();
+
+  List<String> _allRoles = [];
+  List<String> _allGenders = [];
+  List<String> _allClusters = [];
+  List<String> _allVillages = [];
+  List<String> _allSchools = [];
+
+  Set<String>? _roleFilter;
+  Set<String>? _genderFilter;
+  Set<String>? _clusterFilter;
+  Set<String>? _villageFilter;
+  Set<String>? _schoolFilter;
+
+  bool _filtersLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFilterOptions();
+  }
+
+  Future<void> _loadFilterOptions() async {
+    try {
+      final supabase = ref.read(supabaseClientProvider);
+
+      final profiles =
+          ((await supabase.from('profiles').select('role, gender').inFilter('role', [
+                    'shikshaMitra38',
+                    'shikshaMitra910',
+                    'mentorBV8',
+                    'designTeamSS',
+                    'designTeamGS',
+                    'fieldCoordinator',
+                  ]))
+                  as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+
+      final schools = ((await supabase.from('schools').select('name, villages(name, clusters(name))')) as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      final roles = profiles.map((p) => p['role']?.toString() ?? '').where((r) => r.isNotEmpty).toSet().toList()..sort();
+      final genders = profiles.map((p) => p['gender']?.toString() ?? '').where((g) => g.isNotEmpty).toSet().toList()..sort();
+
+      final schoolNames = <String>{};
+      final villageNames = <String>{};
+      final clusterNames = <String>{};
+      for (final s in schools) {
+        final name = s['name']?.toString() ?? '';
+        if (name.isNotEmpty) schoolNames.add(name);
+        final v = s['villages'] as Map?;
+        final vName = v?['name']?.toString() ?? '';
+        if (vName.isNotEmpty) villageNames.add(vName);
+        final c = v?['clusters'] as Map?;
+        final cName = c?['name']?.toString() ?? '';
+        if (cName.isNotEmpty) clusterNames.add(cName);
+      }
+
+      if (mounted) {
+        setState(() {
+          _allRoles = roles;
+          _allGenders = genders;
+          _allClusters = clusterNames.toList()..sort();
+          _allVillages = villageNames.toList()..sort();
+          _allSchools = schoolNames.toList()..sort();
+          _filtersLoaded = true;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> exportCurrentTable() async {
     await _tableKey.currentState?.exportExcel();
   }
+
+  Future<void> _showMultiSelectFilter({
+    required String title,
+    required List<String> allOptions,
+    required Set<String>? currentFilter,
+    required void Function(Set<String>?) onApply,
+  }) async {
+    Set<String> selection = currentFilter != null ? Set.from(currentFilter) : Set.from(allOptions);
+    final searchCtrl = TextEditingController();
+    List<String> filtered = List.from(allOptions);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setD) => AlertDialog(
+          title: Text("Filter by $title"),
+          content: SizedBox(
+            width: 320,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  controller: searchCtrl,
+                  decoration: const InputDecoration(hintText: "Search...", prefixIcon: Icon(Icons.search)),
+                  onChanged: (v) => setD(() {
+                    filtered = allOptions.where((e) => e.toLowerCase().contains(v.toLowerCase())).toList();
+                  }),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  dense: true,
+                  value: selection.length == allOptions.length,
+                  title: const Text("Select All"),
+                  onChanged: (v) => setD(() => selection = v == true ? Set.from(allOptions) : {}),
+                ),
+                const Divider(),
+                Expanded(
+                  child: ListView(
+                    children: filtered
+                        .map(
+                          (opt) => CheckboxListTile(
+                            dense: true,
+                            value: selection.contains(opt),
+                            title: Text(opt),
+                            onChanged: (v) => setD(() => v == true ? selection.add(opt) : selection.remove(opt)),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                onApply(selection.length == allOptions.length ? null : Set.from(selection));
+                Navigator.pop(ctx);
+              },
+              child: const Text("Apply"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool get _hasActiveFilters =>
+      _roleFilter != null || _genderFilter != null || _clusterFilter != null || _villageFilter != null || _schoolFilter != null;
 
   Future<void> _selectSingleDate(BuildContext context, {required bool isStart}) async {
     final DateTime firstDate = DateTime(1970);
@@ -48,6 +193,7 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+
     Widget buildWeekControls() => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -115,6 +261,7 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         ),
       ],
     );
+
     Widget buildDateSelectors() => Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 4),
@@ -132,6 +279,55 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
         ),
       ),
     );
+
+    Widget buildFilterBar() {
+      if (!_filtersLoaded) return const SizedBox.shrink();
+
+      _filterChip(String label, List<String> options, Set<String>? active, void Function(Set<String>?) onApply) => ActionChip(
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        avatar: Icon(Icons.filter_alt, size: 14, color: active != null ? AppTheme.primaryBlue : Colors.grey.shade600),
+        backgroundColor: active != null ? AppTheme.primaryBlue.withAlpha(30) : null,
+        side: BorderSide(color: active != null ? AppTheme.primaryBlue : Colors.grey.shade400),
+        onPressed: () => _showMultiSelectFilter(
+          title: label,
+          allOptions: options,
+          currentFilter: active,
+          onApply: (v) => setState(() => onApply(v)),
+        ),
+      );
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        color: Colors.grey.shade50,
+        child: Row(
+          children: [
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  _filterChip("Role", _allRoles, _roleFilter, (v) => _roleFilter = v),
+                  _filterChip("Gender", _allGenders, _genderFilter, (v) => _genderFilter = v),
+                  _filterChip("Cluster", _allClusters, _clusterFilter, (v) => _clusterFilter = v),
+                  _filterChip("Village", _allVillages, _villageFilter, (v) => _villageFilter = v),
+                  _filterChip("School", _allSchools, _schoolFilter, (v) => _schoolFilter = v),
+                ],
+              ),
+            ),
+            if (_hasActiveFilters)
+              TextButton.icon(
+                onPressed: () => setState(() {
+                  _roleFilter = _genderFilter = _clusterFilter = _villageFilter = _schoolFilter = null;
+                }),
+                icon: const Icon(Icons.filter_alt_off, size: 15),
+                label: const Text("Clear", style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(foregroundColor: Colors.red, padding: const EdgeInsets.symmetric(horizontal: 8)),
+              ),
+          ],
+        ),
+      );
+    }
+
     return Column(
       children: [
         Padding(
@@ -163,13 +359,19 @@ class EmployeeAttendanceTabState extends State<EmployeeAttendanceTab> {
             },
           ),
         ),
-        const Divider(),
+        buildFilterBar(),
+        const Divider(height: 1),
         Expanded(
           child: EmployeeAttendanceTable(
             key: _tableKey,
             searchQuery: widget.searchQuery,
             startDate: widget.range.start,
             endDate: widget.range.end,
+            roleFilter: _roleFilter,
+            genderFilter: _genderFilter,
+            clusterFilter: _clusterFilter,
+            villageFilter: _villageFilter,
+            schoolFilter: _schoolFilter,
           ),
         ),
       ],

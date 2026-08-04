@@ -18,7 +18,23 @@ class EmployeeAttendanceTable extends ConsumerStatefulWidget {
   final String searchQuery;
   final DateTime startDate;
   final DateTime endDate;
-  const EmployeeAttendanceTable({super.key, required this.searchQuery, required this.startDate, required this.endDate});
+  final Set<String>? roleFilter;
+  final Set<String>? genderFilter;
+  final Set<String>? clusterFilter;
+  final Set<String>? villageFilter;
+  final Set<String>? schoolFilter;
+
+  const EmployeeAttendanceTable({
+    super.key,
+    required this.searchQuery,
+    required this.startDate,
+    required this.endDate,
+    this.roleFilter,
+    this.genderFilter,
+    this.clusterFilter,
+    this.villageFilter,
+    this.schoolFilter,
+  });
 
   @override
   ConsumerState<EmployeeAttendanceTable> createState() => EmployeeAttendanceTableState();
@@ -64,7 +80,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     try {
       final supabase = ref.read(supabaseClientProvider);
       final employeesRaw =
-          ((await supabase.from('profiles').select('id, first_name, last_name').inFilter('role', [
+          ((await supabase.from('profiles').select('id, first_name, last_name, role, gender').inFilter('role', [
                     'shikshaMitra38',
                     'shikshaMitra910',
                     'mentorBV8',
@@ -72,6 +88,15 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     'designTeamGS',
                     'fieldCoordinator',
                   ]))
+                  as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+
+      // Fetch school assignments with full hierarchy
+      final profileSchoolsRaw =
+          ((await supabase
+                      .from('profile_schools')
+                      .select('user_id, school_id, schools(id, name, villages(id, name, clusters(id, name)))'))
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
@@ -87,7 +112,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                   .lte('recorded_at', utcRange.end.toIso8601String()))
               as List<dynamic>;
 
-      return await compute(_processAttendanceData, {'employees': employeesRaw, 'records': attendanceRecordsRaw});
+      return await compute(_processAttendanceData, {
+        'employees': employeesRaw,
+        'records': attendanceRecordsRaw,
+        'profileSchools': profileSchoolsRaw,
+      });
     } catch (e) {
       rethrow;
     }
@@ -96,47 +125,68 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   static Map<String, dynamic> _processAttendanceData(Map<String, dynamic> rawPayload) {
     final List<Map<String, dynamic>> employees = List<Map<String, dynamic>>.from(rawPayload['employees']);
     final List<dynamic> attendanceRecords = rawPayload['records'];
-    Map<String, Map<String, dynamic>> employeeData = {};
+    final List<Map<String, dynamic>> profileSchools = List<Map<String, dynamic>>.from(rawPayload['profileSchools']);
 
+    // Build per-user school/village/cluster sets
+    Map<String, Set<String>> userSchools = {};
+    Map<String, Set<String>> userVillages = {};
+    Map<String, Set<String>> userClusters = {};
+
+    for (final ps in profileSchools) {
+      final uid = ps['user_id'] as String;
+      final school = ps['schools'] as Map?;
+      if (school == null) continue;
+      final schoolName = school['name']?.toString() ?? '';
+      final village = school['villages'] as Map?;
+      final villageName = village?['name']?.toString() ?? '';
+      final cluster = village?['clusters'] as Map?;
+      final clusterName = cluster?['name']?.toString() ?? '';
+
+      userSchools.putIfAbsent(uid, () => {}).add(schoolName);
+      if (villageName.isNotEmpty) userVillages.putIfAbsent(uid, () => {}).add(villageName);
+      if (clusterName.isNotEmpty) userClusters.putIfAbsent(uid, () => {}).add(clusterName);
+    }
+
+    Map<String, Map<String, dynamic>> employeeData = {};
     for (final employee in employees) {
-      employeeData[employee['id']] = {
-        'user_id': employee['id'],
+      final uid = employee['id'] as String;
+      employeeData[uid] = {
+        'user_id': uid,
         'full_name': "${employee['first_name']} ${employee['last_name']}",
         'first_name': employee['first_name'] ?? '',
         'last_name': employee['last_name'] ?? '',
+        'role': employee['role'] ?? '',
+        'gender': employee['gender'] ?? '',
+        'schools': userSchools[uid]?.toList() ?? [],
+        'villages': userVillages[uid]?.toList() ?? [],
+        'clusters': userClusters[uid]?.toList() ?? [],
         'attendance_map': <String, dynamic>{},
       };
     }
 
+    // ... rest of attendance processing unchanged
     final sortedRecords = List.from(attendanceRecords)
       ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
 
     for (final record in sortedRecords) {
       final userId = record['user_id'];
       if (!employeeData.containsKey(userId)) continue;
-
       final recordedAt = DateTime.parse(record['recorded_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
       final schoolData = record['schools'];
       final currentSchoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
       final currentVariance = record['attendance_time_variance']?.toString() ?? "99:99:99";
-
       final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
-
       if (!currentMap.containsKey(dateKey)) {
         currentMap[dateKey] = {'status': 'present', 'location': currentSchoolName, 'variance': currentVariance};
       } else {
         final existingData = currentMap[dateKey] as Map<String, dynamic>;
         String finalLocation = existingData['location'];
-        if (currentSchoolName == "off-site" || finalLocation == "off-site") {
-          finalLocation = "off-site";
-        }
+        if (currentSchoolName == "off-site" || finalLocation == "off-site") finalLocation = "off-site";
         String finalVariance = existingData['variance'];
         bool currentHasError = currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
         bool existingHasError = finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
-        if (currentHasError || existingHasError) {
-          finalVariance = currentHasError ? currentVariance : finalVariance;
-        }
+        if (currentHasError || existingHasError) finalVariance = currentHasError ? currentVariance : finalVariance;
         currentMap[dateKey] = {'status': 'present', 'location': finalLocation, 'variance': finalVariance};
       }
     }
@@ -438,10 +488,22 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
         var employees = allEmployees.where((m) {
           final fullName = m['full_name'].toString();
-          final matchesSearch = widget.searchQuery.isEmpty || fullName.toLowerCase().contains(widget.searchQuery.toLowerCase());
-          if (!matchesSearch) return false;
-          if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) {
-            return false;
+          if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) return false;
+          if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) return false;
+          // NEW filters
+          if (widget.roleFilter != null && !widget.roleFilter!.contains(m['role'])) return false;
+          if (widget.genderFilter != null && !widget.genderFilter!.contains(m['gender'])) return false;
+          if (widget.clusterFilter != null) {
+            final userClusters = Set<String>.from(m['clusters'] as List);
+            if (userClusters.intersection(widget.clusterFilter!).isEmpty) return false;
+          }
+          if (widget.villageFilter != null) {
+            final userVillages = Set<String>.from(m['villages'] as List);
+            if (userVillages.intersection(widget.villageFilter!).isEmpty) return false;
+          }
+          if (widget.schoolFilter != null) {
+            final userSchools = Set<String>.from(m['schools'] as List);
+            if (userSchools.intersection(widget.schoolFilter!).isEmpty) return false;
           }
           return true;
         }).toList();
