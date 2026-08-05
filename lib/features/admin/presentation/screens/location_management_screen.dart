@@ -30,6 +30,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Set<String>? _selectedClusterFilters;
   Set<String>? _selectedVillageFilters;
   Set<String>? _selectedSchoolFilters;
+  Set<String>? _selectedGradeFilters;
 
   @override
   void initState() {
@@ -39,35 +40,43 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
   void _onSort(int columnIndex) {
     setState(() {
-      if (_sortColumnIndex == columnIndex) {
+      if (_sortColumnIndex == columnIndex)
         _isAscending = !_isAscending;
-      } else {
+      else {
         _sortColumnIndex = columnIndex;
         _isAscending = true;
       }
+
       _hierarchy.sort((a, b) {
         int compare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
         return _isAscending ? compare : -compare;
       });
+
       for (var cluster in _hierarchy) {
         List villages = cluster['villages'] ?? [];
-        if (columnIndex == 1) {
+        if (columnIndex == 1)
           villages.sort((a, b) {
             int vCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
             return _isAscending ? vCompare : -vCompare;
           });
-        }
+
         for (var village in villages) {
           List schools = village['schools'] ?? [];
-          if (columnIndex == 2) {
+          if (columnIndex == 2)
             schools.sort((a, b) {
               int sCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
               return _isAscending ? sCompare : -sCompare;
             });
-          }
+          else if (columnIndex == 3)
+            schools.sort((a, b) {
+              String gA = (a['grade_offering'] as String? ?? '').toLowerCase();
+              String gB = (b['grade_offering'] as String? ?? '').toLowerCase();
+              int gCompare = gA.compareTo(gB);
+              return _isAscending ? gCompare : -gCompare;
+            });
         }
-        _applyAllFilters();
       }
+      _applyAllFilters();
     });
   }
 
@@ -179,14 +188,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     try {
       final data = await _supabase
           .from('clusters')
-          .select('id, name, villages(id, name, cluster_id, schools(id, name, village_id, latitude, longitude, radius)))')
+          .select(
+            'id, name, villages(id, name, cluster_id, schools(id, name, grade_offering, village_id, latitude, longitude, radius)))',
+          )
           .order('name', ascending: true);
-      if (mounted) {
+      if (mounted)
         setState(() {
           _hierarchy = data;
           _applyAllFilters();
         });
-      }
     } catch (e) {
       debugPrint("Fetch error: $e");
       if (mounted) {
@@ -298,7 +308,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     int clusterColBorder = clusterBorder ? 1 : 0;
     int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
     int schoolColBorder = clusterBorder ? 1 : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
+
     String schoolCellText = "-";
+    String gradeCellText = school != null ? (school['grade_offering'] ?? "-") : "-";
+
     if (school != null) {
       schoolCellText = school['name'];
     }
@@ -310,13 +323,21 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           borderType: clusterColBorder,
           onTap: () => _showManageDialog('Cluster', cluster),
         ),
+
         _ActionCell(
           text: showVillageActions ? village['name'] : "",
           borderType: villageColBorder,
           onTap: () => _showManageDialog('Village', village),
         ),
+
         _ActionCell(
           text: schoolCellText,
+          borderType: schoolColBorder,
+          onTap: school != null ? () => _showManageDialog('School', school) : null,
+        ),
+
+        _ActionCell(
+          text: gradeCellText,
           borderType: schoolColBorder,
           onTap: school != null ? () => _showManageDialog('School', school) : null,
         ),
@@ -329,30 +350,24 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-      if (columnIndex == 0) {
-        values.add(clusterName);
-      }
-      if (columnIndex != 0 && _selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
-        continue;
-      }
+      if (columnIndex == 0) values.add(clusterName);
+      if (columnIndex != 0 && _selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
 
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-        if (columnIndex == 1) {
-          values.add(villageName);
-        }
-        if (columnIndex == 2 && _selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
-          continue;
-        }
+        if (columnIndex == 1) values.add(villageName);
+        if (columnIndex == 2 && _selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) continue;
 
         for (final school in (village['schools'] ?? [])) {
-          if (columnIndex == 2) {
+          if (columnIndex == 2)
             values.add(school['name'].toString());
+          else if (columnIndex == 3) {
+            final grade = school['grade_offering']?.toString();
+            if (grade != null && grade.isNotEmpty) values.add(grade);
           }
         }
       }
     }
-
     return values.toList()..sort();
   }
 
@@ -362,9 +377,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         ? (_selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues))
         : (columnIndex == 1)
         ? (_selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues))
-        : (_selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues));
+        : (columnIndex == 2)
+        ? (_selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues))
+        : (_selectedGradeFilters != null ? Set.from(_selectedGradeFilters!) : Set.from(allValues));
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
+
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -426,6 +444,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                     _selectedVillageFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
                   if (columnIndex == 2)
                     _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                  if (columnIndex == 3)
+                    _selectedGradeFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -439,39 +459,97 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   void _applyAllFilters() {
-    final query = _searchController.text.toLowerCase().trim();
-    final List<dynamic> result = [];
+    final query = _searchController.text.trim().toLowerCase();
+
+    List<dynamic> filtered = [];
+
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
-      final List<dynamic> filteredVillages = [];
+
+      // 1. Check Cluster Filter
+      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
+        continue;
+      }
+
+      List<dynamic> filteredVillages = [];
+
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) continue;
-        final List<dynamic> filteredSchools = [];
+
+        // 2. Check Village Filter
+        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
+          continue;
+        }
+
+        List<dynamic> filteredSchools = [];
+
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
-          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) continue;
+          final gradeOffering = school['grade_offering']?.toString() ?? '';
+
+          // 3. Check School Filter
+          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
+            continue;
+          }
+
+          // 4. Check Grade Offering Filter
+          if (_selectedGradeFilters != null && !_selectedGradeFilters!.contains(gradeOffering)) {
+            continue;
+          }
+
+          // 5. Search Bar Query Matching
           final matchesSearch =
               query.isEmpty ||
               clusterName.toLowerCase().contains(query) ||
               villageName.toLowerCase().contains(query) ||
-              schoolName.toLowerCase().contains(query);
-          if (matchesSearch) filteredSchools.add(school);
+              schoolName.toLowerCase().contains(query) ||
+              gradeOffering.toLowerCase().contains(query);
+
+          if (matchesSearch) {
+            filteredSchools.add(school);
+          }
         }
-        final villageMatchesSearch =
-            query.isEmpty || clusterName.toLowerCase().contains(query) || villageName.toLowerCase().contains(query);
-        if (filteredSchools.isNotEmpty || villageMatchesSearch) {
-          filteredVillages.add({...village, 'schools': filteredSchools});
+
+        // -------------------------------------------------------------
+        // CHILD PRUNING FOR VILLAGE / SCHOOL / GRADE / SEARCH FILTERS
+        // -------------------------------------------------------------
+
+        // Check if village itself matches search query (if no schools matched)
+        final villageMatchesSearch = query.isNotEmpty && villageName.toLowerCase().contains(query);
+
+        // Keep village if schools matched, or if the village itself matched search,
+        // OR if no school/grade/search criteria were actively applied.
+        bool hasActiveSchoolOrGradeFilter = _selectedSchoolFilters != null || _selectedGradeFilters != null;
+
+        if (filteredSchools.isNotEmpty ||
+            villageMatchesSearch ||
+            (filteredSchools.isEmpty && (village['schools'] ?? []).isEmpty && !hasActiveSchoolOrGradeFilter)) {
+          // Build updated village copy
+          var newVillage = Map<String, dynamic>.from(village);
+          newVillage['schools'] = filteredSchools;
+          filteredVillages.add(newVillage);
         }
       }
-      final clusterMatchesSearch = query.isEmpty || clusterName.toLowerCase().contains(query);
-      if (filteredVillages.isNotEmpty || clusterMatchesSearch) {
-        result.add({...cluster, 'villages': filteredVillages});
+
+      // Check if cluster itself matches search query
+      final clusterMatchesSearch = query.isNotEmpty && clusterName.toLowerCase().contains(query);
+
+      // Keep cluster ONLY if it has matching villages, or if cluster itself matched search,
+      // OR if no village/school/grade/search filters were actively applied.
+      bool hasActiveLowerFilters =
+          _selectedVillageFilters != null || _selectedSchoolFilters != null || _selectedGradeFilters != null || query.isNotEmpty;
+
+      if (filteredVillages.isNotEmpty ||
+          clusterMatchesSearch ||
+          (!hasActiveLowerFilters && (cluster['villages'] ?? []).isEmpty)) {
+        var newCluster = Map<String, dynamic>.from(cluster);
+        newCluster['villages'] = filteredVillages;
+        filtered.add(newCluster);
       }
     }
+
     setState(() {
-      _filteredHierarchy = result;
+      _filteredHierarchy = filtered;
     });
   }
 
@@ -483,15 +561,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     String? selectedClusterId = config.isEditMode && config.type == 'Village' ? config.entity['cluster_id']?.toString() : null;
     String? selectedVillageId = config.isEditMode && config.type == 'School' ? config.entity['village_id']?.toString() : null;
+    List<String> gradeOptions = ['BV - 8', '9 - 10'];
+    String? initialGrade = config.isEditMode && config.type == 'School' ? config.entity['grade_offering']?.toString() : 'BV - 8';
 
-    if (config.isEditMode && config.type == 'School' && selectedVillageId != null) {
+    String? selectedGradeOffering = (initialGrade != null && gradeOptions.contains(initialGrade)) ? initialGrade : 'BV - 8';
+
+    if (config.isEditMode && config.type == 'School' && selectedVillageId != null)
       try {
         final matchingCluster = _hierarchy.firstWhere(
           (c) => (c['villages'] as List).any((v) => v['id'].toString() == selectedVillageId),
         );
         selectedClusterId = matchingCluster['id'].toString();
       } catch (_) {}
-    }
 
     GoogleMapController? mapController;
     MapType dialogMapType = MapType.normal;
@@ -510,9 +591,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       final double? lng = double.tryParse(lngController.text.trim());
       final double radius = double.tryParse(radiusController.text.trim()) ?? 50;
 
-      if (lat != null && lng != null && mapController != null) {
+      if (lat != null && lng != null && mapController != null)
         _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
-      }
     }
 
     latController.addListener(updateMapLocation);
@@ -583,9 +663,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 });
                 if (onTapOverride != null) onTapOverride();
                 updateMapLocation();
-                if (mapController != null) {
+                if (mapController != null)
                   await _fitCircleInView(controller: mapController!, center: latLng, radiusMeters: currentRadius);
-                }
               },
             );
           }
@@ -749,6 +828,19 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           ),
                           if (config.type == 'School') ...[
                             const SizedBox(height: 13),
+                            DropdownButtonFormField<String>(
+                              initialValue: selectedGradeOffering,
+                              hint: const Text("Select Grades Offered"),
+                              decoration: const InputDecoration(labelText: "Grade Offering"),
+                              items: const [
+                                DropdownMenuItem(value: "BV - 8", child: Text("BV - 8")),
+                                DropdownMenuItem(value: "9 - 10", child: Text("9 - 10")),
+                              ],
+                              onChanged: (val) {
+                                setDialogState(() => selectedGradeOffering = val);
+                              },
+                            ),
+                            const SizedBox(height: 13),
                             TextField(
                               controller: latController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -846,16 +938,16 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         if (config.type == 'Village') dataPayload['cluster_id'] = selectedClusterId;
                         if (config.type == 'School') {
                           dataPayload['village_id'] = selectedVillageId;
+                          dataPayload['grade_offering'] = selectedGradeOffering;
                           dataPayload['latitude'] = double.tryParse(latController.text.trim());
                           dataPayload['longitude'] = double.tryParse(lngController.text.trim());
                           dataPayload['radius'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
                         }
 
-                        if (config.isEditMode) {
+                        if (config.isEditMode)
                           await _supabase.from(table).update(dataPayload).eq('id', config.entity['id']);
-                        } else {
+                        else
                           await _supabase.from(table).insert(dataPayload);
-                        }
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         _fetchHierarchy();
@@ -984,7 +1076,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       left: BorderSide(color: Colors.grey.shade300),
                       right: BorderSide(color: Colors.grey.shade300),
                     ),
-                    columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(1), 2: FlexColumnWidth(1.2)},
+                    columnWidths: const {
+                      0: FlexColumnWidth(1),
+                      1: FlexColumnWidth(1),
+                      2: FlexColumnWidth(1.2),
+                      3: FlexColumnWidth(1),
+                    },
                     children: [
                       TableRow(
                         decoration: BoxDecoration(color: Colors.grey.shade200),
@@ -1012,6 +1109,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             isSorted: _sortColumnIndex == 2,
                             isAscending: _isAscending,
                             hasFilter: _selectedSchoolFilters != null,
+                          ),
+                          _SortableHeader(
+                            label: "Grade Offering",
+                            onSort: () => _onSort(3),
+                            onFilter: () => _showFilterMenu(context: context, columnIndex: 3),
+                            isSorted: _sortColumnIndex == 3,
+                            isAscending: _isAscending,
+                            hasFilter: _selectedGradeFilters != null,
                           ),
                         ],
                       ),

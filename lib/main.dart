@@ -9,7 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'firebase_options.dart';
 
-// test db
+// main db
 const _supabaseUrl = 'https://ufvdldcevxgnphddxznz.supabase.co';
 const _supabasePublishableKey = 'sb_publishable_qrmOEPPE6UFQOK_mN6SGYA_EwrIv4kx';
 
