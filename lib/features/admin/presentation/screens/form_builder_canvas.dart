@@ -15,7 +15,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class FormBuilderCanvas extends StatefulWidget {
   final String? formId;
   final String formTitle;
-  const FormBuilderCanvas({super.key, this.formId, required this.formTitle});
+  final List<String> roles;
+  const FormBuilderCanvas({super.key, this.formId, required this.formTitle, required this.roles});
   @override
   State<FormBuilderCanvas> createState() => _FormBuilderCanvasState();
 }
@@ -457,7 +458,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                           ),
                         ],
                       ),
-                      if (type == 'radio' || type == 'checkbox_search') ...[
+                      if (type == 'radio' || type == 'checkbox') ...[
                         const Divider(height: 24),
                         const Text("Option Data Mapping Strategy", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         const SizedBox(height: 10),
@@ -798,7 +799,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     bool allowOther = false,
   }) {
     final Map<String, dynamic> configBlock = {'type': type};
-    if (type == 'radio' || type == 'checkbox_search') {
+    if (type == 'radio' || type == 'checkbox') {
       configBlock['allow_other'] = allowOther;
       if (sourceType == 'static' || sourceType == 'excel') {
         final options = staticControllers.map((c) => c.text.trim()).where((text) => text.isNotEmpty).toList();
@@ -893,7 +894,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
                 ),
                 _buildToolButton(icon: Icons.text_fields, label: "Text", type: "text"),
                 _buildToolButton(icon: Icons.radio_button_checked, label: "Radio", type: "radio"),
-                _buildToolButton(icon: Icons.check_box, label: "Check Box", type: "checkbox_search"),
+                _buildToolButton(icon: Icons.check_box, label: "Check Box", type: "checkbox"),
                 const Divider(height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 13.0),

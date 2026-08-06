@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gyanshala_app/core/models/user_role.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_response_hub.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/form_filler_screen.dart';
@@ -8,7 +9,6 @@ import 'form_builder_canvas.dart';
 
 class FormManagementScreen extends StatefulWidget {
   const FormManagementScreen({super.key});
-
   @override
   State<FormManagementScreen> createState() => _FormManagementScreenState();
 }
@@ -16,7 +16,6 @@ class FormManagementScreen extends StatefulWidget {
 class _FormManagementScreenState extends State<FormManagementScreen> {
   List<Map<String, dynamic>> _formsList = [];
   bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
@@ -27,7 +26,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
     setState(() => _isLoading = true);
     try {
       final supabase = Supabase.instance.client;
-      final data = await supabase.from('forms').select('id, title').order('title');
+      final data = await supabase.from('forms').select('id, title, roles').order('title');
       setState(() {
         _formsList = List<Map<String, dynamic>>.from(data);
       });
@@ -70,9 +69,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
           ),
         ) ??
         false;
-
     if (!confirmDelete) return;
-
     setState(() => _isLoading = true);
     try {
       final supabase = Supabase.instance.client;
@@ -92,6 +89,8 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
   void _createNewForm() {
     final titleController = TextEditingController();
+    final List<UserRole> allRoles = UserRole.values;
+    final Set<UserRole> selectedRoles = {...UserRole.values};
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -99,9 +98,43 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
           "Create New Form",
           style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
         ),
-        content: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(hintText: "Enter form title...", border: OutlineInputBorder()),
+        content: StatefulBuilder(
+          builder: (context, setModalState) {
+            return SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(hintText: "Enter form title...", border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("Visible to Roles", style: Theme.of(context).textTheme.titleSmall),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      await _showRoleSelectorDialog(selectedRoles);
+                      setModalState(() {});
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(border: OutlineInputBorder(), labelText: "Visible to Roles"),
+                      child: Text(
+                        selectedRoles.length == UserRole.values.length
+                            ? "All Roles"
+                            : selectedRoles.map((e) => e.label).join(", "),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("Cancel")),
@@ -114,13 +147,26 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
               setState(() => _isLoading = true);
               try {
                 final supabase = Supabase.instance.client;
-                final newFormRow = await supabase.from('forms').insert({'title': text}).select('id, title').single();
+                final newFormRow = await supabase
+                    .from('forms')
+                    .insert({
+                      'title': text,
+                      'roles': selectedRoles.length == allRoles.length ? null : selectedRoles.map((e) => e.name).toList(),
+                    })
+                    .select('id, title, roles')
+                    .single();
                 await _fetchFormsFromSupabase();
                 if (!mounted) return;
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => FormBuilderCanvas(formId: newFormRow['id'].toString(), formTitle: newFormRow['title']),
+                    builder: (context) => FormBuilderCanvas(
+                      formId: newFormRow['id'].toString(),
+                      formTitle: newFormRow['title'],
+                      roles: newFormRow['roles'] == null
+                          ? UserRole.values.map((e) => e.name).toList()
+                          : List<String>.from(newFormRow['roles']),
+                    ),
                   ),
                 ).then((_) {
                   if (mounted) _fetchFormsFromSupabase();
@@ -202,7 +248,13 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => FormBuilderCanvas(formId: currentFormId, formTitle: currentFormTitle),
+                                  builder: (context) => FormBuilderCanvas(
+                                    formId: currentFormId,
+                                    formTitle: currentFormTitle,
+                                    roles: form['roles'] == null
+                                        ? UserRole.values.map((e) => e.name).toList()
+                                        : List<String>.from(form['roles']),
+                                  ),
                                 ),
                               ).then((_) => _fetchFormsFromSupabase());
                             },
@@ -227,4 +279,94 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
       ),
     );
   }
+
+  Future<void> _showRoleSelectorDialog(Set<UserRole> selectedRoles) async {
+    final tempSelection = {...selectedRoles};
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Select Visible Roles"),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CheckboxListTile(
+                        value: tempSelection.length == UserRole.values.length,
+                        title: const Text("Select All", style: TextStyle(fontWeight: FontWeight.bold)),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            if (value == true) {
+                              tempSelection
+                                ..clear()
+                                ..addAll(UserRole.values);
+                            } else {
+                              tempSelection.clear();
+                            }
+                          });
+                        },
+                      ),
+                      const Divider(),
+                      ...UserRole.values.map(
+                        (role) => CheckboxListTile(
+                          value: tempSelection.contains(role),
+                          title: Text(role.label),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: (checked) {
+                            setDialogState(() {
+                              if (checked == true) {
+                                tempSelection.add(role);
+                              } else {
+                                tempSelection.remove(role);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+                ElevatedButton(
+                  onPressed: () {
+                    if (tempSelection.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one role.")));
+                      return;
+                    }
+
+                    selectedRoles
+                      ..clear()
+                      ..addAll(tempSelection);
+
+                    Navigator.pop(context);
+                  },
+                  child: const Text("OK"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Future<void> _showRoleSelectorDialog(Set<UserRole> selectedRoles) async {}
 }
+
+// class _showRoleSelectorDialog {
+// }
+
+// extension on _FormManagementScreenState {
+//   Future<void> _showRoleSelectorDialog(Set<UserRole> selectedRoles) {}
+// }
+
+// Future<void> _showRoleSelectorDialog(Set<UserRole> selectedRoles) async {
+// }

@@ -54,7 +54,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
         final config = question['field_config'] as Map<String, dynamic>? ?? {};
         final qId = question['id'].toString();
 
-        if (config['type'] == 'radio' || config['type'] == 'checkbox_search') {
+        if (config['type'] == 'radio' || config['type'] == 'checkbox') {
           if (config.containsKey('options')) {
             final List<String> staticOptions = List<String>.from(config['options']);
             staticOptions.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -565,7 +565,7 @@ class _FormFillerScreenState extends State<FormFillerScreen> {
                 );
               },
             ),
-          ] else if (type == 'checkbox_search') ...[
+          ] else if (type == 'checkbox') ...[
             Builder(
               builder: (context) {
                 final rawOptions = _resolvedOptions[qId] ?? [];

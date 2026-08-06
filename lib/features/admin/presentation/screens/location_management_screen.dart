@@ -465,8 +465,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-
-      // 1. Check Cluster Filter
       if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
         continue;
       }
@@ -475,8 +473,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-
-        // 2. Check Village Filter
         if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
           continue;
         }
@@ -486,18 +482,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
           final gradeOffering = school['grade_offering']?.toString() ?? '';
-
-          // 3. Check School Filter
           if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
             continue;
           }
-
-          // 4. Check Grade Offering Filter
           if (_selectedGradeFilters != null && !_selectedGradeFilters!.contains(gradeOffering)) {
             continue;
           }
-
-          // 5. Search Bar Query Matching
           final matchesSearch =
               query.isEmpty ||
               clusterName.toLowerCase().contains(query) ||
@@ -509,33 +499,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             filteredSchools.add(school);
           }
         }
-
-        // -------------------------------------------------------------
-        // CHILD PRUNING FOR VILLAGE / SCHOOL / GRADE / SEARCH FILTERS
-        // -------------------------------------------------------------
-
-        // Check if village itself matches search query (if no schools matched)
         final villageMatchesSearch = query.isNotEmpty && villageName.toLowerCase().contains(query);
-
-        // Keep village if schools matched, or if the village itself matched search,
-        // OR if no school/grade/search criteria were actively applied.
         bool hasActiveSchoolOrGradeFilter = _selectedSchoolFilters != null || _selectedGradeFilters != null;
 
         if (filteredSchools.isNotEmpty ||
             villageMatchesSearch ||
             (filteredSchools.isEmpty && (village['schools'] ?? []).isEmpty && !hasActiveSchoolOrGradeFilter)) {
-          // Build updated village copy
           var newVillage = Map<String, dynamic>.from(village);
           newVillage['schools'] = filteredSchools;
           filteredVillages.add(newVillage);
         }
       }
-
-      // Check if cluster itself matches search query
       final clusterMatchesSearch = query.isNotEmpty && clusterName.toLowerCase().contains(query);
-
-      // Keep cluster ONLY if it has matching villages, or if cluster itself matched search,
-      // OR if no village/school/grade/search filters were actively applied.
       bool hasActiveLowerFilters =
           _selectedVillageFilters != null || _selectedSchoolFilters != null || _selectedGradeFilters != null || query.isNotEmpty;
 

@@ -24,10 +24,17 @@ class _AvailableFormsScreenState extends State<AvailableFormsScreen> {
   Future<void> _fetchForms() async {
     try {
       final supabase = Supabase.instance.client;
-      final data = await supabase.from('forms').select('id, title').order('title');
-
+      final user = supabase.auth.currentUser;
+      final data = await supabase.from('forms').select('id, title, roles').order('title');
+      if (user == null) return;
+      final profile = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      final userRole = profile['role'] as String;
       setState(() {
-        _availableForms = List<Map<String, dynamic>>.from(data);
+        _availableForms = List<Map<String, dynamic>>.from(data).where((form) {
+          final roles = form['roles'];
+          if (roles == null) return true;
+          return List<String>.from(roles).contains(userRole);
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
