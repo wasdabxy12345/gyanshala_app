@@ -21,7 +21,6 @@ import '../widgets/role_selector.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
-
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
@@ -34,6 +33,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _qualificationController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   String _fullPhoneNumber = '';
   late UserRole _selectedRole;
   String? _selectedGender;
@@ -45,9 +46,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   String? _selectedVillageId;
   final List<String> _selectedSchoolIds = [];
   final List<LocationItem> _selectedSchoolObjects = [];
-
   bool get _isProductionWeb => kIsWeb && !kDebugMode;
-
   @override
   void initState() {
     super.initState();
@@ -116,7 +115,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         _selectedRole == UserRole.shikshaMitra910 ||
         _selectedRole == UserRole.mentorBV8;
     final isMultiSchool = (_selectedRole == UserRole.mentorBV8 || _selectedRole == UserRole.shikshaMitra910);
-
     return AuthShell(
       title: 'Signup',
       subtitle: 'Submit details for admin approval',
@@ -127,7 +125,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           children: [
             const Text('Select Position *', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-
             RoleSelector(
               selectedRole: _selectedRole,
               allowedRoles: _isProductionWeb ? const [UserRole.admin] : null,
@@ -198,28 +195,53 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const SizedBox(height: 13),
             TextFormField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
+              obscureText: _obscurePassword,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: InputDecoration(
                 labelText: 'Password *',
                 prefixIcon: Icon(Icons.lock_outline),
-                helperText:
-                    'Must contain uppercase, lowercase, number & symbol\nમોટા, નાના અક્ષરો, નંબર અને ચિહ્ન હોવું આવશ્યક છે',
-                helperMaxLines: 2,
+                suffix: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                ),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Password is required';
-                }
-                if (value.length < 6) {
-                  return 'Min 6 characters required';
-                }
+                if (value == null || value.isEmpty) return 'Password is required';
+                final hasMinLength = value.length >= 8;
                 final hasUppercase = value.contains(RegExp(r'[A-Z]'));
                 final hasLowercase = value.contains(RegExp(r'[a-z]'));
                 final hasDigit = value.contains(RegExp(r'[0-9]'));
                 final hasSpecialChar = value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
-
-                if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecialChar) {
-                  return 'Password must include uppercase, lowercase, number, and symbol.\nપાસવર્ડમાં મોટા, નાના અક્ષરો, નંબર અને ચિહ્ન હોવા જોઈએ.';
+                List<String> missingEnglish = [];
+                List<String> missingGujarati = [];
+                if (!hasMinLength) {
+                  missingEnglish.add('at least 8 characters');
+                  missingGujarati.add('ઓછામાં ઓછા 8 અક્ષરો');
+                }
+                if (!hasUppercase) {
+                  missingEnglish.add('an uppercase letter');
+                  missingGujarati.add('મોટો અક્ષર');
+                }
+                if (!hasLowercase) {
+                  missingEnglish.add('a lowercase letter');
+                  missingGujarati.add('નાનો અક્ષર');
+                }
+                if (!hasDigit) {
+                  missingEnglish.add('a number');
+                  missingGujarati.add('નંબર');
+                }
+                if (!hasSpecialChar) {
+                  missingEnglish.add('a special character');
+                  missingGujarati.add('વિશેષ ચિહ્ન');
+                }
+                if (missingEnglish.isNotEmpty) {
+                  String englishMsg = 'Password must include ${_formatList(missingEnglish)}.';
+                  String gujaratiMsg = 'પાસવર્ડમાં ${_formatGujaratiList(missingGujarati)} હોવું જોઈએ.';
+                  return '$englishMsg\n$gujaratiMsg';
                 }
                 return null;
               },
@@ -227,8 +249,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             const SizedBox(height: 13),
             TextFormField(
               controller: _confirmPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm Password *', prefixIcon: Icon(Icons.lock_person_outlined)),
+              obscureText: _obscureConfirmPassword,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              decoration: InputDecoration(
+                labelText: 'Confirm Password *',
+                prefixIcon: Icon(Icons.lock_person_outlined),
+                suffix: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                ),
+              ),
               validator: (value) => (value != _passwordController.text) ? 'Passwords do not match' : null,
             ),
             const SizedBox(height: 13),
@@ -489,5 +523,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     } catch (e) {
       debugPrint('Error loading consent dialog: $e');
     }
+  }
+
+  String _formatList(List<String> items) {
+    if (items.length == 1) return items[0];
+    if (items.length == 2) return '${items[0]} and ${items[1]}';
+    return '${items.sublist(0, items.length - 1).join(', ')}, and ${items.last}';
+  }
+
+  String _formatGujaratiList(List<String> items) {
+    if (items.length == 1) return items[0];
+    if (items.length == 2) return '${items[0]} અને ${items[1]}';
+    return '${items.sublist(0, items.length - 1).join(', ')}, અને ${items.last}';
   }
 }

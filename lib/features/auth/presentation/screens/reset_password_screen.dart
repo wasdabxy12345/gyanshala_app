@@ -27,6 +27,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -61,8 +63,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
           children: [
             TextFormField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                ),
+              ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Password is required';
@@ -76,8 +89,19 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _confirmPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm Password', prefixIcon: Icon(Icons.lock_person_outlined)),
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Confirm Password',
+                prefixIcon: Icon(Icons.lock_person_outlined),
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                ),
+              ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please confirm your password';
