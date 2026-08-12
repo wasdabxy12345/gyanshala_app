@@ -72,9 +72,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => nextScreen), (route) => false);
     } catch (e) {
       if (!mounted) return;
+
+      final errorStr = e.toString().toLowerCase();
+
+      final String displayMessage;
+      if (errorStr.contains('no account found'))
+        displayMessage = 'Incorrect phone number. Please check and try again.\nખોટો ફોન નંબર. કૃપા કરીને તપાસીને ફરી પ્રયાસ કરો.';
+      else if (errorStr.contains('invalid login credentials') || errorStr.contains('password') || errorStr.contains('wrong'))
+        displayMessage = 'Incorrect password. Please try again.\nખોટો પાસવર્ડ. કૃપા કરીને ફરી પ્રયાસ કરો.';
+      else
+        displayMessage = e.toString().replaceFirst('Exception: ', '');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(displayMessage),
           duration: const Duration(seconds: 13),
           action: SnackBarAction(
             label: 'Dismiss',

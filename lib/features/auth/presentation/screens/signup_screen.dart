@@ -1,5 +1,5 @@
 import 'package:dropdown_search/dropdown_search.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -81,7 +81,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Future<void> _onSignupPressed() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     try {
-      String? pushToken = await FirebaseMessaging.instance.getToken();
+      // String? pushToken = await FirebaseMessaging.instance.getToken();
       final phoneNumberToSave = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
       await ref
           .read(authRepositoryProvider)
@@ -92,7 +92,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text,
             role: _selectedRole.name,
             gender: _selectedGender,
-            pushToken: pushToken,
+            // pushToken: pushToken,
             qualification: _qualificationController.text.trim(),
             schoolIds: _selectedSchoolIds,
           );
@@ -199,8 +199,30 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password *', prefixIcon: Icon(Icons.lock_outline)),
-              validator: (value) => (value == null || value.length < 6) ? 'Min 6 characters' : null,
+              decoration: const InputDecoration(
+                labelText: 'Password *',
+                prefixIcon: Icon(Icons.lock_outline),
+                helperText:
+                    'Must contain uppercase, lowercase, number & symbol\nમોટા, નાના અક્ષરો, નંબર અને ચિહ્ન હોવું આવશ્યક છે',
+                helperMaxLines: 2,
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Password is required';
+                }
+                if (value.length < 6) {
+                  return 'Min 6 characters required';
+                }
+                final hasUppercase = value.contains(RegExp(r'[A-Z]'));
+                final hasLowercase = value.contains(RegExp(r'[a-z]'));
+                final hasDigit = value.contains(RegExp(r'[0-9]'));
+                final hasSpecialChar = value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+
+                if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecialChar) {
+                  return 'Password must include uppercase, lowercase, number, and symbol.\nપાસવર્ડમાં મોટા, નાના અક્ષરો, નંબર અને ચિહ્ન હોવા જોઈએ.';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 13),
             TextFormField(

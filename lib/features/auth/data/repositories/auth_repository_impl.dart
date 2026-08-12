@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:gyanshala_app/core/models/user_model.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/repositories/auth_repository.dart';
@@ -136,6 +137,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> updatePassword({required String password, String? identifier, String? oldPassword}) async {
+    final currentUser = _supabase.auth.currentUser;
     try {
       if (identifier != null) {
         final phone = identifier;
@@ -147,8 +149,18 @@ class AuthRepositoryImpl implements AuthRepository {
             'last_name': requestRows.first['last_name'],
             'role': requestRows.first['role'],
           };
-        await _auth.updateUser(UserAttributes(password: password, data: metadata));
-        await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
+        if (currentUser != null) {
+          await _auth.updateUser(UserAttributes(password: password, data: metadata));
+          await _supabase.from('signup_requests').update({'status': 'approved'}).eq('phone', phone);
+          return;
+        }
+
+        if (AppConfig.useDevBypass) {
+          await _supabase.rpc('admin_reset_password_dev', params: {'p_identifier': identifier, 'p_new_password': password});
+          return;
+        }
+
+        throw Exception('Auth session missing. Please verify OTP first.');
       }
     } on AuthApiException catch (e) {
       if (e.message.contains('Invalid login credentials')) throw Exception("The current password you entered is incorrect.");

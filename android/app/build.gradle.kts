@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.gyanshala_app"
-    compileSdk = 36
+    compileSdk = 36 // <-- Updated to satisfy your packages
     buildToolsVersion = "34.0.0"
     ndkVersion = flutter.ndkVersion
 
@@ -24,15 +24,12 @@ android {
 
     defaultConfig {
         applicationId = "org.gyanshala.app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = flutter.minSdkVersion // <-- Keeps Android 11 devices compatible
+        targetSdk = 34 // Target safe stable behavior for devices
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
         multiDexEnabled = true
-
-        minSdk = flutter.minSdkVersion
-        targetSdk = 34
     }
 
     buildTypes {

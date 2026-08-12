@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/inactivity_provider.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/features/auth/presentation/screens/welcome_screen.dart';
-import 'package:gyanshala_app/features/settings/presentation/views/edit_profile_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -53,22 +52,22 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text("Settings")),
       body: ListView(
         children: [
-          ListTile(
-            leading: const Icon(Icons.person_outline),
-            title: const Text("Edit Profile"),
-            onTap: () async {
-              final supabase = ref.read(supabaseClientProvider);
-              final user = supabase.auth.currentUser;
+          // ListTile(
+          //   leading: const Icon(Icons.person_outline),
+          //   title: const Text("Edit Profile"),
+          //   onTap: () async {
+          //     final supabase = ref.read(supabaseClientProvider);
+          //     final user = supabase.auth.currentUser;
 
-              if (user == null) return;
+          //     if (user == null) return;
 
-              final data = await supabase.from('profiles').select().eq('id', user.id).single();
+          //     final data = await supabase.from('profiles').select().eq('id', user.id).single();
 
-              if (context.mounted) {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => EditProfileScreen(initialData: data)));
-              }
-            },
-          ),
+          //     if (context.mounted) {
+          //       Navigator.push(context, MaterialPageRoute(builder: (context) => EditProfileScreen(initialData: data)));
+          //     }
+          //   },
+          // ),
           const Divider(),
           inactivityTimeoutAsync.when(
             data: (timeout) => ListTile(

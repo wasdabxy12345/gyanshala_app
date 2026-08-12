@@ -80,17 +80,21 @@ class _SignupVerificationScreenState extends ConsumerState<SignupVerificationScr
 
   Future<void> _handleSendOtp() async {
     if (_isSendingOtp || _persistedIdentifier == null) return;
+
     if (AppConfig.useDevBypass) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('pending_id');
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("[DEV] Account verified dynamically! Please login."), backgroundColor: Colors.green),
+        const SnackBar(content: Text("[DEV] Account verification bypassed! Please login."), backgroundColor: Colors.green),
       );
 
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
       return;
     }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OtpVerificationScreen(

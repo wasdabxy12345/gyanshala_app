@@ -57,13 +57,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      if (AppConfig.useDevBypass) {
-        _startTimer();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("[DEV MODE] Bypass active: Enter '123456' to proceed.")));
-        return;
-      }
       await ref.read(authRepositoryProvider).sendOtp(identifier: widget.identifier, requireApprovedSignup: true);
       _startTimer();
       if (mounted) {
@@ -83,10 +76,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      if (AppConfig.useDevBypass) {
-        if (mounted) await widget.onVerified();
-        return;
-      }
       await ref.read(authRepositoryProvider).verifyOtp(identifier: widget.identifier, otp: _otpController.text.trim());
       if (!mounted) return;
       await widget.onVerified();
