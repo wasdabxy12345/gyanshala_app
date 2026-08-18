@@ -92,7 +92,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
 
-      // Fetch school assignments with full hierarchy
       final profileSchoolsRaw =
           ((await supabase
                       .from('profile_schools')
@@ -127,24 +126,46 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     final List<dynamic> attendanceRecords = rawPayload['records'];
     final List<Map<String, dynamic>> profileSchools = List<Map<String, dynamic>>.from(rawPayload['profileSchools']);
 
-    // Build per-user school/village/cluster sets
-    Map<String, Set<String>> userSchools = {};
-    Map<String, Set<String>> userVillages = {};
-    Map<String, Set<String>> userClusters = {};
+    // Keep each assignment together so a school is never paired with the
+    // wrong village/cluster when an employee has schools in multiple places.
+    Map<String, List<Map<String, String>>> userSchoolAssignments = {};
 
     for (final ps in profileSchools) {
       final uid = ps['user_id'] as String;
       final school = ps['schools'] as Map?;
       if (school == null) continue;
+
       final schoolName = school['name']?.toString() ?? '';
       final village = school['villages'] as Map?;
       final villageName = village?['name']?.toString() ?? '';
       final cluster = village?['clusters'] as Map?;
       final clusterName = cluster?['name']?.toString() ?? '';
 
-      userSchools.putIfAbsent(uid, () => {}).add(schoolName);
-      if (villageName.isNotEmpty) userVillages.putIfAbsent(uid, () => {}).add(villageName);
-      if (clusterName.isNotEmpty) userClusters.putIfAbsent(uid, () => {}).add(clusterName);
+      if (schoolName.isEmpty) continue;
+
+      userSchoolAssignments.putIfAbsent(uid, () => []).add({
+        'school': schoolName,
+        'village': villageName,
+        'cluster': clusterName,
+      });
+    }
+
+    // Remove duplicate assignments while preserving the school -> village ->
+    // cluster relationship.
+    for (final assignments in userSchoolAssignments.values) {
+      final seen = <String>{};
+      assignments.removeWhere((a) {
+        final key = '${a['school']}\u001F${a['village']}\u001F${a['cluster']}';
+        if (!seen.add(key)) return true;
+        return false;
+      });
+      assignments.sort((a, b) {
+        final schoolCompare = (a['school'] ?? '').compareTo(b['school'] ?? '');
+        if (schoolCompare != 0) return schoolCompare;
+        final villageCompare = (a['village'] ?? '').compareTo(b['village'] ?? '');
+        if (villageCompare != 0) return villageCompare;
+        return (a['cluster'] ?? '').compareTo(b['cluster'] ?? '');
+      });
     }
 
     Map<String, Map<String, dynamic>> employeeData = {};
@@ -157,14 +178,27 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         'last_name': employee['last_name'] ?? '',
         'role': employee['role'] ?? '',
         'gender': employee['gender'] ?? '',
-        'schools': userSchools[uid]?.toList() ?? [],
-        'villages': userVillages[uid]?.toList() ?? [],
-        'clusters': userClusters[uid]?.toList() ?? [],
+        'school_assignments': userSchoolAssignments[uid] ?? <Map<String, String>>[],
+        // Keep these lists for the existing table filters.
+        'schools': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+            .map((a) => a['school'] ?? '')
+            .where((v) => v.isNotEmpty)
+            .toSet()
+            .toList(),
+        'villages': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+            .map((a) => a['village'] ?? '')
+            .where((v) => v.isNotEmpty)
+            .toSet()
+            .toList(),
+        'clusters': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+            .map((a) => a['cluster'] ?? '')
+            .where((v) => v.isNotEmpty)
+            .toSet()
+            .toList(),
         'attendance_map': <String, dynamic>{},
       };
     }
 
-    // ... rest of attendance processing unchanged
     final sortedRecords = List.from(attendanceRecords)
       ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
 
@@ -204,6 +238,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final headers = [
         "Name",
         "Date",
+        "Role",
+        "Gender",
+        "School(s)",
+        "Village(s)",
+        "Cluster(s)",
         "Check In Time",
         "Check Out Time",
         "Check In Location",
@@ -221,12 +260,32 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         final userId = record['user_id'];
         final employee = employeeMap[userId];
         final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
-        if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) {
-          continue;
-        }
-        if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) {
-          continue;
-        }
+        final String role = employee != null ? employee['role'] : 'Unknown Role';
+        final String gender = employee != null ? employee['gender'] : 'Unknown Gender';
+
+        final List<Map<String, dynamic>> assignments = employee != null
+            ? List<Map<String, dynamic>>.from(employee['school_assignments'] ?? const [])
+            : [];
+
+        final String assignedSchools = assignments
+            .map((a) => a['school']?.toString() ?? '')
+            .where((v) => v.isNotEmpty)
+            .join('\n');
+
+        final String assignedVillages = assignments
+            .map((a) => a['village']?.toString() ?? '')
+            .where((v) => v.isNotEmpty)
+            .join('\n');
+
+        final String assignedClusters = assignments
+            .map((a) => a['cluster']?.toString() ?? '')
+            .where((v) => v.isNotEmpty)
+            .join('\n');
+
+        if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) continue;
+
+        if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) continue;
+
         final DateTime localTime = DateTime.parse(record['recorded_at']).toLocal();
         final String dateKey = DateFormat('dd-MM-yyyy').format(localTime);
         final String timeStr = DateFormat('HH:mm:ss').format(localTime);
@@ -241,10 +300,16 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         final String coordinatesStr = (lat != null && lon != null) ? "$lat, $lon" : '';
 
         final String rowCompositeKey = "${userId}_$dateKey";
+
         if (!structuredRows.containsKey(rowCompositeKey)) {
           structuredRows[rowCompositeKey] = {
             'name': fullName,
             'date': dateKey,
+            'role': role,
+            'gender': gender,
+            'assigned_schools': assignedSchools,
+            'assigned_villages': assignedVillages,
+            'assigned_clusters': assignedClusters,
             'check_in_time': '',
             'check_in_variance': '99:99:99',
             'check_in_loc': 'off-site',
@@ -279,6 +344,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         sheet.appendRow([
           TextCellValue(r['name']),
           TextCellValue(r['date']),
+          TextCellValue(r['role']),
+          TextCellValue(r['gender']),
+          TextCellValue(r['assigned_schools']),
+          TextCellValue(r['assigned_villages']),
+          TextCellValue(r['assigned_clusters']),
           TextCellValue(r['check_in_time']),
           TextCellValue(r['check_out_time']),
           TextCellValue(r['check_in_loc']),
@@ -295,18 +365,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         bool isCheckInLate = checkInVar != "00:00:00" && checkInVar != "00:00:00.000";
         bool isCheckOutEarly = checkOutVar != "00:00:00" && checkOutVar != "00:00:00.000";
 
-        if (isCheckInLate && r['check_in_time'].isNotEmpty) {
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
-        }
-        if (isCheckOutEarly && r['check_out_time'].isNotEmpty) {
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
-        }
-        if (checkInLoc == "off-site") {
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
-        }
-        if (checkOutLoc == "off-site") {
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
-        }
+        if (isCheckInLate)
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+
+        if (isCheckOutEarly)
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+
+        if (checkInLoc == "off-site")
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
+
+        if (checkOutLoc == "off-site")
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
 
         currentExcelRowIndex++;
       }
@@ -316,7 +385,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       final startRange = DateFormat('dd-MM-yy').format(widget.startDate);
       final endRange = DateFormat('dd-MM-yy').format(widget.endDate);
-      final fileName = 'Employee_Attendance_Summary_[$startRange to $endRange].xlsx';
+      final fileName = 'Employee_Attendance_[$startRange to $endRange].xlsx';
 
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -334,9 +403,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         }
       } else {
         var status = await Permission.manageExternalStorage.status;
-        if (!status.isGranted) {
-          status = await Permission.manageExternalStorage.request();
-        }
+        if (!status.isGranted) status = await Permission.manageExternalStorage.request();
+
         Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
@@ -490,7 +558,6 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           final fullName = m['full_name'].toString();
           if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) return false;
           if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) return false;
-          // NEW filters
           if (widget.roleFilter != null && !widget.roleFilter!.contains(m['role'])) return false;
           if (widget.genderFilter != null && !widget.genderFilter!.contains(m['gender'])) return false;
           if (widget.clusterFilter != null) {
@@ -526,7 +593,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     : (emp['last_name'] ?? ''))
               : (emp['full_name'] ?? 'Unknown');
           final Size size = calcTextSize(context, textToMeasure, nameStyle);
-          final double totalNeeded = size.width + 48.0; // Added padding for sort/filter icons in header
+          final double totalNeeded = size.width + 48.0;
           if (totalNeeded > maxNameWidth) maxNameWidth = totalNeeded;
         }
 
@@ -543,9 +610,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           final bool isFutureOrToday =
               cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
 
-          if (_isHoliday(d) || isFutureOrToday) {
+          if (_isHoliday(d) || isFutureOrToday)
             dailyTotals.add(-1);
-          } else {
+          else {
             final key = DateFormat('yyyy-MM-dd').format(d);
             int count = 0;
             for (final m in employees) {
@@ -555,9 +622,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
               final variance = record != null ? record['variance'].toString() : "99:99:99";
 
-              if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000")) {
-                count++;
-              }
+              if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000")) count++;
             }
             dailyTotals.add(count);
             grandTotalPresent += count;
@@ -826,11 +891,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                 final isPresent = record != null && record['status'] == 'present';
                                 final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
                                 final variance = record != null ? record['variance'].toString() : "99:99:99";
-                                if (isPresent &&
-                                    location != "off-site" &&
-                                    (variance == "00:00:00" || variance == "00:00:00.000")) {
+                                if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000"))
                                   presentCount++;
-                                }
                               }
                             }
                             return Container(
