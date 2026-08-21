@@ -91,7 +91,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> sendOtp({required String identifier, bool requireApprovedSignup = true}) async {
+  Future<void> sendOtp({required String identifier}) async {
     final phone = identifier;
     final signupData = await getSignupStatus(identifier);
     final status = signupData['status'];

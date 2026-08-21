@@ -13,7 +13,7 @@ abstract class AuthRepository {
     String? qualification,
     List<String>? schoolIds,
   });
-  Future<void> sendOtp({required String identifier, bool requireApprovedSignup = false});
+  Future<void> sendOtp({required String identifier});
   Future<void> verifyOtp({required String identifier, required String otp});
   Future<void> updatePassword({required String password, String? identifier, String? oldPassword});
   Future<Map<String, String?>> getSignupStatus(String identifier);

@@ -104,7 +104,7 @@ class _SignupVerificationScreenState extends ConsumerState<SignupVerificationScr
           onVerified: () async {
             setState(() => _isSendingOtp = true);
             try {
-              await ref.read(authRepositoryProvider).sendOtp(identifier: _persistedIdentifier!, requireApprovedSignup: true);
+              await ref.read(authRepositoryProvider).sendOtp(identifier: _persistedIdentifier!);
 
               if (!mounted) return;
               Navigator.of(context).push(

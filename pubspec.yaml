@@ -15,7 +15,7 @@ flutter_native_splash:
     image: assets/splash/splash.png
     color: "#ffffff"
 
-version: 1.0.98+98
+version: 1.1.01+1101
 
 environment:
   sdk: ^3.11.4

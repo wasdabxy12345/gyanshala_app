@@ -57,7 +57,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(authRepositoryProvider).sendOtp(identifier: widget.identifier, requireApprovedSignup: true);
+      await ref.read(authRepositoryProvider).sendOtp(identifier: widget.identifier);
       _startTimer();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP request sent!")));

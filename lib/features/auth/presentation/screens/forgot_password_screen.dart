@@ -31,6 +31,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
     try {
       final identifier = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
+      final authRepo = ref.read(authRepositoryProvider);
+      final signupStatusMap = await authRepo.getSignupStatus(identifier);
+      final status = signupStatusMap['status'];
+      final rejectionReason = signupStatusMap['rejection_reason'] ?? 'No explicit reason specified.';
+
+      if (status == 'not_found') throw Exception('No account found associated with the entered phone number.');
+      if (status == 'pending') throw Exception('Your signup request is still pending admin approval.');
+      if (status == 'rejected') throw Exception('Your signup request has been rejected.\n\nReason: $rejectionReason');
+
       if (AppConfig.otpBypass) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
@@ -45,8 +54,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         );
         return;
       }
-      await ref.read(authRepositoryProvider).sendOtp(identifier: identifier, requireApprovedSignup: false);
+
+      await authRepo.sendOtp(identifier: identifier);
       if (!mounted) return;
+
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => OtpVerificationScreen(
@@ -83,25 +94,38 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         key: _formKey,
         child: Column(
           children: [
-            IntlPhoneField(
-              controller: _phoneController,
-              initialCountryCode: 'IN',
-              decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
-              onChanged: (phone) {
-                _fullPhoneNumber = phone.completeNumber;
-              },
-              onCountryChanged: (country) {
-                if (_phoneController.text.isNotEmpty) {
-                  _fullPhoneNumber = '+${country.dialCode}${_phoneController.text.trim()}';
-                }
-              },
-              validator: (phone) {
-                if (phone == null || phone.number.trim().isEmpty) {
-                  return 'Phone Number is required';
-                }
-                return null;
-              },
-            ),
+            if (AppConfig.hideCountryCodeSelector)
+              TextFormField(
+                controller: _phoneController,
+                decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone;
+                },
+                validator: (phone) {
+                  return phone == null || phone.trim().isEmpty ? 'Phone Number is required' : null;
+                },
+                keyboardType: TextInputType.phone,
+              )
+            else
+              IntlPhoneField(
+                controller: _phoneController,
+                initialCountryCode: 'IN',
+                decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone.completeNumber;
+                },
+                onCountryChanged: (country) {
+                  if (_phoneController.text.isNotEmpty) {
+                    _fullPhoneNumber = '+${country.dialCode}${_phoneController.text.trim()}';
+                  }
+                },
+                validator: (phone) {
+                  if (phone == null || phone.number.trim().isEmpty) {
+                    return 'Phone Number is required';
+                  }
+                  return null;
+                },
+              ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

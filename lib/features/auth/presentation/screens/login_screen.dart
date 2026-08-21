@@ -41,8 +41,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).clearSnackBars();
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      final identifierToUse = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _identifierController.text.trim();
-      final user = await authRepo.login(identifier: identifierToUse, password: _passwordController.text);
+      final identifier = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _identifierController.text.trim();
+      final user = await authRepo.login(identifier: identifier, password: _passwordController.text);
 
       final name = (user.firstName ?? '').trim().isEmpty ? 'User' : user.firstName!.trim();
       final userRole = UserRole.fromString(user.role);

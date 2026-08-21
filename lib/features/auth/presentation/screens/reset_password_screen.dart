@@ -64,24 +64,52 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: 'Password *',
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                   onPressed: () {
                     setState(() {
                       _obscurePassword = !_obscurePassword;
                     });
                   },
-                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                 ),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Password is required';
+                if (value == null || value.isEmpty) return 'Password is required';
+                final hasMinLength = value.length >= 8;
+                final hasUppercase = value.contains(RegExp(r'[A-Z]'));
+                final hasLowercase = value.contains(RegExp(r'[a-z]'));
+                final hasDigit = value.contains(RegExp(r'[0-9]'));
+                final hasSpecialChar = value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+                List<String> missingEnglish = [];
+                List<String> missingGujarati = [];
+                if (!hasMinLength) {
+                  missingEnglish.add('at least 8 characters');
+                  missingGujarati.add('ઓછામાં ઓછા 8 અક્ષરો');
                 }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
+                if (!hasUppercase) {
+                  missingEnglish.add('an uppercase letter');
+                  missingGujarati.add('મોટો અક્ષર');
+                }
+                if (!hasLowercase) {
+                  missingEnglish.add('a lowercase letter');
+                  missingGujarati.add('નાનો અક્ષર');
+                }
+                if (!hasDigit) {
+                  missingEnglish.add('a number');
+                  missingGujarati.add('નંબર');
+                }
+                if (!hasSpecialChar) {
+                  missingEnglish.add('a special character');
+                  missingGujarati.add('વિશેષ ચિહ્ન');
+                }
+                if (missingEnglish.isNotEmpty) {
+                  String englishMsg = 'Password must include ${_formatEnglishList(missingEnglish)}.';
+                  String gujaratiMsg = 'પાસવર્ડમાં ${_formatGujaratiList(missingGujarati)} હોવું જોઈએ.';
+                  return '$englishMsg\n$gujaratiMsg';
                 }
                 return null;
               },
@@ -89,17 +117,18 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _confirmPasswordController,
-              obscureText: _obscurePassword,
+              obscureText: _obscureConfirmPassword,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               decoration: InputDecoration(
-                labelText: 'Confirm Password',
+                labelText: 'Confirm Password *',
                 prefixIcon: Icon(Icons.lock_person_outlined),
                 suffixIcon: IconButton(
+                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                   onPressed: () {
                     setState(() {
                       _obscureConfirmPassword = !_obscureConfirmPassword;
                     });
                   },
-                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                 ),
               ),
               validator: (value) {
@@ -122,5 +151,17 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       ),
       footer: const SizedBox.shrink(),
     );
+  }
+
+  String _formatEnglishList(List<String> items) {
+    if (items.length == 1) return items[0];
+    if (items.length == 2) return '${items[0]} and ${items[1]}';
+    return '${items.sublist(0, items.length - 1).join(', ')}, and ${items.last}';
+  }
+
+  String _formatGujaratiList(List<String> items) {
+    if (items.length == 1) return items[0];
+    if (items.length == 2) return '${items[0]} અને ${items[1]}';
+    return '${items.sublist(0, items.length - 1).join(', ')}, અને ${items.last}';
   }
 }

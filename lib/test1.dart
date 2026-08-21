@@ -1,110 +1,153 @@
-// // In lib/features/employees/presentation/widgets/employee_attendance_table.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gyanshala_app/core/providers/auth_provider.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/otp_verification_screen.dart';
+import 'package:gyanshala_app/features/auth/presentation/screens/reset_password_screen.dart';
+import 'package:gyanshala_app/features/auth/presentation/widgets/auth_shell.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 
-// /// Update exportExcel signature to accept filtered and sorted employees
-// Future<void> exportExcel(List<Map<String, dynamic>> employees, Map<String, dynamic> attendanceMap) async {
-//   final excel = Excel.createExcel();
-//   final sheet = excel[excel.getDefaultSheet()!];
 
-//   // Determine dates within range
-//   List<DateTime> dateRange = [];
-//   DateTime current = DateTime(widget.startDate.year, widget.startDate.month, widget.startDate.day);
-//   final DateTime end = DateTime(widget.endDate.year, widget.endDate.month, widget.endDate.day);
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
-//   while (!current.isAfter(end)) {
-//     dateRange.add(current);
-//     current = current.add(const Duration(days: 1));
-//   }
+  @override
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
 
-//   // Header Row
-//   List<CellValue> headerRow = [
-//     TextCellValue("Employee Name"),
-//     TextCellValue("Role"),
-//     TextCellValue("Cluster"),
-//     TextCellValue("Village"),
-//     TextCellValue("School"),
-//   ];
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
+  String _fullPhoneNumber = '';
 
-//   for (var date in dateRange) {
-//     headerRow.add(TextCellValue(DateFormat('dd/MM').format(date)));
-//   }
-//   headerRow.add(TextCellValue("Total Present"));
-//   headerRow.add(TextCellValue("Attendance %"));
-//   sheet.appendRow(headerRow);
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
 
-//   // Rows for Filtered/Sorted Employees
-//   for (var emp in employees) {
-//     final empId = emp['id'];
-//     final empName = "${emp['first_name'] ?? ''} ${emp['last_name'] ?? ''}".trim();
-//     final role = emp['role'] ?? '';
-//     final cluster = emp['cluster'] ?? '';
-//     final village = emp['village'] ?? '';
-//     final school = emp['school'] ?? '';
+  Future<void> _onGenerateOtpPressed() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    try {
+      final identifier = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
+      
+      // 1. Check the database for the user's signup/approval status first
+      final authRepo = ref.read(authRepositoryProvider);
+      final signupStatusMap = await authRepo.getSignupStatus(identifier);
+      final status = signupStatusMap['status'];
+      final rejectionReason = signupStatusMap['rejection_reason'] ?? 'No explicit reason specified.';
 
-//     List<CellValue> rowData = [
-//       TextCellValue(empName),
-//       TextCellValue(role),
-//       TextCellValue(cluster),
-//       TextCellValue(village),
-//       TextCellValue(school),
-//     ];
+      // 2. Validate the status before proceeding
+      if (status == 'not_found') {
+        throw Exception('No account found associated with the entered phone number.');
+      }
+      if (status == 'pending') {
+        throw Exception('Your signup request is still pending admin approval.');
+      }
+      if (status == 'rejected') {
+        throw Exception('Your signup request has been rejected.\n\nReason: $rejectionReason');
+      }
 
-//     int presentCount = 0;
-//     int totalWorkingDays = 0;
+      // 3. Handle OTP Bypass if enabled
+      if (AppConfig.otpBypass) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => ResetPasswordScreen(
+              identifier: identifier,
+              title: 'Reset Password',
+              subtitle: 'Create a new password for your account',
+              successMessage: 'Password reset successful',
+            ),
+          ),
+        );
+        return;
+      }
 
-//     for (var date in dateRange) {
-//       final dateKey = DateFormat('dd-MM-yyyy').format(date);
-//       final record = attendanceMap[empId]?[dateKey];
+      // 4. Send OTP if status is approved/valid
+      await authRepo.sendOtp(identifier: identifier);
+      
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => OtpVerificationScreen(
+            identifier: identifier,
+            title: 'OTP Verification',
+            subtitle: 'Enter OTP sent on registered phone number',
+            onVerified: () async {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => ResetPasswordScreen(
+                    identifier: identifier,
+                    title: 'Reset Password',
+                    subtitle: 'Create a new password for your account',
+                    successMessage: 'Password reset successful',
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
 
-//       if (date.weekday != DateTime.sunday) {
-//         totalWorkingDays++;
-//       }
-
-//       if (record != null && record['status'] == 'present') {
-//         presentCount++;
-//         rowData.add(TextCellValue("P"));
-//       } else if (record != null && record['status'] == 'late') {
-//         presentCount++;
-//         rowData.add(TextCellValue("L"));
-//       } else if (date.weekday == DateTime.sunday) {
-//         rowData.add(TextCellValue("-"));
-//       } else {
-//         rowData.add(TextCellValue("A"));
-//       }
-//     }
-
-//     rowData.add(TextCellValue(presentCount.toString()));
-//     final double percentage = totalWorkingDays > 0 ? (presentCount / totalWorkingDays) * 100 : 0.0;
-//     rowData.add(TextCellValue("${percentage.toStringAsFixed(1)}%"));
-
-//     sheet.appendRow(rowData);
-//   }
-
-//   final fileBytes = excel.save();
-//   if (fileBytes == null) return;
-
-//   final String fileName = "Employee_Attendance_${DateFormat('yyyyMMdd').format(widget.startDate)}_to_${DateFormat('yyyyMMdd').format(widget.endDate)}.xlsx";
-
-//   if (kIsWeb) {
-//     final blob = html.Blob([fileBytes]);
-//     final url = html.Url.createObjectUrlFromBlob(blob);
-//     final anchor = html.AnchorElement(href: url)
-//       ..setAttribute("download", fileName)
-//       ..click();
-//     html.Url.revokeObjectUrl(url);
-//   } else {
-//     Directory downloadsDir;
-//     if (Platform.isAndroid) {
-//       downloadsDir = Directory('/storage/emulated/0/Download');
-//     } else {
-//       downloadsDir = await getApplicationDocumentsDirectory();
-//     }
-//     final file = File('${downloadsDir.path}/$fileName');
-//     await file.writeAsBytes(fileBytes);
-
-//     if (mounted) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text('Exported successfully to ${file.path}')),
-//       );
-//     }
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    return AuthShell(
+      title: 'Forgot Password',
+      subtitle: 'Enter registered phone number',
+      formChild: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            if (AppConfig.hideCountryCodeSelector)
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone;
+                },
+                validator: (phone) {
+                  return phone == null || phone.trim().isEmpty ? 'Phone Number is required' : null;
+                },
+                keyboardType: TextInputType.phone,
+              )
+            else
+              IntlPhoneField(
+                controller: _phoneController,
+                initialCountryCode: 'IN',
+                decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone.completeNumber;
+                },
+                onCountryChanged: (country) {
+                  if (_phoneController.text.isNotEmpty) {
+                    _fullPhoneNumber = '+${country.dialCode}${_phoneController.text.trim()}';
+                  }
+                },
+                validator: (phone) {
+                  if (phone == null || phone.number.trim().isEmpty) {
+                    return 'Phone Number is required';
+                  }
+                  return null;
+                },
+              ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(onPressed: _onGenerateOtpPressed, child: const Text('Generate OTP')),
+            ),
+          ],
+        ),
+      ),
+      footer: const SizedBox.shrink(),
+    );
+  }
+}

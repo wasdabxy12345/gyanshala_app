@@ -200,13 +200,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               decoration: InputDecoration(
                 labelText: 'Password *',
                 prefixIcon: Icon(Icons.lock_outline),
-                suffix: IconButton(
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                   onPressed: () {
                     setState(() {
                       _obscurePassword = !_obscurePassword;
                     });
                   },
-                  icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                 ),
               ),
               validator: (value) {
@@ -239,7 +239,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   missingGujarati.add('વિશેષ ચિહ્ન');
                 }
                 if (missingEnglish.isNotEmpty) {
-                  String englishMsg = 'Password must include ${_formatList(missingEnglish)}.';
+                  String englishMsg = 'Password must include ${_formatEnglishList(missingEnglish)}.';
                   String gujaratiMsg = 'પાસવર્ડમાં ${_formatGujaratiList(missingGujarati)} હોવું જોઈએ.';
                   return '$englishMsg\n$gujaratiMsg';
                 }
@@ -254,16 +254,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               decoration: InputDecoration(
                 labelText: 'Confirm Password *',
                 prefixIcon: Icon(Icons.lock_person_outlined),
-                suffix: IconButton(
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                   onPressed: () {
                     setState(() {
                       _obscureConfirmPassword = !_obscureConfirmPassword;
                     });
                   },
-                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                 ),
               ),
-              validator: (value) => (value != _passwordController.text) ? 'Passwords do not match' : null,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please confirm your password';
+                }
+                if (value != _passwordController.text) {
+                  return 'Passwords do not match';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 13),
             if (isNotAdmin) ...[
@@ -525,7 +533,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
   }
 
-  String _formatList(List<String> items) {
+  String _formatEnglishList(List<String> items) {
     if (items.length == 1) return items[0];
     if (items.length == 2) return '${items[0]} and ${items[1]}';
     return '${items.sublist(0, items.length - 1).join(', ')}, and ${items.last}';
