@@ -126,9 +126,7 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     final List<dynamic> attendanceRecords = rawPayload['records'];
     final List<Map<String, dynamic>> profileSchools = List<Map<String, dynamic>>.from(rawPayload['profileSchools']);
 
-    // Keep each assignment together so a school is never paired with the
-    // wrong village/cluster when an employee has schools in multiple places.
-    Map<String, List<Map<String, String>>> userSchoolAssignments = {};
+    Map<String, List<Map<String, String>>> userSchools = {};
 
     for (final ps in profileSchools) {
       final uid = ps['user_id'] as String;
@@ -143,23 +141,16 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       if (schoolName.isEmpty) continue;
 
-      userSchoolAssignments.putIfAbsent(uid, () => []).add({
-        'school': schoolName,
-        'village': villageName,
-        'cluster': clusterName,
-      });
+      userSchools.putIfAbsent(uid, () => []).add({'school': schoolName, 'village': villageName, 'cluster': clusterName});
     }
-
-    // Remove duplicate assignments while preserving the school -> village ->
-    // cluster relationship.
-    for (final assignments in userSchoolAssignments.values) {
+    for (final school in userSchools.values) {
       final seen = <String>{};
-      assignments.removeWhere((a) {
+      school.removeWhere((a) {
         final key = '${a['school']}\u001F${a['village']}\u001F${a['cluster']}';
         if (!seen.add(key)) return true;
         return false;
       });
-      assignments.sort((a, b) {
+      school.sort((a, b) {
         final schoolCompare = (a['school'] ?? '').compareTo(b['school'] ?? '');
         if (schoolCompare != 0) return schoolCompare;
         final villageCompare = (a['village'] ?? '').compareTo(b['village'] ?? '');
@@ -178,19 +169,18 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         'last_name': employee['last_name'] ?? '',
         'role': employee['role'] ?? '',
         'gender': employee['gender'] ?? '',
-        'school_assignments': userSchoolAssignments[uid] ?? <Map<String, String>>[],
-        // Keep these lists for the existing table filters.
-        'schools': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+        'school_assignments': userSchools[uid] ?? <Map<String, String>>[],
+        'schools': (userSchools[uid] ?? const <Map<String, String>>[])
             .map((a) => a['school'] ?? '')
             .where((v) => v.isNotEmpty)
             .toSet()
             .toList(),
-        'villages': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+        'villages': (userSchools[uid] ?? const <Map<String, String>>[])
             .map((a) => a['village'] ?? '')
             .where((v) => v.isNotEmpty)
             .toSet()
             .toList(),
-        'clusters': (userSchoolAssignments[uid] ?? const <Map<String, String>>[])
+        'clusters': (userSchools[uid] ?? const <Map<String, String>>[])
             .map((a) => a['cluster'] ?? '')
             .where((v) => v.isNotEmpty)
             .toSet()

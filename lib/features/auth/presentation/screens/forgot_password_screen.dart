@@ -31,7 +31,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
     try {
       final identifier = _fullPhoneNumber.isNotEmpty ? _fullPhoneNumber : _phoneController.text.trim();
-      if (AppConfig.useDevBypass) {
+      if (AppConfig.otpBypass) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(

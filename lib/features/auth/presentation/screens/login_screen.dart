@@ -111,25 +111,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IntlPhoneField(
-              controller: _identifierController,
-              initialCountryCode: 'IN',
-              decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
-              onChanged: (phone) {
-                _fullPhoneNumber = phone.completeNumber;
-              },
-              onCountryChanged: (country) {
-                if (_identifierController.text.isNotEmpty) {
-                  _fullPhoneNumber = '+${country.dialCode}${_identifierController.text.trim()}';
-                }
-              },
-              validator: (phone) {
-                if (phone == null || phone.number.trim().isEmpty) {
-                  return 'Phone Number is required';
-                }
-                return null;
-              },
-            ),
+            if (AppConfig.hideCountryCodeSelector)
+              TextFormField(
+                controller: _identifierController,
+                decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone;
+                },
+                validator: (phone) {
+                  if (phone == null || phone.trim().isEmpty) return 'Phone Number is required';
+                  return null;
+                },
+                keyboardType: TextInputType.phone,
+              )
+            else
+              IntlPhoneField(
+                controller: _identifierController,
+                initialCountryCode: 'IN',
+                decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder()),
+                onChanged: (phone) {
+                  _fullPhoneNumber = phone.completeNumber;
+                },
+                onCountryChanged: (country) {
+                  if (_identifierController.text.isNotEmpty) {
+                    _fullPhoneNumber = '+${country.dialCode}${_identifierController.text.trim()}';
+                  }
+                },
+                validator: (phone) {
+                  if (phone == null || phone.number.trim().isEmpty) return 'Phone Number is required';
+                  return null;
+                },
+              ),
+
             const SizedBox(height: 14),
             TextFormField(
               controller: _passwordController,

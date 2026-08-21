@@ -81,7 +81,7 @@ class _SignupVerificationScreenState extends ConsumerState<SignupVerificationScr
   Future<void> _handleSendOtp() async {
     if (_isSendingOtp || _persistedIdentifier == null) return;
 
-    if (AppConfig.useDevBypass) {
+    if (AppConfig.otpBypass) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('pending_id');
 

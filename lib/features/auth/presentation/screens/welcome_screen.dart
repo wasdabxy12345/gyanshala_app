@@ -145,7 +145,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     if (_pendingId == null) return;
     _dismissSnackBar();
 
-    if (AppConfig.useDevBypass) {
+    if (AppConfig.otpBypass) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('pending_id');
       if (!mounted) return;

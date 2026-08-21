@@ -155,7 +155,7 @@ class AuthRepositoryImpl implements AuthRepository {
           return;
         }
 
-        if (AppConfig.useDevBypass) {
+        if (AppConfig.otpBypass) {
           await _supabase.rpc('admin_reset_password_dev', params: {'p_identifier': identifier, 'p_new_password': password});
           return;
         }
