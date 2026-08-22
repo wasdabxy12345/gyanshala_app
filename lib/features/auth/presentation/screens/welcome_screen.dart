@@ -187,96 +187,99 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Update Available'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(statusMessage),
-                  if (isDownloading) ...[
-                    const SizedBox(height: 20),
-                    LinearProgressIndicator(value: downloadProgress),
-                    const SizedBox(height: 10),
-                    Text(
-                      '${(downloadProgress * 100).toStringAsFixed(0)}% Downloaded',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ],
-              ),
-              actions: isDownloading
-                  ? []
-                  : [
-                      ElevatedButton(
-                        onPressed: () async {
-                          setDialogState(() {
-                            isDownloading = true;
-                            statusMessage = "Downloading update file. Please wait...";
-                          });
-
-                          try {
-                            client = http.Client();
-                            final request = http.Request('GET', Uri.parse(downloadUrl));
-                            final response = await client!.send(request);
-
-                            if (response.statusCode != 200) {
-                              throw Exception('Server error: ${response.statusCode}');
-                            }
-
-                            final contentLength = response.contentLength ?? 0;
-                            final directory = await getTemporaryDirectory();
-                            final apkPath = '${directory.path}/gyanshala_update.apk';
-                            final file = File(apkPath);
-                            if (await file.exists()) {
-                              await file.delete();
-                            }
-
-                            List<int> bytes = [];
-
-                            response.stream.listen(
-                              (chunk) {
-                                bytes.addAll(chunk);
-                                if (contentLength > 0) {
-                                  setDialogState(() {
-                                    downloadProgress = bytes.length / contentLength;
-                                  });
-                                }
-                              },
-                              onDone: () async {
-                                await file.writeAsBytes(bytes);
-                                client?.close();
-
-                                setDialogState(() {
-                                  statusMessage = "Opening installer...";
-                                });
-                                if (mounted) Navigator.pop(context);
-                                await OpenFilex.open(apkPath);
-                              },
-                              onError: (error) {
-                                client?.close();
-                                setDialogState(() {
-                                  isDownloading = false;
-                                  statusMessage = "Download stream interrupted.";
-                                });
-                              },
-                              cancelOnError: true,
-                            );
-                          } catch (e) {
-                            client?.close();
-                            setDialogState(() {
-                              isDownloading = false;
-                              statusMessage = "Failed to launch network download.";
-                            });
-                          }
-                        },
-                        child: const Text('Update Now'),
+        return PopScope(
+          canPop: false,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: const Text('Update Available'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(statusMessage),
+                    if (isDownloading) ...[
+                      const SizedBox(height: 20),
+                      LinearProgressIndicator(value: downloadProgress),
+                      const SizedBox(height: 10),
+                      Text(
+                        '${(downloadProgress * 100).toStringAsFixed(0)}% Downloaded',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
-            );
-          },
+                  ],
+                ),
+                actions: isDownloading
+                    ? []
+                    : [
+                        ElevatedButton(
+                          onPressed: () async {
+                            setDialogState(() {
+                              isDownloading = true;
+                              statusMessage = "Downloading update file. Please wait...";
+                            });
+
+                            try {
+                              client = http.Client();
+                              final request = http.Request('GET', Uri.parse(downloadUrl));
+                              final response = await client!.send(request);
+
+                              if (response.statusCode != 200) {
+                                throw Exception('Server error: ${response.statusCode}');
+                              }
+
+                              final contentLength = response.contentLength ?? 0;
+                              final directory = await getTemporaryDirectory();
+                              final apkPath = '${directory.path}/gyanshala_update.apk';
+                              final file = File(apkPath);
+                              if (await file.exists()) {
+                                await file.delete();
+                              }
+
+                              List<int> bytes = [];
+
+                              response.stream.listen(
+                                (chunk) {
+                                  bytes.addAll(chunk);
+                                  if (contentLength > 0) {
+                                    setDialogState(() {
+                                      downloadProgress = bytes.length / contentLength;
+                                    });
+                                  }
+                                },
+                                onDone: () async {
+                                  await file.writeAsBytes(bytes);
+                                  client?.close();
+
+                                  setDialogState(() {
+                                    statusMessage = "Opening installer...";
+                                  });
+                                  if (mounted) Navigator.pop(context);
+                                  await OpenFilex.open(apkPath);
+                                },
+                                onError: (error) {
+                                  client?.close();
+                                  setDialogState(() {
+                                    isDownloading = false;
+                                    statusMessage = "Download stream interrupted.";
+                                  });
+                                },
+                                cancelOnError: true,
+                              );
+                            } catch (e) {
+                              client?.close();
+                              setDialogState(() {
+                                isDownloading = false;
+                                statusMessage = "Failed to launch network download.";
+                              });
+                            }
+                          },
+                          child: const Text('Update Now'),
+                        ),
+                      ],
+              );
+            },
+          ),
         );
       },
     );
