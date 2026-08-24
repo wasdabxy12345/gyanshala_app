@@ -125,16 +125,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 24),
 
                     // Section Title: Hierarchy Entry Breakdown
-                    const Text(
-                      'Cluster & Village Wise Entry Summary',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Ketli entries che ane kai reet ni entry che (Cluster / Village / School breakdown):',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 12),
 
                     // Nested Hierarchy Expansion List
                     _buildHierarchyBreakdown(),
