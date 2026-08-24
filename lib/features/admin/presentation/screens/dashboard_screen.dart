@@ -79,7 +79,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Overview Dashboard'),
+        title: const Text('Dashboard'),
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchDashboardData)],
       ),
       body: _isLoading
@@ -104,20 +104,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           childAspectRatio: isDesktop ? 1.8 : 1.3,
                           physics: const NeverScrollableScrollPhysics(),
                           children: [
-                            _buildMetricCard('Total Students', '$_totalStudents', Icons.school, Colors.blue),
-                            _buildMetricCard('Total Staff', '$_totalStaff', Icons.badge, Colors.green),
-                            _buildMetricCard(
-                              "Student Entries Today",
-                              '$_todayStudentAttendanceCount',
-                              Icons.how_to_reg,
-                              Colors.orange,
-                            ),
-                            _buildMetricCard(
-                              "Staff Entries Today",
-                              '$_todayStaffAttendanceCount',
-                              Icons.access_time_filled,
-                              Colors.purple,
-                            ),
+                            _buildMetricCard('Total Students', '$_totalStudents', Colors.red),
+                            _buildMetricCard('Total Staff', '$_totalStaff', Colors.amber),
+                            _buildMetricCard("Student Entries Today", '$_todayStudentAttendanceCount', Colors.green),
+                            _buildMetricCard("Staff Entries Today", '$_todayStaffAttendanceCount', Colors.blue),
                           ],
                         );
                       },
@@ -135,29 +125,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
+  Widget _buildMetricCard(String title, String value, Color color) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.1),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(height: 8),
             Text(
               value,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+              style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: color),
             ),
             const SizedBox(height: 2),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
             ),
           ],
         ),
@@ -191,7 +176,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 6),
           child: ExpansionTile(
-            leading: const Icon(Icons.hub, color: Colors.indigo),
             title: Text('Cluster: ${cluster['name'] ?? 'Unnamed'}', style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Villages: ${villages.length} | Students: $clusterStudentCount'),
             children: villages.map<Widget>((village) {
