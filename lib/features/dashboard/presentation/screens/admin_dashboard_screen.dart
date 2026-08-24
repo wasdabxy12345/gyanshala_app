@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
+import 'package:gyanshala_app/features/admin/presentation/screens/dashboard_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
@@ -48,6 +49,7 @@ class AdminHome extends StatelessWidget {
       MenuItem(title: "Locations", targetScreen: LocationManagementScreen()),
       MenuItem(title: "Monitoring and Evaluation Tools", targetScreen: FormManagementScreen()),
       MenuItem(title: "Students", targetScreen: StudentHubPage()),
+      MenuItem(title: "Dashboard", targetScreen: DashboardScreen()),
     ];
 
     return SingleChildScrollView(

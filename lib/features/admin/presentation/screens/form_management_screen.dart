@@ -16,6 +16,7 @@ class FormManagementScreen extends StatefulWidget {
 class _FormManagementScreenState extends State<FormManagementScreen> {
   List<Map<String, dynamic>> _formsList = [];
   bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,18 +25,19 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
 
   Future<void> _fetchFormsFromSupabase() async {
     setState(() => _isLoading = true);
+
     try {
       final supabase = Supabase.instance.client;
       final data = await supabase.from('forms').select('id, title, roles').order('title');
+
       setState(() {
         _formsList = List<Map<String, dynamic>>.from(data);
       });
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text("Error syncing forms collection: $e"), backgroundColor: Colors.red));
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -91,6 +93,7 @@ class _FormManagementScreenState extends State<FormManagementScreen> {
     final titleController = TextEditingController();
     final List<UserRole> allRoles = UserRole.values;
     final Set<UserRole> selectedRoles = {...UserRole.values};
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
