@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:geolocator/geolocator.dart';
@@ -131,15 +132,13 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
     }
   }
 
-  Future<void> processCheckIn() async {
+  Future<void> processCheckIn(BuildContext context) async {
     if (state.isLoading) return;
     final bool currentCheckStatus = state.value ?? false;
     state = const AsyncLoading<bool>();
     try {
       final Position? position = await LocationService.getCurrentPosition();
-      if (position == null) {
-        throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
-      }
+      if (position == null) throw Exception("Could not fetch location. Ensure GPS and permissions are enabled.");
 
       final dynamic response = await _client.rpc(
         'get_school_at_location',
@@ -147,28 +146,38 @@ class EmployeeAttendanceController extends StateNotifier<AsyncValue<bool>> {
       );
       String? detectedSchoolId = response?.toString();
       if (detectedSchoolId == null || detectedSchoolId.trim().isEmpty) {
-        detectedSchoolId = null;
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text("Attendance Error"),
+              content: const Text(
+                "You are not within the vicinity of any registered school. \n"
+                "તમે કોઈપણ રજિસ્ટર્ડ શાળાની નજીકમાં નથી.",
+              ),
+              actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text("OK"))],
+            );
+          },
+        );
+        state = AsyncData(currentCheckStatus);
+      } else {
+        final userId = _client.auth.currentUser?.id;
+        if (userId == null) throw Exception("User is not authenticated.");
+
+        final bool checkingInThisAction = !currentCheckStatus;
+        final String? deviationInterval = await _calculateDeviation(userId, checkingInThisAction);
+
+        await _client.from('employee_attendance').insert({
+          'user_id': userId,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'status': checkingInThisAction ? 'check_in' : 'check_out',
+          'school_id': detectedSchoolId,
+          'attendance_time_variance': deviationInterval,
+        });
+
+        state = AsyncData(checkingInThisAction);
       }
-
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) {
-        throw Exception("User is not authenticated.");
-      }
-
-      final bool checkingInThisAction = !currentCheckStatus;
-      final String? deviationInterval = await _calculateDeviation(userId, checkingInThisAction);
-
-      await _client.from('employee_attendance').insert({
-        'user_id': userId,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'status': checkingInThisAction ? 'check_in' : 'check_out',
-        'school_id': detectedSchoolId,
-        'attendance_time_variance': deviationInterval,
-      });
-
-      state = AsyncData(checkingInThisAction);
-      dev.log("Success: ${checkingInThisAction ? 'Checked In' : 'Checked Out'} at $detectedSchoolId");
     } catch (e, stack) {
       dev.log("Attendance Error", error: e, stackTrace: stack);
       state = AsyncError(e, stack);
