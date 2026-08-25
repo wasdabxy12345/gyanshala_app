@@ -550,7 +550,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       } catch (_) {}
 
     GoogleMapController? mapController;
-    MapType dialogMapType = MapType.normal;
+    MapType dialogMapType = MapType.hybrid;
     int mapRefreshKey = 0;
 
     double initialLat = config.isEditMode && config.entity['latitude'] != null
@@ -561,17 +561,24 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         : 0;
     LatLng? selectedLatLng = initialLat != 0 || initialLng != 0 ? LatLng(initialLat, initialLng) : null;
 
-    void updateMapLocation() {
+    void updateMapLocation(StateSetter setDialogState) {
       final double? lat = double.tryParse(latController.text.trim());
       final double? lng = double.tryParse(lngController.text.trim());
-      final double radius = double.tryParse(radiusController.text.trim()) ?? 50;
 
-      if (lat != null && lng != null && mapController != null)
-        _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
+      if (lat == null || lng == null) return;
+
+      final double radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+
+      final newLocation = LatLng(lat, lng);
+
+      setDialogState(() {
+        selectedLatLng = newLocation;
+      });
+
+      if (mapController != null) {
+        _fitCircleInView(controller: mapController!, center: newLocation, radiusMeters: radius);
+      }
     }
-
-    latController.addListener(updateMapLocation);
-    lngController.addListener(updateMapLocation);
 
     Future<String?> showQuickAdd(String parentType) async {
       final quickController = TextEditingController();
@@ -637,7 +644,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   lngController.text = latLng.longitude.toStringAsFixed(6);
                 });
                 if (onTapOverride != null) onTapOverride();
-                updateMapLocation();
+                updateMapLocation(setDialogState);
                 if (mapController != null)
                   await _fitCircleInView(controller: mapController!, center: latLng, radiusMeters: currentRadius);
               },
@@ -820,13 +827,51 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                               controller: latController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               decoration: const InputDecoration(labelText: "Latitude"),
+                              onChanged: (_) async {
+                                final lat = double.tryParse(latController.text.trim());
+                                final lng = double.tryParse(lngController.text.trim());
+
+                                if (lat == null || lng == null) return;
+
+                                final radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+
+                                final newLocation = LatLng(lat, lng);
+
+                                setDialogState(() {
+                                  selectedLatLng = newLocation;
+                                });
+
+                                if (mapController != null) {
+                                  await _fitCircleInView(controller: mapController!, center: newLocation, radiusMeters: radius);
+                                }
+                              },
                             ),
+
                             const SizedBox(height: 13),
                             TextField(
                               controller: lngController,
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               decoration: const InputDecoration(labelText: "Longitude"),
+                              onChanged: (_) async {
+                                final lat = double.tryParse(latController.text.trim());
+                                final lng = double.tryParse(lngController.text.trim());
+
+                                if (lat == null || lng == null) return;
+
+                                final radius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+
+                                final newLocation = LatLng(lat, lng);
+
+                                setDialogState(() {
+                                  selectedLatLng = newLocation;
+                                });
+
+                                if (mapController != null) {
+                                  await _fitCircleInView(controller: mapController!, center: newLocation, radiusMeters: radius);
+                                }
+                              },
                             ),
+
                             const SizedBox(height: 13),
                             TextField(
                               controller: radiusController,
@@ -834,14 +879,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                               decoration: const InputDecoration(labelText: "Radius"),
                               onChanged: (_) async {
                                 setDialogState(() {});
-                                updateMapLocation();
-                                if (mapController != null && selectedLatLng != null) {
+                                updateMapLocation(setDialogState);
+                                if (mapController != null && selectedLatLng != null)
                                   await _fitCircleInView(
                                     controller: mapController!,
                                     center: selectedLatLng!,
                                     radiusMeters: currentRadius,
                                   );
-                                }
                               },
                             ),
                           ],
@@ -939,10 +983,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           );
         },
       ),
-    ).then((_) {
-      latController.removeListener(updateMapLocation);
-      lngController.removeListener(updateMapLocation);
-    });
+    ).then((_) {});
   }
 
   Future<void> _showAddDialog(String type) async {
