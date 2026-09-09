@@ -76,8 +76,6 @@ class _MarkStudentAttendancePageState extends State<MarkStudentAttendancePage> {
     if (_userRole == 'admin') return true;
     if (_userRole == 'shikshaMitra38') return grade >= 3 && grade <= 8;
     if (_userRole == 'shikshaMitra910') return grade == 9 || grade == 10;
-    if (_userRole == 'mentorBV8' || _userRole == 'designTeamSS' || _userRole == 'designTeamGS' || _userRole == 'fieldCoordinator')
-      return false;
     return false;
   }
 

@@ -1,12 +1,15 @@
+// added dashboard button
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/widgets/dashboard_header.dart';
-import 'package:gyanshala_app/features/admin/presentation/screens/dashboard_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/employee_hub_page.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/form_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/location_management_screen.dart';
 import 'package:gyanshala_app/features/admin/presentation/screens/signup_requests_screen.dart';
+import 'package:gyanshala_app/features/dashboard/presentation/widgets/attendance_card.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/available_forms_screen.dart';
 import 'package:gyanshala_app/features/settings/presentation/views/settings_screen.dart';
 import 'package:gyanshala_app/features/students/presentation/views/student_hub_page.dart';
 
@@ -49,7 +52,8 @@ class AdminHome extends StatelessWidget {
       MenuItem(title: "Locations", targetScreen: LocationManagementScreen()),
       MenuItem(title: "Monitoring and Evaluation Tools", targetScreen: FormManagementScreen()),
       MenuItem(title: "Students", targetScreen: StudentHubPage()),
-      MenuItem(title: "Dashboard", targetScreen: DashboardScreen()),
+      MenuItem(title: "Fill Forms", targetScreen: AvailableFormsScreen()),
+      // MenuItem(title: "Dashboard", targetScreen: DashboardScreen()),
     ];
 
     return SingleChildScrollView(
@@ -64,7 +68,9 @@ class AdminHome extends StatelessWidget {
               "Welcome, $adminName",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: MediaQuery.of(context).size.width < 842 ? 13 : 20),
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: 22),
+            const AttendanceCard(),
+            const SizedBox(height: 22),
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),

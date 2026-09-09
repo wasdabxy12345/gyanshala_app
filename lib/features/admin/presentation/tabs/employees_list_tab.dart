@@ -74,9 +74,6 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
       supabase
           .from('profiles')
           .select('*, profile_schools(schools(name, villages:village_id(name, clusters:cluster_id(name))))')
-          .or(
-            'role.eq.shikshaMitra38,role.eq.shikshaMitra910,role.eq.mentorBV8,role.eq.designTeamSS,role.eq.designTeamGS,role.eq.fieldCoordinator',
-          )
           .then((data) => List<Map<String, dynamic>>.from(data as List)),
     );
   }
@@ -125,16 +122,15 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         clusterLines.add(isFirstRow ? currentCluster : "[LINE]$currentCluster");
         lastCluster = currentCluster;
         lastVillage = "";
-      } else {
+      } else
         clusterLines.add(globalBlockChanged ? "[SPACE]" : "");
-      }
 
       if (currentVillage != lastVillage) {
         villageLines.add(isFirstRow ? currentVillage : "[LINE]$currentVillage");
         lastVillage = currentVillage;
-      } else {
+      } else
         villageLines.add(globalBlockChanged ? "[SPACE]" : "");
-      }
+
       schoolLines.add(globalBlockChanged ? "[LINE]$currentSchool" : currentSchool);
       isFirstRow = false;
     }
@@ -170,9 +166,8 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           : _filteredEmployees;
 
       final excel = Excel.createExcel();
-      if (excel.sheets.containsKey('Sheet1')) {
-        excel.delete('Sheet1');
-      }
+      if (excel.sheets.containsKey('Sheet1')) excel.delete('Sheet1');
+
       final Sheet sheet = excel['Sheet1'];
       final headers = ['First Name', 'Last Name', 'Phone', 'Role', 'Gender', 'Cluster(s)', 'Village(s)', 'School(s)'];
       sheet.appendRow(headers.map((e) => TextCellValue(e)).toList());
@@ -209,14 +204,11 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
         anchor.click();
         anchor.remove();
         html.Url.revokeObjectUrl(url);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started.")));
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started.")));
       } else {
         var status = await Permission.manageExternalStorage.status;
-        if (!status.isGranted) {
-          status = await Permission.manageExternalStorage.request();
-        }
+        if (!status.isGranted) status = await Permission.manageExternalStorage.request();
+
         Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
           final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
@@ -255,12 +247,12 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
 
   void _onSort(int columnIndex) {
     setState(() {
-      if (_sortColumnIndex == columnIndex) {
+      if (_sortColumnIndex == columnIndex)
         _isAscending = !_isAscending;
-      } else {
+      else
         _sortColumnIndex = columnIndex;
-        _isAscending = true;
-      }
+      _isAscending = true;
+
       _applySorting();
     });
   }
@@ -294,9 +286,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
             valA = a['gender']?.toString() ?? "";
             break;
         }
-        if (_sortColumnIndex != 3) {
-          valB = b[_getDatabaseKeyFromColumnIndex(_sortColumnIndex)]?.toString() ?? "";
-        }
+        if (_sortColumnIndex != 3) valB = b[_getDatabaseKeyFromColumnIndex(_sortColumnIndex)]?.toString() ?? "";
       }
       int compare = valA.toLowerCase().compareTo(valB.toLowerCase());
       return _isAscending ? compare : -compare;
@@ -463,9 +453,8 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                   child: ListView(
                     children: filteredValues.map((value) {
                       String displayString = value;
-                      if (columnIndex == 3) {
-                        displayString = UserRole.fromString(value).label;
-                      }
+                      if (columnIndex == 3) displayString = UserRole.fromString(value).label;
+
                       return CheckboxListTile(
                         dense: true,
                         value: currentSelection.contains(value),
@@ -534,9 +523,7 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
           _rawEmployees = snapshot.data!;
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _applyAllFilters();
-            }
+            if (mounted) _applyAllFilters();
           });
 
           bool hasActiveFilters = [
@@ -576,11 +563,10 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                       ),
                     TextButton(
                       onPressed: () => setState(() {
-                        if (isAllRowsSelected) {
+                        if (isAllRowsSelected)
                           _selectedEmployeeIds.clear();
-                        } else {
+                        else
                           _selectedEmployeeIds.addAll(_filteredEmployees.map((m) => m['id'].toString()));
-                        }
                       }),
                       child: Text(isAllRowsSelected ? 'Deselect All' : 'Select All'),
                     ),
@@ -626,11 +612,10 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                           tristate: _selectedEmployeeIds.isNotEmpty && !isAllRowsSelected,
                                           onChanged: (checked) {
                                             setState(() {
-                                              if (checked == true) {
+                                              if (checked == true)
                                                 _selectedEmployeeIds.addAll(_filteredEmployees.map((m) => m['id'].toString()));
-                                              } else {
+                                              else
                                                 _selectedEmployeeIds.clear();
-                                              }
                                             });
                                           },
                                         ),
@@ -717,11 +702,10 @@ class EmployeeListTabState extends ConsumerState<EmployeeListTab> {
                                             value: isRowSelected,
                                             onChanged: (checked) {
                                               setState(() {
-                                                if (checked == true) {
+                                                if (checked == true)
                                                   _selectedEmployeeIds.add(empId);
-                                                } else {
+                                                else
                                                   _selectedEmployeeIds.remove(empId);
-                                                }
                                               });
                                             },
                                           ),
@@ -831,9 +815,7 @@ class _DataCell extends StatelessWidget {
           bool addLineSpacing = line.startsWith("[SPACE]");
           String cleanText = line.replaceFirst("[LINE]", "").replaceFirst("[SPACE]", "");
 
-          if (cleanText.isEmpty) {
-            cleanText = "\u200B";
-          }
+          if (cleanText.isEmpty) cleanText = "\u200B";
 
           Widget lineWidget = Padding(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 3),
@@ -850,7 +832,7 @@ class _DataCell extends StatelessWidget {
             ),
           );
 
-          if (drawDivider) {
+          if (drawDivider)
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -859,14 +841,14 @@ class _DataCell extends StatelessWidget {
                 lineWidget,
               ],
             );
-          }
-          if (addLineSpacing) {
+
+          if (addLineSpacing)
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [const SizedBox(height: 13), lineWidget],
             );
-          }
+
           return lineWidget;
         }).toList(),
       ),

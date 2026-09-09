@@ -53,7 +53,7 @@ class AttendanceCard extends ConsumerWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(minWidth: 80, maxWidth: 100),
                 child: ElevatedButton(
-                  onPressed: isLoading ? null : () => ref.read(employeeAttendanceProvider.notifier).processCheckIn(),
+                  onPressed: isLoading ? null : () => ref.read(employeeAttendanceProvider.notifier).processCheckIn(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isCheckedIn ? Colors.red : Colors.blue,
                     foregroundColor: Colors.white,

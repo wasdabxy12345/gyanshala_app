@@ -1,3 +1,5 @@
+// temporarily removed responses for performance
+
 import 'dart:io';
 import 'dart:ui';
 
@@ -157,9 +159,8 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
           ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
           : "User (${row['user_id'].toString().substring(0, 6)})";
     }
-    if (index == 1) {
-      return formatISTDateTime(row['submitted_at'].toString());
-    }
+    if (index == 1) return formatISTDateTime(row['submitted_at'].toString());
+
     if (index == 2) {
       final dynamic lat = row['latitude'];
       final dynamic lon = row['longitude'];
@@ -174,12 +175,10 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
       final Map<String, dynamic> answersPayload = row['responses'] as Map<String, dynamic>? ?? {};
       final dynamic rawAnswer = answersPayload[questionId];
 
-      if (rawAnswer == null || (rawAnswer is List && rawAnswer.isEmpty)) {
-        return "-";
-      }
-      if (rawAnswer is List) {
-        return rawAnswer.join(', ');
-      }
+      if (rawAnswer == null || (rawAnswer is List && rawAnswer.isEmpty)) return "-";
+
+      if (rawAnswer is List) return rawAnswer.join(', ');
+
       return rawAnswer.toString();
     }
     return "";
@@ -187,9 +186,8 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
   List<String> _getUniqueValuesForColumn(int columnIndex) {
     final Set<String> values = {};
-    for (final row in _rawRows) {
-      values.add(_getCellValueString(row, columnIndex));
-    }
+    for (final row in _rawRows) values.add(_getCellValueString(row, columnIndex));
+
     return values.toList()..sort();
   }
 
@@ -259,11 +257,11 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
               onPressed: () {
                 setState(() {
                   final isAllSelected = currentSelection.length == allValues.length;
-                  if (isAllSelected) {
+                  if (isAllSelected)
                     _selectedColumnFilters.remove(columnIndex);
-                  } else {
+                  else
                     _selectedColumnFilters[columnIndex] = Set.from(currentSelection);
-                  }
+
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -286,27 +284,16 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_horizontalController.hasClients) {
-        debugPrint('Horizontal extent: ${_horizontalController.position.maxScrollExtent}');
-      }
+      if (_horizontalController.hasClients) debugPrint('Horizontal extent: ${_horizontalController.position.maxScrollExtent}');
     });
 
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
-    if (_rawRows.isEmpty) {
-      return const Center(child: Text("No submissions found"));
-    }
+    if (_rawRows.isEmpty) return const Center(child: Text("No submissions found"));
 
     final bool hasActiveFilters = _selectedColumnFilters.isNotEmpty;
 
-    final List<String> headerTitles = [
-      "Employee Name",
-      "Submission Date",
-      "GPS Location",
-      ..._columns.map((q) => (q['question'] ?? '').toString()),
-    ];
+    final List<String> headerTitles = ["Employee Name", "Submission Date", "GPS Location"];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -406,7 +393,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
             final dynamic lat = row['latitude'];
             final dynamic lon = row['longitude'];
 
-            final Map<String, dynamic> answersPayload = row['responses'] as Map<String, dynamic>? ?? {};
+            // final Map<String, dynamic> answersPayload = row['responses'] as Map<String, dynamic>? ?? {};
 
             return TableRow(
               children: [
@@ -418,21 +405,21 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                       : "No GPS Data",
                   textColor: lat != null ? Colors.black : Colors.grey,
                 ),
-                ..._columns.map((q) {
-                  final String questionId = q['id'].toString();
-                  final dynamic rawAnswer = answersPayload[questionId];
+                // ..._columns.map((q) {
+                //   final String questionId = q['id'].toString();
+                //   final dynamic rawAnswer = answersPayload[questionId];
 
-                  if (rawAnswer == null || (rawAnswer is List && rawAnswer.isEmpty)) {
-                    return _buildDataCell("-", textColor: Colors.grey);
-                  }
+                //   if (rawAnswer == null || (rawAnswer is List && rawAnswer.isEmpty)) {
+                //     return _buildDataCell("-", textColor: Colors.grey);
+                //   }
 
-                  if (rawAnswer is List) {
-                    final String stackedString = rawAnswer.map((item) => "• ${item.toString()}").join("\n");
-                    return _buildDataCell(stackedString);
-                  }
+                //   if (rawAnswer is List) {
+                //     final String stackedString = rawAnswer.map((item) => "• ${item.toString()}").join("\n");
+                //     return _buildDataCell(stackedString);
+                //   }
 
-                  return _buildDataCell(rawAnswer.toString());
-                }),
+                //   return _buildDataCell(rawAnswer.toString());
+                // }),
               ],
             );
           }).toList(),
@@ -550,9 +537,7 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
 
           if (rawAnswer == null) return '';
 
-          if (rawAnswer is List) {
-            return rawAnswer.join(', ');
-          }
+          if (rawAnswer is List) return rawAnswer.join(', ');
 
           return rawAnswer.toString();
         }).toList();
@@ -564,10 +549,10 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
           ...answers.map((e) => TextCellValue(e)),
         ]);
       }
+
       final bytes = excel.encode();
-      if (bytes == null) {
-        throw Exception('Failed to generate excel file');
-      }
+      if (bytes == null) throw Exception('Failed to generate excel file');
+
       final fileName = "${widget.formTitle} [${DateTime.now()}].xlsx";
       if (kIsWeb) {
         debugPrint("Excel bytes length: ${bytes.length}");
@@ -583,18 +568,14 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
         anchor.remove();
         html.Url.revokeObjectUrl(url);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started")));
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel download started")));
       } else {
         final dir = await getApplicationDocumentsDirectory();
         final file = File('${dir.path}/$fileName');
         await file.writeAsBytes(bytes);
         await OpenFilex.open(file.path);
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel exported successfully")));
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Excel exported successfully")));
       }
     } catch (e) {
       if (!mounted) return;
@@ -629,11 +610,10 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                           initialDate: tempFrom ?? DateTime.now(),
                         );
 
-                        if (picked != null) {
+                        if (picked != null)
                           setDialogState(() {
                             tempFrom = picked;
                           });
-                        }
                       },
                     ),
                     ListTile(
@@ -647,11 +627,10 @@ class DetailedFormResponsesTabState extends State<DetailedFormResponsesTab> {
                           initialDate: tempTo ?? DateTime.now(),
                         );
 
-                        if (picked != null) {
+                        if (picked != null)
                           setDialogState(() {
                             tempTo = picked;
                           });
-                        }
                       },
                     ),
                   ],

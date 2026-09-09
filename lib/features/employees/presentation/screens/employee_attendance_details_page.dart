@@ -31,7 +31,7 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
       final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
       final List<Map<String, dynamic>> schools = List<Map<String, dynamic>>.from(futures[1]);
 
-      if (logs.isNotEmpty) {
+      if (logs.isNotEmpty)
         try {
           final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
           for (var log in logs) {
@@ -40,7 +40,7 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
         } catch (profileError) {
           debugPrint("Profile Fetch Error: $profileError");
         }
-      }
+
       return {'logs': logs, 'schools': schools};
     } catch (e, stackTrace) {
       debugPrint("Database Exception in AttendanceDetailsPage: $e");
@@ -53,12 +53,9 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
     Map<String, dynamic>? checkInLog;
     Map<String, dynamic>? checkOutLog;
     for (var log in logs) {
-      if (log['status'] == 'check_in' && checkInLog == null) {
-        checkInLog = log;
-      }
-      if (log['status'] == 'check_out') {
-        checkOutLog = log;
-      }
+      if (log['status'] == 'check_in' && checkInLog == null) checkInLog = log;
+
+      if (log['status'] == 'check_out') checkOutLog = log;
     }
     if (checkInLog != null && checkOutLog != null) {
       final start = DateTime.parse(checkInLog['recorded_at']);
@@ -67,13 +64,13 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
       final hours = difference.inHours;
       final minutes = difference.inMinutes.remainder(60);
       final seconds = difference.inSeconds.remainder(60);
-      if (hours > 0) {
+
+      if (hours > 0)
         return "$hours hr $minutes min";
-      } else if (minutes > 0) {
+      else if (minutes > 0)
         return "$minutes min $seconds sec";
-      } else {
+      else
         return "$seconds sec";
-      }
     }
     return "Incomplete Cycle";
   }
@@ -86,9 +83,8 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
       final double radius = double.tryParse(school['radius'].toString()) ?? 50.0;
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
-        if (distance <= radius) {
-          return school;
-        }
+
+        if (distance <= radius) return school;
       }
     }
     return null;
@@ -111,10 +107,9 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchPageData(ref),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+          if (snapshot.hasError)
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -125,14 +120,12 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                 ),
               ),
             );
-          }
+
           final data = snapshot.data;
           final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
           final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
 
-          if (logs.isEmpty) {
-            return const Center(child: Text('No details available for this day.'));
-          }
+          if (logs.isEmpty) return const Center(child: Text('No details available for this day.'));
 
           final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null

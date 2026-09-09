@@ -79,18 +79,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   Future<Map<String, dynamic>> _loadDataPipeline() async {
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final employeesRaw =
-          ((await supabase.from('profiles').select('id, first_name, last_name, role, gender').inFilter('role', [
-                    'shikshaMitra38',
-                    'shikshaMitra910',
-                    'mentorBV8',
-                    'designTeamSS',
-                    'designTeamGS',
-                    'fieldCoordinator',
-                  ]))
-                  as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
+      final employeesRaw = ((await supabase.from('profiles').select('id, first_name, last_name, role, gender')) as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
 
       final profileSchoolsRaw =
           ((await supabase

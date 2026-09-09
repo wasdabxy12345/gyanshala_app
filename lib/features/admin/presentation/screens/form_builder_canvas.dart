@@ -76,9 +76,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
     } catch (e) {
       if (mounted) Navigator.pop(context);
       debugPrint("Error auto-populating choices from table configuration: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to download lookups: $e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Failed to download lookups: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -125,9 +124,8 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error loading form structure: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error loading form structure: $e"), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -241,16 +239,14 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
         await supabase.from('form_questions').upsert(finalRemappedRows, onConflict: 'id');
       }
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Form setup changes saved successfully!"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Form setup changes saved successfully!"), backgroundColor: Colors.green));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Failed to save changes: $e"), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Failed to save changes: $e"), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -259,7 +255,7 @@ class _FormBuilderCanvasState extends State<FormBuilderCanvas> {
 
   Future<List<String>> _pickOptionsFromExcel() async {
     try {
-      FilePickerResult? result = await FilePicker.pickFiles(
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls'],
         withData: true,

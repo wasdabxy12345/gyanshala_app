@@ -35,17 +35,14 @@ class AuthRepositoryImpl implements AuthRepository {
       final profileStatus = (profileData['account_status'].toString()).toLowerCase();
       final profileActionReason = profileData['action_reason']?.toString() ?? 'No reason specified';
 
-      if (profileStatus == 'suspended' || profileStatus == 'removed') {
+      if (profileStatus == 'suspended' || profileStatus == 'removed')
         throw Exception('Your account has been $profileStatus\n\nReason: $profileActionReason');
-      }
 
       final String role = profileData['role']?.toString() ?? '';
-      if (kIsWeb && !kDebugMode && role != 'admin') {
-        throw Exception('Web login is restricted to Administrator accounts only.');
-      }
-    } else {
+      if (kIsWeb && !kDebugMode && role != 'admin') throw Exception('Web login is restricted to Administrator accounts only.');
+    } else
       throw Exception('No account found associated with the entered phone number');
-    }
+
     final normalizedPhone = profileData['phone']?.toString() ?? identifier;
     final response = await _supabase.auth.signInWithPassword(phone: normalizedPhone, password: password);
 

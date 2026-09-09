@@ -11,7 +11,7 @@ import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/core/utils/excel_parser/excel_parser.dart'
     if (dart.library.js_interop) 'package:gyanshala_app/core/utils/excel_parser/excel_web_parser.dart'
     if (dart.library.io) 'package:gyanshala_app/core/utils/excel_parser/excel_mobile_parser.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide MapType;
 
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
@@ -81,7 +81,7 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Future<void> _importFromExcel() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls', 'csv'],
       withData: true,

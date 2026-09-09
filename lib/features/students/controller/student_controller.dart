@@ -178,7 +178,7 @@ class StudentController extends StateNotifier<bool> {
   }
 
   Future<void> importStudentsFromExcel() async {
-    FilePickerResult? result = await FilePicker.pickFiles(
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls'],
       withData: true,

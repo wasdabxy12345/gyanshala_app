@@ -42,18 +42,9 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
     try {
       final supabase = ref.read(supabaseClientProvider);
 
-      final profiles =
-          ((await supabase.from('profiles').select('role, gender').inFilter('role', [
-                    'shikshaMitra38',
-                    'shikshaMitra910',
-                    'mentorBV8',
-                    'designTeamSS',
-                    'designTeamGS',
-                    'fieldCoordinator',
-                  ]))
-                  as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
+      final profiles = ((await supabase.from('profiles').select('role, gender')) as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
 
       final schools = ((await supabase.from('schools').select('name, villages(name, clusters(name))')) as List<dynamic>)
           .map((e) => Map<String, dynamic>.from(e as Map))
@@ -76,7 +67,7 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
         if (cName.isNotEmpty) clusterNames.add(cName);
       }
 
-      if (mounted) {
+      if (mounted)
         setState(() {
           _allRoles = roles;
           _allGenders = genders;
@@ -85,7 +76,6 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           _allSchools = schoolNames.toList()..sort();
           _filtersLoaded = true;
         });
-      }
     } catch (_) {}
   }
 
@@ -179,7 +169,7 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
       firstDate: pickerFirstDate,
       lastDate: pickerLastDate,
     );
-    if (picked != null) {
+    if (picked != null)
       if (isStart) {
         final newEnd = picked.isAfter(widget.range.end) ? picked : widget.range.end;
         widget.onRangeChanged(DateTimeRange(start: picked, end: newEnd));
@@ -187,7 +177,6 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
         final newStart = picked.isBefore(widget.range.start) ? picked : widget.range.start;
         widget.onRangeChanged(DateTimeRange(start: newStart, end: picked));
       }
-    }
   }
 
   @override
@@ -334,7 +323,7 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 2),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 600) {
+              if (constraints.maxWidth < 600)
                 return Column(
                   children: [
                     buildDateSelectors(),
@@ -348,7 +337,7 @@ class EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                     ),
                   ],
                 );
-              }
+
               return Row(
                 children: [
                   Expanded(child: buildWeekControls()),
