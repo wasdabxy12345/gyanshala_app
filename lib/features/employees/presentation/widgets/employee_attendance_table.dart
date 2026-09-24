@@ -7,6 +7,7 @@ import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/employee_detail_attendance_page.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/employee_individual_day_attendance_page.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -989,12 +990,25 @@ class EmployeeAttendanceTableState
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      isMobile
-                                          ? "${emp['first_name'] ?? ''}\n${emp['last_name'] ?? ''}"
-                                          : (emp['full_name'] ?? 'Unknown'),
-                                      maxLines: isMobile ? 2 : 1,
-                                      style: nameStyle,
+                                    child: TextButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                EmployeeDetailAttendancePage(
+                                              userId: emp['user_id'] ?? '',
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Text(
+                                        isMobile
+                                            ? "${emp['first_name'] ?? ''}\n${emp['last_name'] ?? ''}"
+                                            : (emp['full_name'] ?? 'Unknown'),
+                                        maxLines: isMobile ? 2 : 1,
+                                        style: nameStyle,
+                                      ),
                                     ),
                                   ),
                                 ),

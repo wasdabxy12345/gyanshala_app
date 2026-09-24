@@ -16,7 +16,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide MapType;
 class LocationManagementScreen extends StatefulWidget {
   const LocationManagementScreen({super.key});
   @override
-  State<LocationManagementScreen> createState() => _LocationManagementScreenState();
+  State<LocationManagementScreen> createState() =>
+      _LocationManagementScreenState();
 }
 
 class _LocationManagementScreenState extends State<LocationManagementScreen> {
@@ -48,7 +49,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       }
 
       _hierarchy.sort((a, b) {
-        int compare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
+        int compare = (a['name'] as String).toLowerCase().compareTo(
+          (b['name'] as String).toLowerCase(),
+        );
         return _isAscending ? compare : -compare;
       });
 
@@ -56,7 +59,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         List villages = cluster['villages'] ?? [];
         if (columnIndex == 1)
           villages.sort((a, b) {
-            int vCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
+            int vCompare = (a['name'] as String).toLowerCase().compareTo(
+              (b['name'] as String).toLowerCase(),
+            );
             return _isAscending ? vCompare : -vCompare;
           });
 
@@ -64,7 +69,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           List schools = village['schools'] ?? [];
           if (columnIndex == 2)
             schools.sort((a, b) {
-              int sCompare = (a['name'] as String).toLowerCase().compareTo((b['name'] as String).toLowerCase());
+              int sCompare = (a['name'] as String).toLowerCase().compareTo(
+                (b['name'] as String).toLowerCase(),
+              );
               return _isAscending ? sCompare : -sCompare;
             });
           else if (columnIndex == 3)
@@ -100,7 +107,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         throw Exception("Could not read file data");
       }
       debugPrint("Parsing Excel file...");
-      final excelData = kIsWeb ? await ExcelParser.parseLocationMatrix(bytes) : _parseExcelDataNative(bytes);
+      final excelData = kIsWeb
+          ? await ExcelParser.parseLocationMatrix(bytes)
+          : _parseExcelDataNative(bytes);
       debugPrint("Excel parsed: ${excelData.length} rows");
       for (final rowData in excelData) {
         try {
@@ -114,14 +123,21 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           if (rowData['village'] != null && rowData['village'].isNotEmpty) {
             final villageResp = await _supabase
                 .from('villages')
-                .upsert({'name': rowData['village'], 'cluster_id': clusterId}, onConflict: 'name, cluster_id')
+                .upsert({
+                  'name': rowData['village'],
+                  'cluster_id': clusterId,
+                }, onConflict: 'name, cluster_id')
                 .select()
                 .single();
             villageId = villageResp['id'].toString();
           }
           if (villageId != null) {
-            double? lat = rowData['lat'] != null ? double.tryParse(rowData['lat']) : null;
-            double? lng = rowData['lng'] != null ? double.tryParse(rowData['lng']) : null;
+            double? lat = rowData['lat'] != null
+                ? double.tryParse(rowData['lat'])
+                : null;
+            double? lng = rowData['lng'] != null
+                ? double.tryParse(rowData['lng'])
+                : null;
             await _supabase.from('schools').upsert({
               'name': rowData['school'],
               'village_id': villageId,
@@ -137,12 +153,16 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       }
       await _fetchHierarchy();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Successfully processed $importedCount rows")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Successfully processed $importedCount rows")),
+        );
       }
     } catch (e) {
       debugPrint("Import Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Import Error: ${e.toString()}")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Import Error: ${e.toString()}")),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -165,7 +185,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         final schoolName = row[2]?.value?.toString().trim();
         final rawLat = row.length > 3 ? row[3]?.value?.toString().trim() : null;
         final rawLng = row.length > 3 ? row[3]?.value?.toString().trim() : null;
-        if (rawCluster?.toLowerCase() == 'cluster' && schoolName?.toLowerCase() == 'school') {
+        if (rawCluster?.toLowerCase() == 'cluster' &&
+            schoolName?.toLowerCase() == 'school') {
           continue;
         }
         if (rawCluster != null && rawCluster.isNotEmpty) {
@@ -176,7 +197,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         }
         if (lastClusterName == null || lastClusterName.isEmpty) continue;
         if (schoolName == null || schoolName.isEmpty) continue;
-        rows.add({'cluster': lastClusterName, 'village': lastVillageName, 'school': schoolName, 'lat': rawLat, 'lng': rawLng});
+        rows.add({
+          'cluster': lastClusterName,
+          'village': lastVillageName,
+          'school': schoolName,
+          'lat': rawLat,
+          'lng': rawLng,
+        });
       }
     }
     return rows;
@@ -200,7 +227,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     } catch (e) {
       debugPrint("Fetch error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error fetching data: $e")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error fetching data: $e")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -210,9 +239,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   Future<void> _confirmDelete(String type, dynamic entity) async {
     String warning = "";
     if (type == 'Cluster') {
-      warning = "\n\nWarning: Deleting this Cluster will also delete ALL associated Villages and Schools!";
+      warning =
+          "\n\nWarning: Deleting this Cluster will also delete ALL associated Villages and Schools!";
     } else if (type == 'Village') {
-      warning = "\n\nWarning: Deleting this Village will also delete ALL associated Schools!";
+      warning =
+          "\n\nWarning: Deleting this Village will also delete ALL associated Schools!";
     }
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -225,25 +256,36 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               const TextSpan(text: "Are you sure you want to delete "),
               TextSpan(
                 text: "'${entity['name']}'",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
               ),
               TextSpan(text: "?$warning"),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Delete Everything", style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Delete Everything",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
     if (!mounted) return;
     if (confirmed == true) {
-      String table = type == 'Cluster' ? 'clusters' : (type == 'Village' ? 'villages' : 'schools');
+      String table = type == 'Cluster'
+          ? 'clusters'
+          : (type == 'Village' ? 'villages' : 'schools');
       await _supabase.from(table).delete().eq('id', entity['id']);
       if (mounted) _fetchHierarchy();
     }
@@ -254,12 +296,20 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     for (var cluster in _filteredHierarchy) {
       List villages = cluster['villages'] ?? [];
       if (villages.isEmpty) {
-        rows.add(_buildSingleRow(cluster, null, null, showClusterActions: true, clusterBorder: true));
+        rows.add(
+          _buildSingleRow(
+            cluster,
+            null,
+            null,
+            showClusterActions: true,
+            clusterBorder: true,
+          ),
+        );
       } else {
         for (int vIdx = 0; vIdx < villages.length; vIdx++) {
           var village = villages[vIdx];
           List schools = village['schools'] ?? [];
-          if (schools.isEmpty) {
+          if (schools.isEmpty)
             rows.add(
               _buildSingleRow(
                 cluster,
@@ -271,8 +321,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 villageBorder: vIdx > 0,
               ),
             );
-          } else {
-            for (int sIdx = 0; sIdx < schools.length; sIdx++) {
+          else
+            for (int sIdx = 0; sIdx < schools.length; sIdx++)
               rows.add(
                 _buildSingleRow(
                   cluster,
@@ -286,8 +336,6 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   schoolBorder: sIdx > 0,
                 ),
               );
-            }
-          }
         }
       }
     }
@@ -307,14 +355,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }) {
     int clusterColBorder = clusterBorder ? 1 : 0;
     int villageColBorder = clusterBorder ? 1 : (villageBorder ? 2 : 0);
-    int schoolColBorder = clusterBorder ? 1 : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
+    int schoolColBorder = clusterBorder
+        ? 1
+        : (villageBorder ? 2 : (schoolBorder ? 3 : 0));
 
     String schoolCellText = "-";
-    String gradeCellText = school != null ? (school['grade_offering'] ?? "-") : "-";
+    String gradeCellText = school != null
+        ? (school['grade_offering'] ?? "-")
+        : "-";
 
-    if (school != null) {
-      schoolCellText = school['name'];
-    }
+    if (school != null) schoolCellText = school['name'];
+
     return TableRow(
       children: [
         _ActionCell(
@@ -333,13 +384,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         _ActionCell(
           text: schoolCellText,
           borderType: schoolColBorder,
-          onTap: school != null ? () => _showManageDialog('School', school) : null,
+          onTap: school != null
+              ? () => _showManageDialog('School', school)
+              : null,
         ),
 
         _ActionCell(
           text: gradeCellText,
           borderType: schoolColBorder,
-          onTap: school != null ? () => _showManageDialog('School', school) : null,
+          onTap: school != null
+              ? () => _showManageDialog('School', school)
+              : null,
         ),
       ],
     );
@@ -351,12 +406,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
       if (columnIndex == 0) values.add(clusterName);
-      if (columnIndex != 0 && _selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) continue;
+      if (columnIndex != 0 &&
+          _selectedClusterFilters != null &&
+          !_selectedClusterFilters!.contains(clusterName))
+        continue;
 
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
         if (columnIndex == 1) values.add(villageName);
-        if (columnIndex == 2 && _selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) continue;
+        if (columnIndex == 2 &&
+            _selectedVillageFilters != null &&
+            !_selectedVillageFilters!.contains(villageName))
+          continue;
 
         for (final school in (village['schools'] ?? [])) {
           if (columnIndex == 2)
@@ -371,15 +432,26 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     return values.toList()..sort();
   }
 
-  Future<void> _showFilterMenu({required BuildContext context, required int columnIndex}) async {
+  Future<void> _showFilterMenu({
+    required BuildContext context,
+    required int columnIndex,
+  }) async {
     final allValues = _getUniqueValues(columnIndex);
     Set<String> currentSelection = (columnIndex == 0)
-        ? (_selectedClusterFilters != null ? Set.from(_selectedClusterFilters!) : Set.from(allValues))
+        ? (_selectedClusterFilters != null
+              ? Set.from(_selectedClusterFilters!)
+              : Set.from(allValues))
         : (columnIndex == 1)
-        ? (_selectedVillageFilters != null ? Set.from(_selectedVillageFilters!) : Set.from(allValues))
+        ? (_selectedVillageFilters != null
+              ? Set.from(_selectedVillageFilters!)
+              : Set.from(allValues))
         : (columnIndex == 2)
-        ? (_selectedSchoolFilters != null ? Set.from(_selectedSchoolFilters!) : Set.from(allValues))
-        : (_selectedGradeFilters != null ? Set.from(_selectedGradeFilters!) : Set.from(allValues));
+        ? (_selectedSchoolFilters != null
+              ? Set.from(_selectedSchoolFilters!)
+              : Set.from(allValues))
+        : (_selectedGradeFilters != null
+              ? Set.from(_selectedGradeFilters!)
+              : Set.from(allValues));
     final dialogSearchController = TextEditingController();
     List<String> filteredValues = List.from(allValues);
 
@@ -395,10 +467,17 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
               children: [
                 TextField(
                   controller: dialogSearchController,
-                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search)),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                  ),
                   onChanged: (value) {
                     setStateDialog(() {
-                      filteredValues = allValues.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                      filteredValues = allValues
+                          .where(
+                            (e) =>
+                                e.toLowerCase().contains(value.toLowerCase()),
+                          )
+                          .toList();
                     });
                   },
                 ),
@@ -409,7 +488,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   title: const Text("Select All"),
                   onChanged: (checked) {
                     setStateDialog(() {
-                      currentSelection = checked == true ? Set.from(allValues) : {};
+                      currentSelection = checked == true
+                          ? Set.from(allValues)
+                          : {};
                     });
                   },
                 ),
@@ -423,7 +504,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         title: Text(value),
                         onChanged: (checked) {
                           setStateDialog(() {
-                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+                            checked == true
+                                ? currentSelection.add(value)
+                                : currentSelection.remove(value);
                           });
                         },
                       );
@@ -434,18 +517,33 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               onPressed: () {
                 setState(() {
                   if (columnIndex == 0)
-                    _selectedClusterFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                    _selectedClusterFilters =
+                        currentSelection.length == allValues.length
+                        ? null
+                        : Set.from(currentSelection);
                   if (columnIndex == 1)
-                    _selectedVillageFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                    _selectedVillageFilters =
+                        currentSelection.length == allValues.length
+                        ? null
+                        : Set.from(currentSelection);
                   if (columnIndex == 2)
-                    _selectedSchoolFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                    _selectedSchoolFilters =
+                        currentSelection.length == allValues.length
+                        ? null
+                        : Set.from(currentSelection);
                   if (columnIndex == 3)
-                    _selectedGradeFilters = currentSelection.length == allValues.length ? null : Set.from(currentSelection);
+                    _selectedGradeFilters =
+                        currentSelection.length == allValues.length
+                        ? null
+                        : Set.from(currentSelection);
                   _applyAllFilters();
                 });
                 Navigator.pop(ctx);
@@ -465,7 +563,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
     for (final cluster in _hierarchy) {
       final clusterName = cluster['name'].toString();
-      if (_selectedClusterFilters != null && !_selectedClusterFilters!.contains(clusterName)) {
+      if (_selectedClusterFilters != null &&
+          !_selectedClusterFilters!.contains(clusterName)) {
         continue;
       }
 
@@ -473,7 +572,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
 
       for (final village in (cluster['villages'] ?? [])) {
         final villageName = village['name'].toString();
-        if (_selectedVillageFilters != null && !_selectedVillageFilters!.contains(villageName)) {
+        if (_selectedVillageFilters != null &&
+            !_selectedVillageFilters!.contains(villageName)) {
           continue;
         }
 
@@ -482,10 +582,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
         for (final school in (village['schools'] ?? [])) {
           final schoolName = school['name'].toString();
           final gradeOffering = school['grade_offering']?.toString() ?? '';
-          if (_selectedSchoolFilters != null && !_selectedSchoolFilters!.contains(schoolName)) {
+          if (_selectedSchoolFilters != null &&
+              !_selectedSchoolFilters!.contains(schoolName)) {
             continue;
           }
-          if (_selectedGradeFilters != null && !_selectedGradeFilters!.contains(gradeOffering)) {
+          if (_selectedGradeFilters != null &&
+              !_selectedGradeFilters!.contains(gradeOffering)) {
             continue;
           }
           final matchesSearch =
@@ -499,20 +601,28 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             filteredSchools.add(school);
           }
         }
-        final villageMatchesSearch = query.isNotEmpty && villageName.toLowerCase().contains(query);
-        bool hasActiveSchoolOrGradeFilter = _selectedSchoolFilters != null || _selectedGradeFilters != null;
+        final villageMatchesSearch =
+            query.isNotEmpty && villageName.toLowerCase().contains(query);
+        bool hasActiveSchoolOrGradeFilter =
+            _selectedSchoolFilters != null || _selectedGradeFilters != null;
 
         if (filteredSchools.isNotEmpty ||
             villageMatchesSearch ||
-            (filteredSchools.isEmpty && (village['schools'] ?? []).isEmpty && !hasActiveSchoolOrGradeFilter)) {
+            (filteredSchools.isEmpty &&
+                (village['schools'] ?? []).isEmpty &&
+                !hasActiveSchoolOrGradeFilter)) {
           var newVillage = Map<String, dynamic>.from(village);
           newVillage['schools'] = filteredSchools;
           filteredVillages.add(newVillage);
         }
       }
-      final clusterMatchesSearch = query.isNotEmpty && clusterName.toLowerCase().contains(query);
+      final clusterMatchesSearch =
+          query.isNotEmpty && clusterName.toLowerCase().contains(query);
       bool hasActiveLowerFilters =
-          _selectedVillageFilters != null || _selectedSchoolFilters != null || _selectedGradeFilters != null || query.isNotEmpty;
+          _selectedVillageFilters != null ||
+          _selectedSchoolFilters != null ||
+          _selectedGradeFilters != null ||
+          query.isNotEmpty;
 
       if (filteredVillages.isNotEmpty ||
           clusterMatchesSearch ||
@@ -529,22 +639,49 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Future<void> _showLocationFormDialog(LocationFormConfig config) async {
-    final nameController = TextEditingController(text: config.isEditMode ? config.entity['name'] : '');
-    final latController = TextEditingController(text: config.isEditMode ? config.entity['latitude']?.toString() ?? '' : '');
-    final lngController = TextEditingController(text: config.isEditMode ? config.entity['longitude']?.toString() ?? '' : '');
-    final radiusController = TextEditingController(text: config.isEditMode ? config.entity['radius']?.toString() ?? '50' : '50');
+    final nameController = TextEditingController(
+      text: config.isEditMode ? config.entity['name'] : '',
+    );
+    final latController = TextEditingController(
+      text: config.isEditMode
+          ? config.entity['latitude']?.toString() ?? ''
+          : '',
+    );
+    final lngController = TextEditingController(
+      text: config.isEditMode
+          ? config.entity['longitude']?.toString() ?? ''
+          : '',
+    );
+    final radiusController = TextEditingController(
+      text: config.isEditMode
+          ? config.entity['radius']?.toString() ?? '50'
+          : '50',
+    );
 
-    String? selectedClusterId = config.isEditMode && config.type == 'Village' ? config.entity['cluster_id']?.toString() : null;
-    String? selectedVillageId = config.isEditMode && config.type == 'School' ? config.entity['village_id']?.toString() : null;
+    String? selectedClusterId = config.isEditMode && config.type == 'Village'
+        ? config.entity['cluster_id']?.toString()
+        : null;
+    String? selectedVillageId = config.isEditMode && config.type == 'School'
+        ? config.entity['village_id']?.toString()
+        : null;
     List<String> gradeOptions = ['BV - 8', '9 - 10'];
-    String? initialGrade = config.isEditMode && config.type == 'School' ? config.entity['grade_offering']?.toString() : 'BV - 8';
+    String? initialGrade = config.isEditMode && config.type == 'School'
+        ? config.entity['grade_offering']?.toString()
+        : 'BV - 8';
 
-    String? selectedGradeOffering = (initialGrade != null && gradeOptions.contains(initialGrade)) ? initialGrade : 'BV - 8';
+    String? selectedGradeOffering =
+        (initialGrade != null && gradeOptions.contains(initialGrade))
+        ? initialGrade
+        : 'BV - 8';
 
-    if (config.isEditMode && config.type == 'School' && selectedVillageId != null)
+    if (config.isEditMode &&
+        config.type == 'School' &&
+        selectedVillageId != null)
       try {
         final matchingCluster = _hierarchy.firstWhere(
-          (c) => (c['villages'] as List).any((v) => v['id'].toString() == selectedVillageId),
+          (c) => (c['villages'] as List).any(
+            (v) => v['id'].toString() == selectedVillageId,
+          ),
         );
         selectedClusterId = matchingCluster['id'].toString();
       } catch (_) {}
@@ -559,7 +696,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     double initialLng = config.isEditMode && config.entity['longitude'] != null
         ? double.tryParse(config.entity['longitude'].toString()) ?? 0
         : 0;
-    LatLng? selectedLatLng = initialLat != 0 || initialLng != 0 ? LatLng(initialLat, initialLng) : null;
+    LatLng? selectedLatLng = initialLat != 0 || initialLng != 0
+        ? LatLng(initialLat, initialLng)
+        : null;
 
     void updateMapLocation() {
       final double? lat = double.tryParse(latController.text.trim());
@@ -567,7 +706,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       final double radius = double.tryParse(radiusController.text.trim()) ?? 50;
 
       if (lat != null && lng != null && mapController != null)
-        _fitCircleInView(controller: mapController!, center: LatLng(lat, lng), radiusMeters: radius);
+        _fitCircleInView(
+          controller: mapController!,
+          center: LatLng(lat, lng),
+          radiusMeters: radius,
+        );
     }
 
     latController.addListener(updateMapLocation);
@@ -585,7 +728,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
             autofocus: true,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(qCtx), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(qCtx),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               onPressed: () async {
                 final name = quickController.text.trim();
@@ -598,9 +744,14 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                   insertData['cluster_id'] = selectedClusterId;
                 }
 
-                final response = await _supabase.from(table).insert(insertData).select().single();
+                final response = await _supabase
+                    .from(table)
+                    .insert(insertData)
+                    .select()
+                    .single();
                 await _fetchHierarchy();
-                if (qCtx.mounted) Navigator.pop(qCtx, response['id'].toString());
+                if (qCtx.mounted)
+                  Navigator.pop(qCtx, response['id'].toString());
               },
               child: const Text("Create"),
             ),
@@ -613,7 +764,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final double currentRadius = double.tryParse(radiusController.text.trim()) ?? 50.0;
+          final double currentRadius =
+              double.tryParse(radiusController.text.trim()) ?? 50.0;
 
           Widget buildUnifiedMapCanvas({VoidCallback? onTapOverride}) {
             return _LocationMapCanvas(
@@ -627,7 +779,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 mapController = ctrl;
                 if (selectedLatLng != null) {
                   await Future.delayed(const Duration(milliseconds: 150));
-                  await _fitCircleInView(controller: ctrl, center: selectedLatLng!, radiusMeters: currentRadius);
+                  await _fitCircleInView(
+                    controller: ctrl,
+                    center: selectedLatLng!,
+                    radiusMeters: currentRadius,
+                  );
                 }
               },
               onTap: (latLng) async {
@@ -639,7 +795,11 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                 if (onTapOverride != null) onTapOverride();
                 updateMapLocation();
                 if (mapController != null)
-                  await _fitCircleInView(controller: mapController!, center: latLng, radiusMeters: currentRadius);
+                  await _fitCircleInView(
+                    controller: mapController!,
+                    center: latLng,
+                    radiusMeters: currentRadius,
+                  );
               },
             );
           }
@@ -660,7 +820,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           child: Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 13,
+                                  vertical: 6,
+                                ),
                                 child: _buildMapHeaderControl(
                                   context: context,
                                   currentType: dialogMapType,
@@ -672,10 +835,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                     });
                                     setFsState(() {});
                                   },
-                                  onToggleFullscreen: () => Navigator.of(context).pop(),
+                                  onToggleFullscreen: () =>
+                                      Navigator.of(context).pop(),
                                 ),
                               ),
-                              Expanded(child: buildUnifiedMapCanvas(onTapOverride: () => setFsState(() {}))),
+                              Expanded(
+                                child: buildUnifiedMapCanvas(
+                                  onTapOverride: () => setFsState(() {}),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -707,7 +875,8 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (!config.isEditMode && config.type == 'School') ...[
+                          if (!config.isEditMode &&
+                              config.type == 'School') ...[
                             OutlinedButton.icon(
                               onPressed: () {
                                 Navigator.pop(ctx);
@@ -727,33 +896,53 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                   Expanded(child: Divider()),
                                   Padding(
                                     padding: EdgeInsets.symmetric(),
-                                    child: Text("OR MANUALLY", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                                    child: Text(
+                                      "OR MANUALLY",
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
                                   ),
                                   Expanded(child: Divider()),
                                 ],
                               ),
                             ),
                           ],
-                          if (config.type == 'Village' || config.type == 'School')
+                          if (config.type == 'Village' ||
+                              config.type == 'School')
                             DropdownButtonFormField<String>(
                               initialValue: selectedClusterId,
                               hint: const Text("Select Cluster"),
-                              decoration: config.isEditMode ? const InputDecoration(labelText: "Cluster") : null,
+                              decoration: config.isEditMode
+                                  ? const InputDecoration(labelText: "Cluster")
+                                  : null,
                               items: [
                                 if (!config.isEditMode)
                                   const DropdownMenuItem(
                                     value: "ADD_NEW",
                                     child: Text(
                                       "+ Add New Cluster...",
-                                      style: TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold),
+                                      style: TextStyle(
+                                        color: AppTheme.primaryBlue,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                ..._hierarchy.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))),
+                                ..._hierarchy.map(
+                                  (c) => DropdownMenuItem(
+                                    value: c['id'].toString(),
+                                    child: Text(c['name']),
+                                  ),
+                                ),
                               ],
                               onChanged: (val) async {
                                 if (val == "ADD_NEW") {
                                   final newId = await showQuickAdd("Cluster");
-                                  if (newId != null) setDialogState(() => selectedClusterId = newId);
+                                  if (newId != null)
+                                    setDialogState(
+                                      () => selectedClusterId = newId,
+                                    );
                                 } else {
                                   setDialogState(() {
                                     selectedClusterId = val;
@@ -767,8 +956,12 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                             DropdownButtonFormField<String>(
                               initialValue: selectedVillageId,
                               hint: const Text("Select Village"),
-                              disabledHint: const Text("Select a Cluster first"),
-                              decoration: config.isEditMode ? const InputDecoration(labelText: "Village") : null,
+                              disabledHint: const Text(
+                                "Select a Cluster first",
+                              ),
+                              decoration: config.isEditMode
+                                  ? const InputDecoration(labelText: "Village")
+                                  : null,
                               items: selectedClusterId == null
                                   ? []
                                   : [
@@ -777,21 +970,40 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                                           value: "ADD_NEW",
                                           child: Text(
                                             "+ Add New Village...",
-                                            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                                            style: TextStyle(
+                                              color: Colors.blue,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
-                                      ...(_hierarchy.firstWhere((c) => c['id'].toString() == selectedClusterId)['villages']
+                                      ...(_hierarchy.firstWhere(
+                                                (c) =>
+                                                    c['id'].toString() ==
+                                                    selectedClusterId,
+                                              )['villages']
                                               as List)
-                                          .map((v) => DropdownMenuItem(value: v['id'].toString(), child: Text(v['name']))),
+                                          .map(
+                                            (v) => DropdownMenuItem(
+                                              value: v['id'].toString(),
+                                              child: Text(v['name']),
+                                            ),
+                                          ),
                                     ],
                               onChanged: selectedClusterId == null
                                   ? null
                                   : (val) async {
                                       if (val == "ADD_NEW") {
-                                        final newId = await showQuickAdd("Village");
-                                        if (newId != null) setDialogState(() => selectedVillageId = newId);
+                                        final newId = await showQuickAdd(
+                                          "Village",
+                                        );
+                                        if (newId != null)
+                                          setDialogState(
+                                            () => selectedVillageId = newId,
+                                          );
                                       } else {
-                                        setDialogState(() => selectedVillageId = val);
+                                        setDialogState(
+                                          () => selectedVillageId = val,
+                                        );
                                       }
                                     },
                             ),
@@ -799,43 +1011,70 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           const SizedBox(height: 13),
                           TextField(
                             controller: nameController,
-                            decoration: InputDecoration(labelText: config.isEditMode ? config.type : "${config.type} Name"),
+                            decoration: InputDecoration(
+                              labelText: config.isEditMode
+                                  ? config.type
+                                  : "${config.type} Name",
+                            ),
                           ),
                           if (config.type == 'School') ...[
                             const SizedBox(height: 13),
                             DropdownButtonFormField<String>(
                               initialValue: selectedGradeOffering,
                               hint: const Text("Select Grades Offered"),
-                              decoration: const InputDecoration(labelText: "Grade Offering"),
+                              decoration: const InputDecoration(
+                                labelText: "Grade Offering",
+                              ),
                               items: const [
-                                DropdownMenuItem(value: "BV - 8", child: Text("BV - 8")),
-                                DropdownMenuItem(value: "9 - 10", child: Text("9 - 10")),
+                                DropdownMenuItem(
+                                  value: "BV - 8",
+                                  child: Text("BV - 8"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "9 - 10",
+                                  child: Text("9 - 10"),
+                                ),
                               ],
                               onChanged: (val) {
-                                setDialogState(() => selectedGradeOffering = val);
+                                setDialogState(
+                                  () => selectedGradeOffering = val,
+                                );
                               },
                             ),
                             const SizedBox(height: 13),
                             TextField(
                               controller: latController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: "Latitude"),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: "Latitude",
+                              ),
                             ),
                             const SizedBox(height: 13),
                             TextField(
                               controller: lngController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(labelText: "Longitude"),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: "Longitude",
+                              ),
                             ),
                             const SizedBox(height: 13),
                             TextField(
                               controller: radiusController,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: "Radius"),
+                              decoration: const InputDecoration(
+                                labelText: "Radius",
+                              ),
                               onChanged: (_) async {
                                 setDialogState(() {});
                                 updateMapLocation();
-                                if (mapController != null && selectedLatLng != null) {
+                                if (mapController != null &&
+                                    selectedLatLng != null) {
                                   await _fitCircleInView(
                                     controller: mapController!,
                                     center: selectedLatLng!,
@@ -871,7 +1110,9 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           const SizedBox(height: 13),
                           Expanded(
                             child: Container(
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
                               clipBehavior: Clip.antiAlias,
                               child: buildUnifiedMapCanvas(),
                             ),
@@ -894,10 +1135,16 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         _confirmDelete(config.type, config.entity);
                       },
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      label: const Text("Delete", style: TextStyle(color: Colors.red)),
+                      label: const Text(
+                        "Delete",
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   const Spacer(),
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Cancel"),
+                  ),
                   const SizedBox(width: 13),
                   ElevatedButton(
                     onPressed: () async {
@@ -908,27 +1155,45 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                         final Map<String, dynamic> dataPayload = {'name': name};
                         String table = config.type == 'Cluster'
                             ? 'clusters'
-                            : (config.type == 'Village' ? 'villages' : 'schools');
+                            : (config.type == 'Village'
+                                  ? 'villages'
+                                  : 'schools');
 
-                        if (config.type == 'Village') dataPayload['cluster_id'] = selectedClusterId;
+                        if (config.type == 'Village')
+                          dataPayload['cluster_id'] = selectedClusterId;
                         if (config.type == 'School') {
                           dataPayload['village_id'] = selectedVillageId;
                           dataPayload['grade_offering'] = selectedGradeOffering;
-                          dataPayload['latitude'] = double.tryParse(latController.text.trim());
-                          dataPayload['longitude'] = double.tryParse(lngController.text.trim());
-                          dataPayload['radius'] = double.tryParse(radiusController.text.trim()) ?? 50.0;
+                          dataPayload['latitude'] = double.tryParse(
+                            latController.text.trim(),
+                          );
+                          dataPayload['longitude'] = double.tryParse(
+                            lngController.text.trim(),
+                          );
+                          dataPayload['radius'] =
+                              double.tryParse(radiusController.text.trim()) ??
+                              50.0;
                         }
 
                         if (config.isEditMode)
-                          await _supabase.from(table).update(dataPayload).eq('id', config.entity['id']);
+                          await _supabase
+                              .from(table)
+                              .update(dataPayload)
+                              .eq('id', config.entity['id']);
                         else
                           await _supabase.from(table).insert(dataPayload);
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         _fetchHierarchy();
-                        messenger.showSnackBar(SnackBar(content: Text("${config.type} saved successfully!")));
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text("${config.type} saved successfully!"),
+                          ),
+                        );
                       } catch (e) {
-                        messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
+                        messenger.showSnackBar(
+                          SnackBar(content: Text("Error: $e")),
+                        );
                       }
                     },
                     child: Text(config.isEditMode ? "Save Changes" : "Save"),
@@ -946,11 +1211,15 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }
 
   Future<void> _showAddDialog(String type) async {
-    await _showLocationFormDialog(LocationFormConfig(type: type, isEditMode: false));
+    await _showLocationFormDialog(
+      LocationFormConfig(type: type, isEditMode: false),
+    );
   }
 
   Future<void> _showManageDialog(String type, dynamic entity) async {
-    await _showLocationFormDialog(LocationFormConfig(type: type, isEditMode: true, entity: entity));
+    await _showLocationFormDialog(
+      LocationFormConfig(type: type, isEditMode: true, entity: entity),
+    );
   }
 
   Widget _buildMapHeaderControl({
@@ -969,15 +1238,25 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(color: isSelected ? AppTheme.primaryBlue : Colors.transparent),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black),
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isSelected ? Colors.white : Colors.black,
+                ),
                 const SizedBox(width: 3),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : Colors.black,
+                  ),
                 ),
               ],
             ),
@@ -1002,7 +1281,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
           ),
         ),
         IconButton(
-          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
+          icon: Icon(
+            expanded ? Icons.fullscreen_exit : Icons.fullscreen,
+            color: AppTheme.primaryBlue,
+          ),
           onPressed: onToggleFullscreen,
         ),
       ],
@@ -1016,11 +1298,18 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
   }) async {
     final latOffset = radiusMeters / 111320.0;
 
-    final lngOffset = radiusMeters / (111320.0 * math.cos(center.latitude * math.pi / 180));
+    final lngOffset =
+        radiusMeters / (111320.0 * math.cos(center.latitude * math.pi / 180));
 
     final bounds = LatLngBounds(
-      southwest: LatLng(center.latitude - latOffset, center.longitude - lngOffset),
-      northeast: LatLng(center.latitude + latOffset, center.longitude + lngOffset),
+      southwest: LatLng(
+        center.latitude - latOffset,
+        center.longitude - lngOffset,
+      ),
+      northeast: LatLng(
+        center.latitude + latOffset,
+        center.longitude + lngOffset,
+      ),
     );
 
     await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 37));
@@ -1031,7 +1320,13 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Location Management"),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchHierarchy, tooltip: "Refresh")],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchHierarchy,
+            tooltip: "Refresh",
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: Colors.grey.shade300, height: 1),
@@ -1064,7 +1359,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           _SortableHeader(
                             label: "Cluster",
                             onSort: () => _onSort(0),
-                            onFilter: () => _showFilterMenu(context: context, columnIndex: 0),
+                            onFilter: () => _showFilterMenu(
+                              context: context,
+                              columnIndex: 0,
+                            ),
                             isSorted: _sortColumnIndex == 0,
                             isAscending: _isAscending,
                             hasFilter: _selectedClusterFilters != null,
@@ -1072,7 +1370,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           _SortableHeader(
                             label: "Village",
                             onSort: () => _onSort(1),
-                            onFilter: () => _showFilterMenu(context: context, columnIndex: 1),
+                            onFilter: () => _showFilterMenu(
+                              context: context,
+                              columnIndex: 1,
+                            ),
                             isSorted: _sortColumnIndex == 1,
                             isAscending: _isAscending,
                             hasFilter: _selectedVillageFilters != null,
@@ -1080,7 +1381,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           _SortableHeader(
                             label: "School",
                             onSort: () => _onSort(2),
-                            onFilter: () => _showFilterMenu(context: context, columnIndex: 2),
+                            onFilter: () => _showFilterMenu(
+                              context: context,
+                              columnIndex: 2,
+                            ),
                             isSorted: _sortColumnIndex == 2,
                             isAscending: _isAscending,
                             hasFilter: _selectedSchoolFilters != null,
@@ -1088,7 +1392,10 @@ class _LocationManagementScreenState extends State<LocationManagementScreen> {
                           _SortableHeader(
                             label: "Grade Offering",
                             onSort: () => _onSort(3),
-                            onFilter: () => _showFilterMenu(context: context, columnIndex: 3),
+                            onFilter: () => _showFilterMenu(
+                              context: context,
+                              columnIndex: 3,
+                            ),
                             isSorted: _sortColumnIndex == 3,
                             isAscending: _isAscending,
                             hasFilter: _selectedGradeFilters != null,
@@ -1136,14 +1443,26 @@ class _LocationMapCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     return GoogleMap(
       key: ValueKey('unified_canvas_${refreshKey}_${mapType.name}'),
-      initialCameraPosition: CameraPosition(target: selectedLatLng ?? LatLng(initialLat, initialLng), zoom: 13),
+      initialCameraPosition: CameraPosition(
+        target: selectedLatLng ?? LatLng(initialLat, initialLng),
+        zoom: 13,
+      ),
       mapType: mapType,
       zoomControlsEnabled: true,
       myLocationButtonEnabled: true,
-      gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+      gestureRecognizers: {
+        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+      },
       onMapCreated: onMapCreated,
       onTap: onTap,
-      markers: selectedLatLng == null ? {} : {Marker(markerId: const MarkerId('canvas_pin'), position: selectedLatLng!)},
+      markers: selectedLatLng == null
+          ? {}
+          : {
+              Marker(
+                markerId: const MarkerId('canvas_pin'),
+                position: selectedLatLng!,
+              ),
+            },
       circles: selectedLatLng == null
           ? {}
           : {
@@ -1187,11 +1506,18 @@ class _SortableHeader extends StatelessWidget {
               child: Row(
                 children: [
                   Flexible(
-                    child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                   const SizedBox(width: 3),
                   Icon(
-                    isSorted ? (isAscending ? Icons.arrow_upward : Icons.arrow_downward) : Icons.unfold_more,
+                    isSorted
+                        ? (isAscending
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward)
+                        : Icons.unfold_more,
                     size: 13,
                     color: isSorted ? AppTheme.primaryBlue : Colors.grey,
                   ),
@@ -1203,8 +1529,16 @@ class _SortableHeader extends StatelessWidget {
             onTap: onFilter,
             child: Container(
               padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(color: hasFilter ? AppTheme.primaryBlue.withAlpha(30) : Colors.transparent),
-              child: Icon(Icons.filter_alt, size: 13, color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700),
+              decoration: BoxDecoration(
+                color: hasFilter
+                    ? AppTheme.primaryBlue.withAlpha(30)
+                    : Colors.transparent,
+              ),
+              child: Icon(
+                Icons.filter_alt,
+                size: 13,
+                color: hasFilter ? AppTheme.primaryBlue : Colors.grey.shade700,
+              ),
             ),
           ),
         ],
@@ -1218,7 +1552,12 @@ class _ActionCell extends StatelessWidget {
   final bool isBold;
   final int borderType;
   final VoidCallback? onTap;
-  const _ActionCell({required this.text, this.isBold = false, this.borderType = 0, this.onTap});
+  const _ActionCell({
+    required this.text,
+    this.isBold = false,
+    this.borderType = 0,
+    this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     BorderSide? topSide;
@@ -1230,7 +1569,9 @@ class _ActionCell extends StatelessWidget {
       topSide = BorderSide(color: Colors.grey.shade300, width: 0.5);
     }
     return Container(
-      decoration: BoxDecoration(border: topSide != null ? Border(top: topSide) : null),
+      decoration: BoxDecoration(
+        border: topSide != null ? Border(top: topSide) : null,
+      ),
       child: InkWell(
         onTap: (text.isEmpty || text == "-") ? null : onTap,
         child: Padding(
@@ -1242,7 +1583,9 @@ class _ActionCell extends StatelessWidget {
                   text,
                   style: TextStyle(
                     fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                    color: (text.isEmpty || text == "-") ? Colors.grey : AppTheme.textPrimary,
+                    color: (text.isEmpty || text == "-")
+                        ? Colors.grey
+                        : AppTheme.textPrimary,
                     decorationStyle: TextDecorationStyle.dotted,
                   ),
                 ),
@@ -1260,5 +1603,9 @@ class LocationFormConfig {
   final bool isEditMode;
   final dynamic entity;
 
-  LocationFormConfig({required this.type, this.isEditMode = false, this.entity});
+  LocationFormConfig({
+    required this.type,
+    this.isEditMode = false,
+    this.entity,
+  });
 }
