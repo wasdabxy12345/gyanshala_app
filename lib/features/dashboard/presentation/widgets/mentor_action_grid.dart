@@ -6,13 +6,13 @@ class MentorActionGrid extends StatelessWidget {
   MentorActionGrid({super.key});
 
   final List<MenuItem> menuItems = [
-    // const MenuItem(title: "Students", icon: Icons.group, color: Colors.red, targetScreen: MarkStudentAttendancePage()),
     const MenuItem(
       title: "Monitoring and Evaluation Tools",
       icon: Icons.assignment_turned_in,
-      color: Colors.amber,
+      color: Colors.red,
       targetScreen: AvailableFormsScreen(),
     ),
+    // const MenuItem(title: "Dashboard", icon: Icons.analytics, color: Colors.amber, targetScreen: MentorDashboard()),
     // const MenuItem(title: "Test Data", icon: Icons.bar_chart, color: Colors.green),
     // const MenuItem(title: "Monthly Reports", icon: Icons.description, color: Colors.blue),
   ];
@@ -34,9 +34,14 @@ class MentorActionGrid extends StatelessWidget {
     return InkWell(
       onTap: () {
         if (item.targetScreen != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => item.targetScreen!));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => item.targetScreen!),
+          );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("not yet implemented")));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("not yet implemented")));
         }
       },
       child: Container(
@@ -49,7 +54,10 @@ class MentorActionGrid extends StatelessWidget {
               child: Icon(item.icon, color: item.color),
             ),
             const SizedBox(height: 13),
-            Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              item.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ),
@@ -63,5 +71,10 @@ class MenuItem {
   final Color color;
   final Widget? targetScreen;
 
-  const MenuItem({required this.title, required this.icon, required this.color, this.targetScreen});
+  const MenuItem({
+    required this.title,
+    required this.icon,
+    required this.color,
+    this.targetScreen,
+  });
 }

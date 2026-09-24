@@ -31,5 +31,8 @@
         "cmd": "dart run sort_pubspec_dependencies"
       }
     ]
+  },
+  "[dart]": {
+    "editor.formatOnSave": true
   }
 }

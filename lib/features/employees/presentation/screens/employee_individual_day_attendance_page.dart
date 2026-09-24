@@ -10,10 +10,14 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
-class EmployeeAttendanceDetailsPage extends ConsumerWidget {
+class EmployeeIndividualDayAttendancePage extends ConsumerWidget {
   final String userId;
   final String dateString;
-  const EmployeeAttendanceDetailsPage({super.key, required this.userId, required this.dateString});
+  const EmployeeIndividualDayAttendancePage({
+    super.key,
+    required this.userId,
+    required this.dateString,
+  });
 
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
@@ -26,14 +30,23 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
             .gte('recorded_at', '$dateString 00:00:00+00')
             .lte('recorded_at', '$dateString 23:59:59+00')
             .order('recorded_at', ascending: true),
-        supabase.from('schools').select('id, name, latitude, longitude, radius'),
+        supabase
+            .from('schools')
+            .select('id, name, latitude, longitude, radius'),
       ]);
-      final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(futures[0]);
-      final List<Map<String, dynamic>> schools = List<Map<String, dynamic>>.from(futures[1]);
+      final List<Map<String, dynamic>> logs = List<Map<String, dynamic>>.from(
+        futures[0],
+      );
+      final List<Map<String, dynamic>> schools =
+          List<Map<String, dynamic>>.from(futures[1]);
 
       if (logs.isNotEmpty)
         try {
-          final profileResponse = await supabase.from('profiles').select('first_name, last_name, role').eq('id', userId).single();
+          final profileResponse = await supabase
+              .from('profiles')
+              .select('first_name, last_name, role')
+              .eq('id', userId)
+              .single();
           for (var log in logs) {
             log['profiles'] = profileResponse;
           }
@@ -75,12 +88,21 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
     return "Incomplete Cycle";
   }
 
-  Map<String, dynamic>? _checkSchoolGeofence(double? lat, double? lng, List<Map<String, dynamic>> schools) {
+  Map<String, dynamic>? _checkSchoolGeofence(
+    double? lat,
+    double? lng,
+    List<Map<String, dynamic>> schools,
+  ) {
     if (lat == null || lng == null) return null;
     for (var school in schools) {
-      final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
-      final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
-      final double radius = double.tryParse(school['radius'].toString()) ?? 50.0;
+      final double? sLat = school['latitude'] != null
+          ? double.tryParse(school['latitude'].toString())
+          : null;
+      final double? sLng = school['longitude'] != null
+          ? double.tryParse(school['longitude'].toString())
+          : null;
+      final double radius =
+          double.tryParse(school['radius'].toString()) ?? 50.0;
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
 
@@ -90,10 +112,18 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
     return null;
   }
 
-  double _coordinateDistance(double lat1, double lon1, double lat2, double lon2) {
+  double _coordinateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
     var p = 0.017453292519943295;
     var c = math.cos;
-    var a = 0.5 - c((lat2 - lat1) * p) / 2 + c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
+    var a =
+        0.5 -
+        c((lat2 - lat1) * p) / 2 +
+        c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
     return 12742 * math.asin(math.sqrt(a)) * 1000;
   }
 
@@ -107,7 +137,8 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchPageData(ref),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting)
+            return const Center(child: CircularProgressIndicator());
 
           if (snapshot.hasError)
             return Center(
@@ -125,14 +156,20 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
           final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
           final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
 
-          if (logs.isEmpty) return const Center(child: Text('No details available for this day.'));
+          if (logs.isEmpty)
+            return const Center(
+              child: Text('No details available for this day.'),
+            );
 
           final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null
-              ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}".trim()
+              ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}"
+                    .trim()
               : "Unknown Employee";
           final role = profile?['role'] ?? 'N/A';
-          final formattedDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(logs.first['recorded_at']).toLocal());
+          final formattedDate = DateFormat(
+            'dd MMMM yyyy',
+          ).format(DateTime.parse(logs.first['recorded_at']).toLocal());
           final totalHours = _calculateTotalHours(logs);
 
           Widget logsDetailsPanel() {
@@ -140,7 +177,13 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(employeeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(
+                  employeeName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 13),
                 Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
                 const Divider(height: 13),
@@ -149,16 +192,30 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                 const Divider(height: 13),
                 ...logs.map((log) {
                   final isCheckIn = log['status'] == 'check_in';
-                  final timeStr = DateFormat('hh:mm:ss a').format(DateTime.parse(log['recorded_at']).toLocal());
-                  final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
-                  final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+                  final timeStr = DateFormat(
+                    'hh:mm:ss a',
+                  ).format(DateTime.parse(log['recorded_at']).toLocal());
+                  final double? lat = log['latitude'] != null
+                      ? double.tryParse(log['latitude'].toString())
+                      : null;
+                  final double? lng = log['longitude'] != null
+                      ? double.tryParse(log['longitude'].toString())
+                      : null;
 
-                  final matchingSchool = _checkSchoolGeofence(lat, lng, schools);
+                  final matchingSchool = _checkSchoolGeofence(
+                    lat,
+                    lng,
+                    schools,
+                  );
                   final bool isAtSchool = matchingSchool != null;
-                  final String presenceSubtitle = isAtSchool ? "At: ${matchingSchool['name']}" : "off-site";
+                  final String presenceSubtitle = isAtSchool
+                      ? "At: ${matchingSchool['name']}"
+                      : "off-site";
 
-                  final String variance = log['attendance_time_variance']?.toString() ?? "99:99:99";
-                  final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
+                  final String variance =
+                      log['attendance_time_variance']?.toString() ?? "99:99:99";
+                  final bool isOnTime =
+                      variance == "00:00:00" || variance == "00:00:00.000";
 
                   IconData statusIcon;
                   Color statusColor;
@@ -167,11 +224,15 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                   if (isAtSchool && isOnTime) {
                     statusIcon = Icons.check;
                     statusColor = Colors.green;
-                    statusLabel = isCheckIn ? "On-Time Check In" : "On-Time Check Out";
+                    statusLabel = isCheckIn
+                        ? "On-Time Check In"
+                        : "On-Time Check Out";
                   } else if (isAtSchool && !isOnTime) {
                     statusIcon = Icons.access_time;
                     statusColor = Colors.amber;
-                    statusLabel = variance == "99:99:99" ? "Timing Untracked" : "Wrong Time (Variance: $variance)";
+                    statusLabel = variance == "99:99:99"
+                        ? "Timing Untracked"
+                        : "Wrong Time (Variance: $variance)";
                   } else if (!isAtSchool && isOnTime) {
                     statusIcon = Icons.wrong_location;
                     statusColor = Colors.amber;
@@ -179,7 +240,9 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                   } else {
                     statusIcon = Icons.warning;
                     statusColor = Colors.purple;
-                    statusLabel = variance == "99:99:99" ? "Off-Site & Untracked" : "Off-Site & Wrong Time ($variance)";
+                    statusLabel = variance == "99:99:99"
+                        ? "Off-Site & Untracked"
+                        : "Off-Site & Wrong Time ($variance)";
                   }
 
                   return ListTile(
@@ -187,17 +250,27 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                     leading: Icon(statusIcon, color: statusColor, size: 26),
                     title: Row(
                       children: [
-                        Text(isCheckIn ? "Check In" : "Check Out", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          isCheckIn ? "Check In" : "Check Out",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.1),
                             border: Border.all(color: statusColor, width: 0.5),
                           ),
                           child: Text(
                             isAtSchool ? "at a school" : "Off-Site",
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor,
+                            ),
                           ),
                         ),
                       ],
@@ -208,11 +281,21 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                         Text(presenceSubtitle),
                         Text(
                           statusLabel,
-                          style: TextStyle(fontSize: 11, color: statusColor, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: statusColor,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
-                    trailing: Text(timeStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    trailing: Text(
+                      timeStr,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   );
                 }),
               ],
@@ -233,7 +316,11 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                           const SizedBox(width: 13),
                           Expanded(
                             flex: 2,
-                            child: AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
+                            child: AttendanceMultiMapView(
+                              logs: logs,
+                              schools: schools,
+                              employeeName: employeeName,
+                            ),
                           ),
                         ],
                       )
@@ -242,7 +329,11 @@ class EmployeeAttendanceDetailsPage extends ConsumerWidget {
                         children: [
                           logsDetailsPanel(),
                           const Divider(height: 13),
-                          AttendanceMultiMapView(logs: logs, schools: schools, employeeName: employeeName),
+                          AttendanceMultiMapView(
+                            logs: logs,
+                            schools: schools,
+                            employeeName: employeeName,
+                          ),
                         ],
                       ),
               ),
@@ -287,7 +378,10 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     _initializeMapData();
   }
 
-  Future<BitmapDescriptor> _createCustomMarkerBitmap({required String text, required Color badgeColor}) async {
+  Future<BitmapDescriptor> _createCustomMarkerBitmap({
+    required String text,
+    required Color badgeColor,
+  }) async {
     const int width = 60;
     const int height = 50;
     final pictureRecorder = ui.PictureRecorder();
@@ -309,14 +403,24 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     path.close();
     canvas.drawPath(path, paint);
 
-    final textPainter = TextPainter(textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center);
+    final textPainter = TextPainter(
+      textDirection: ui.TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
     textPainter.text = TextSpan(
       text: text,
-      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
     );
     textPainter.layout(minWidth: 0, maxWidth: width.toDouble());
 
-    final offset = Offset((width - textPainter.width) / 2, ((height - 10) - textPainter.height) / 2);
+    final offset = Offset(
+      (width - textPainter.width) / 2,
+      ((height - 10) - textPainter.height) / 2,
+    );
     textPainter.paint(canvas, offset);
 
     final picture = pictureRecorder.endRecording();
@@ -328,12 +432,22 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
 
   Future<void> _initializeMapData() async {
     List<LatLng> tracePoints = [];
-    final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(text: "IN", badgeColor: Colors.blue);
-    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(text: "OUT", badgeColor: Colors.blue);
+    final BitmapDescriptor checkInIcon = await _createCustomMarkerBitmap(
+      text: "IN",
+      badgeColor: Colors.blue,
+    );
+    final BitmapDescriptor checkOutIcon = await _createCustomMarkerBitmap(
+      text: "OUT",
+      badgeColor: Colors.blue,
+    );
 
     for (var school in widget.schools) {
-      final double? sLat = school['latitude'] != null ? double.tryParse(school['latitude'].toString()) : null;
-      final double? sLng = school['longitude'] != null ? double.tryParse(school['longitude'].toString()) : null;
+      final double? sLat = school['latitude'] != null
+          ? double.tryParse(school['latitude'].toString())
+          : null;
+      final double? sLng = school['longitude'] != null
+          ? double.tryParse(school['longitude'].toString())
+          : null;
       final double radius = double.tryParse(school['radius'].toString()) ?? 50;
       if (sLat != null && sLng != null) {
         final schoolPoint = LatLng(sLat, sLng);
@@ -341,8 +455,13 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
           Marker(
             markerId: MarkerId('school_${school['id']}'),
             position: schoolPoint,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-            infoWindow: InfoWindow(title: school['name'] ?? 'School', snippet: 'Radius: ${radius.toStringAsFixed(0)}m'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueViolet,
+            ),
+            infoWindow: InfoWindow(
+              title: school['name'] ?? 'School',
+              snippet: 'Radius: ${radius.toStringAsFixed(0)}m',
+            ),
           ),
         );
         _circles.add(
@@ -359,8 +478,12 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     }
 
     for (var log in widget.logs) {
-      final double? lat = log['latitude'] != null ? double.tryParse(log['latitude'].toString()) : null;
-      final double? lng = log['longitude'] != null ? double.tryParse(log['longitude'].toString()) : null;
+      final double? lat = log['latitude'] != null
+          ? double.tryParse(log['latitude'].toString())
+          : null;
+      final double? lng = log['longitude'] != null
+          ? double.tryParse(log['longitude'].toString())
+          : null;
       if (lat != null && lng != null) {
         final point = LatLng(lat, lng);
         tracePoints.add(point);
@@ -377,10 +500,19 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     }
 
     if (tracePoints.length > 1) {
-      _polylines.add(Polyline(polylineId: const PolylineId('route_trace'), points: tracePoints, color: Colors.black54, width: 3));
+      _polylines.add(
+        Polyline(
+          polylineId: const PolylineId('route_trace'),
+          points: tracePoints,
+          color: Colors.black54,
+          width: 3,
+        ),
+      );
     }
 
-    final pointsToBound = tracePoints.isNotEmpty ? tracePoints : _markers.map((m) => m.position).toList();
+    final pointsToBound = tracePoints.isNotEmpty
+        ? tracePoints
+        : _markers.map((m) => m.position).toList();
     if (pointsToBound.isNotEmpty) {
       double minLat = pointsToBound.first.latitude;
       double maxLat = pointsToBound.first.latitude;
@@ -406,7 +538,12 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     }
   }
 
-  Widget _buildMapTypeButton({required IconData icon, required String label, required MapType type, VoidCallback? onRefresh}) {
+  Widget _buildMapTypeButton({
+    required IconData icon,
+    required String label,
+    required MapType type,
+    VoidCallback? onRefresh,
+  }) {
     final bool isSelected = _mapType == type;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -423,15 +560,25 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(color: isSelected ? AppTheme.primaryBlue : Colors.transparent),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 13, color: isSelected ? Colors.white : Colors.black),
+              Icon(
+                icon,
+                size: 13,
+                color: isSelected ? Colors.white : Colors.black,
+              ),
               const SizedBox(width: 3),
               Text(
                 label,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.black),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : Colors.black,
+                ),
               ),
             ],
           ),
@@ -450,15 +597,35 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildMapTypeButton(icon: Icons.map, label: "Map", type: MapType.normal, onRefresh: onRefresh),
-              _buildMapTypeButton(icon: Icons.satellite_alt, label: "Sat", type: MapType.satellite, onRefresh: onRefresh),
-              _buildMapTypeButton(icon: Icons.layers, label: "Hybrid", type: MapType.hybrid, onRefresh: onRefresh),
+              _buildMapTypeButton(
+                icon: Icons.map,
+                label: "Map",
+                type: MapType.normal,
+                onRefresh: onRefresh,
+              ),
+              _buildMapTypeButton(
+                icon: Icons.satellite_alt,
+                label: "Sat",
+                type: MapType.satellite,
+                onRefresh: onRefresh,
+              ),
+              _buildMapTypeButton(
+                icon: Icons.layers,
+                label: "Hybrid",
+                type: MapType.hybrid,
+                onRefresh: onRefresh,
+              ),
             ],
           ),
         ),
         IconButton(
-          icon: Icon(expanded ? Icons.fullscreen_exit : Icons.fullscreen, color: AppTheme.primaryBlue),
-          onPressed: expanded ? () => Navigator.of(context).pop() : _openExpandedView,
+          icon: Icon(
+            expanded ? Icons.fullscreen_exit : Icons.fullscreen,
+            color: AppTheme.primaryBlue,
+          ),
+          onPressed: expanded
+              ? () => Navigator.of(context).pop()
+              : _openExpandedView,
         ),
       ],
     );
@@ -471,17 +638,24 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
-      initialCameraPosition: CameraPosition(target: _markers.first.position, zoom: 20),
+      initialCameraPosition: CameraPosition(
+        target: _markers.first.position,
+        zoom: 20,
+      ),
       markers: _markers,
       circles: _circles,
       polylines: _polylines,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
-      gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+      gestureRecognizers: {
+        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+      },
       onMapCreated: (controller) {
         _mapController = controller;
         if (_mapBounds != null) {
-          _mapController?.animateCamera(CameraUpdate.newLatLngBounds(_mapBounds!, 60));
+          _mapController?.animateCamera(
+            CameraUpdate.newLatLngBounds(_mapBounds!, 60),
+          );
         }
       },
     );
@@ -504,7 +678,10 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
                     children: [
                       Container(
                         color: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 8,
+                        ),
                         child: _buildMapHeader(
                           expanded: true,
                           onRefresh: () {
@@ -534,7 +711,9 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       builder: (context, constraints) {
         final Widget mapContainer = Container(
           width: double.infinity,
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+          ),
           clipBehavior: Clip.antiAlias,
           child: _buildBaseMapWidget(),
         );
