@@ -7,7 +7,7 @@ import 'package:flutter/painting.dart' as painting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
-import 'package:gyanshala_app/features/employees/presentation/screens/employee_attendance_details_page.dart';
+import 'package:gyanshala_app/features/employees/presentation/screens/employee_individual_day_attendance_page.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -37,10 +37,12 @@ class EmployeeAttendanceTable extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<EmployeeAttendanceTable> createState() => EmployeeAttendanceTableState();
+  ConsumerState<EmployeeAttendanceTable> createState() =>
+      EmployeeAttendanceTableState();
 }
 
-class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable> {
+class EmployeeAttendanceTableState
+    extends ConsumerState<EmployeeAttendanceTable> {
   late Future<Map<String, dynamic>> _attendanceFetchFuture;
   final ScrollController _horizontalHeaderController = ScrollController();
   final ScrollController _horizontalBodyController = ScrollController();
@@ -69,7 +71,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   @override
   void didUpdateWidget(covariant EmployeeAttendanceTable oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.startDate != widget.startDate || oldWidget.endDate != widget.endDate) {
+    if (oldWidget.startDate != widget.startDate ||
+        oldWidget.endDate != widget.endDate) {
       setState(() {
         _attendanceFetchFuture = _loadDataPipeline();
       });
@@ -79,19 +82,27 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   Future<Map<String, dynamic>> _loadDataPipeline() async {
     try {
       final supabase = ref.read(supabaseClientProvider);
-      final employeesRaw = ((await supabase.from('profiles').select('id, first_name, last_name, role, gender')) as List<dynamic>)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-
-      final profileSchoolsRaw =
+      final employeesRaw =
           ((await supabase
-                      .from('profile_schools')
-                      .select('user_id, school_id, schools(id, name, villages(id, name, clusters(id, name)))'))
+                      .from('profiles')
+                      .select('id, first_name, last_name, role, gender'))
                   as List<dynamic>)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
 
-      final utcRange = toUtcRange(DateTimeRange(start: widget.startDate, end: widget.endDate));
+      final profileSchoolsRaw =
+          ((await supabase
+                      .from('profile_schools')
+                      .select(
+                        'user_id, school_id, schools(id, name, villages(id, name, clusters(id, name)))',
+                      ))
+                  as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+
+      final utcRange = toUtcRange(
+        DateTimeRange(start: widget.startDate, end: widget.endDate),
+      );
       final attendanceRecordsRaw =
           (await supabase
                   .from('employee_attendance')
@@ -112,10 +123,14 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     }
   }
 
-  static Map<String, dynamic> _processAttendanceData(Map<String, dynamic> rawPayload) {
-    final List<Map<String, dynamic>> employees = List<Map<String, dynamic>>.from(rawPayload['employees']);
+  static Map<String, dynamic> _processAttendanceData(
+    Map<String, dynamic> rawPayload,
+  ) {
+    final List<Map<String, dynamic>> employees =
+        List<Map<String, dynamic>>.from(rawPayload['employees']);
     final List<dynamic> attendanceRecords = rawPayload['records'];
-    final List<Map<String, dynamic>> profileSchools = List<Map<String, dynamic>>.from(rawPayload['profileSchools']);
+    final List<Map<String, dynamic>> profileSchools =
+        List<Map<String, dynamic>>.from(rawPayload['profileSchools']);
 
     Map<String, List<Map<String, String>>> userSchools = {};
 
@@ -132,7 +147,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       if (schoolName.isEmpty) continue;
 
-      userSchools.putIfAbsent(uid, () => []).add({'school': schoolName, 'village': villageName, 'cluster': clusterName});
+      userSchools.putIfAbsent(uid, () => []).add({
+        'school': schoolName,
+        'village': villageName,
+        'cluster': clusterName,
+      });
     }
     for (final school in userSchools.values) {
       final seen = <String>{};
@@ -144,7 +163,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       school.sort((a, b) {
         final schoolCompare = (a['school'] ?? '').compareTo(b['school'] ?? '');
         if (schoolCompare != 0) return schoolCompare;
-        final villageCompare = (a['village'] ?? '').compareTo(b['village'] ?? '');
+        final villageCompare = (a['village'] ?? '').compareTo(
+          b['village'] ?? '',
+        );
         if (villageCompare != 0) return villageCompare;
         return (a['cluster'] ?? '').compareTo(b['cluster'] ?? '');
       });
@@ -181,7 +202,11 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     }
 
     final sortedRecords = List.from(attendanceRecords)
-      ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
+      ..sort(
+        (a, b) => DateTime.parse(
+          a['recorded_at'],
+        ).compareTo(DateTime.parse(b['recorded_at'])),
+      );
 
     for (final record in sortedRecords) {
       final userId = record['user_id'];
@@ -189,20 +214,37 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final recordedAt = DateTime.parse(record['recorded_at']).toLocal();
       final dateKey = DateFormat('yyyy-MM-dd').format(recordedAt);
       final schoolData = record['schools'];
-      final currentSchoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
-      final currentVariance = record['attendance_time_variance']?.toString() ?? "99:99:99";
-      final currentMap = employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
+      final currentSchoolName =
+          (schoolData != null && schoolData['name'] != null)
+          ? schoolData['name'].toString()
+          : "off-site";
+      final currentVariance =
+          record['attendance_time_variance']?.toString() ?? "99:99:99";
+      final currentMap =
+          employeeData[userId]!['attendance_map'] as Map<String, dynamic>;
       if (!currentMap.containsKey(dateKey)) {
-        currentMap[dateKey] = {'status': 'present', 'location': currentSchoolName, 'variance': currentVariance};
+        currentMap[dateKey] = {
+          'status': 'present',
+          'location': currentSchoolName,
+          'variance': currentVariance,
+        };
       } else {
         final existingData = currentMap[dateKey] as Map<String, dynamic>;
         String finalLocation = existingData['location'];
-        if (currentSchoolName == "off-site" || finalLocation == "off-site") finalLocation = "off-site";
+        if (currentSchoolName == "off-site" || finalLocation == "off-site")
+          finalLocation = "off-site";
         String finalVariance = existingData['variance'];
-        bool currentHasError = currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
-        bool existingHasError = finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
-        if (currentHasError || existingHasError) finalVariance = currentHasError ? currentVariance : finalVariance;
-        currentMap[dateKey] = {'status': 'present', 'location': finalLocation, 'variance': finalVariance};
+        bool currentHasError =
+            currentVariance != "00:00:00" && currentVariance != "00:00:00.000";
+        bool existingHasError =
+            finalVariance != "00:00:00" && finalVariance != "00:00:00.000";
+        if (currentHasError || existingHasError)
+          finalVariance = currentHasError ? currentVariance : finalVariance;
+        currentMap[dateKey] = {
+          'status': 'present',
+          'location': finalLocation,
+          'variance': finalVariance,
+        };
       }
     }
     return {'employees': employeeData, 'records': attendanceRecords};
@@ -235,17 +277,29 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
 
       Map<String, Map<String, dynamic>> structuredRows = {};
       final sortedRecords = List.from(rawRecords)
-        ..sort((a, b) => DateTime.parse(a['recorded_at']).compareTo(DateTime.parse(b['recorded_at'])));
+        ..sort(
+          (a, b) => DateTime.parse(
+            a['recorded_at'],
+          ).compareTo(DateTime.parse(b['recorded_at'])),
+        );
 
       for (final record in sortedRecords) {
         final userId = record['user_id'];
         final employee = employeeMap[userId];
-        final String fullName = employee != null ? employee['full_name'] : 'Unknown Employee';
-        final String role = employee != null ? employee['role'] : 'Unknown Role';
-        final String gender = employee != null ? employee['gender'] : 'Unknown Gender';
+        final String fullName = employee != null
+            ? employee['full_name']
+            : 'Unknown Employee';
+        final String role = employee != null
+            ? employee['role']
+            : 'Unknown Role';
+        final String gender = employee != null
+            ? employee['gender']
+            : 'Unknown Gender';
 
         final List<Map<String, dynamic>> assignments = employee != null
-            ? List<Map<String, dynamic>>.from(employee['school_assignments'] ?? const [])
+            ? List<Map<String, dynamic>>.from(
+                employee['school_assignments'] ?? const [],
+              )
             : [];
 
         final String assignedSchools = assignments
@@ -263,22 +317,34 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
             .where((v) => v.isNotEmpty)
             .join('\n');
 
-        if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) continue;
+        if (widget.searchQuery.isNotEmpty &&
+            !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase()))
+          continue;
 
-        if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) continue;
+        if (_selectedEmployeeNameFilters != null &&
+            !_selectedEmployeeNameFilters!.contains(fullName))
+          continue;
 
-        final DateTime localTime = DateTime.parse(record['recorded_at']).toLocal();
+        final DateTime localTime = DateTime.parse(
+          record['recorded_at'],
+        ).toLocal();
         final String dateKey = DateFormat('dd-MM-yyyy').format(localTime);
         final String timeStr = DateFormat('HH:mm:ss').format(localTime);
         final String status = record['status'] ?? '';
 
         final schoolData = record['schools'];
-        final String schoolName = (schoolData != null && schoolData['name'] != null) ? schoolData['name'].toString() : "off-site";
-        final String variance = record['attendance_time_variance']?.toString() ?? "99:99:99";
+        final String schoolName =
+            (schoolData != null && schoolData['name'] != null)
+            ? schoolData['name'].toString()
+            : "off-site";
+        final String variance =
+            record['attendance_time_variance']?.toString() ?? "99:99:99";
 
         final lat = record['latitude'];
         final lon = record['longitude'];
-        final String coordinatesStr = (lat != null && lon != null) ? "$lat, $lon" : '';
+        final String coordinatesStr = (lat != null && lon != null)
+            ? "$lat, $lon"
+            : '';
 
         final String rowCompositeKey = "${userId}_$dateKey";
 
@@ -315,8 +381,12 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         }
       }
 
-      final CellStyle offSiteAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
-      final CellStyle varianceAlertStyle = CellStyle(backgroundColorHex: ExcelColor.redAccent);
+      final CellStyle offSiteAlertStyle = CellStyle(
+        backgroundColorHex: ExcelColor.redAccent,
+      );
+      final CellStyle varianceAlertStyle = CellStyle(
+        backgroundColorHex: ExcelColor.redAccent,
+      );
       int currentExcelRowIndex = 1;
 
       for (final rowKey in structuredRows.keys) {
@@ -343,20 +413,54 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         final String checkInLoc = r['check_in_loc'].toString().toLowerCase();
         final String checkOutLoc = r['check_out_loc'].toString().toLowerCase();
 
-        bool isCheckInLate = checkInVar != "00:00:00" && checkInVar != "00:00:00.000";
-        bool isCheckOutEarly = checkOutVar != "00:00:00" && checkOutVar != "00:00:00.000";
+        bool isCheckInLate =
+            checkInVar != "00:00:00" && checkInVar != "00:00:00.000";
+        bool isCheckOutEarly =
+            checkOutVar != "00:00:00" && checkOutVar != "00:00:00.000";
 
         if (isCheckInLate)
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+          sheet
+                  .cell(
+                    CellIndex.indexByColumnRow(
+                      columnIndex: 7,
+                      rowIndex: currentExcelRowIndex,
+                    ),
+                  )
+                  .cellStyle =
+              varianceAlertStyle;
 
         if (isCheckOutEarly)
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: currentExcelRowIndex)).cellStyle = varianceAlertStyle;
+          sheet
+                  .cell(
+                    CellIndex.indexByColumnRow(
+                      columnIndex: 8,
+                      rowIndex: currentExcelRowIndex,
+                    ),
+                  )
+                  .cellStyle =
+              varianceAlertStyle;
 
         if (checkInLoc == "off-site")
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
+          sheet
+                  .cell(
+                    CellIndex.indexByColumnRow(
+                      columnIndex: 9,
+                      rowIndex: currentExcelRowIndex,
+                    ),
+                  )
+                  .cellStyle =
+              offSiteAlertStyle;
 
         if (checkOutLoc == "off-site")
-          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: currentExcelRowIndex)).cellStyle = offSiteAlertStyle;
+          sheet
+                  .cell(
+                    CellIndex.indexByColumnRow(
+                      columnIndex: 10,
+                      rowIndex: currentExcelRowIndex,
+                    ),
+                  )
+                  .cellStyle =
+              offSiteAlertStyle;
 
         currentExcelRowIndex++;
       }
@@ -369,7 +473,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
       final fileName = 'Employee_Attendance_[$startRange to $endRange].xlsx';
 
       if (kIsWeb) {
-        final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final blob = html.Blob([
+          bytes,
+        ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         final url = html.Url.createObjectUrlFromBlob(blob);
         final anchor = html.AnchorElement()
           ..href = url
@@ -380,15 +486,21 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         anchor.remove();
         html.Url.revokeObjectUrl(url);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendance exported successfully')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Attendance exported successfully')),
+          );
         }
       } else {
         var status = await Permission.manageExternalStorage.status;
-        if (!status.isGranted) status = await Permission.manageExternalStorage.request();
+        if (!status.isGranted)
+          status = await Permission.manageExternalStorage.request();
 
         Directory? downloadsDir = Directory('/storage/emulated/0/Download');
         if (!await downloadsDir.exists()) {
-          final List<Directory>? externalDirs = await getExternalStorageDirectories(type: StorageDirectory.downloads);
+          final List<Directory>? externalDirs =
+              await getExternalStorageDirectories(
+                type: StorageDirectory.downloads,
+              );
           downloadsDir = externalDirs != null && externalDirs.isNotEmpty
               ? externalDirs.first
               : await getApplicationDocumentsDirectory();
@@ -405,26 +517,43 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                     icon: const Icon(Icons.close, color: Colors.red),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
-                    onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+                    onPressed: () =>
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar(),
                   ),
                   const SizedBox(width: 13),
-                  Expanded(child: Text("Saved to Downloads: $fileName", softWrap: true)),
+                  Expanded(
+                    child: Text(
+                      "Saved to Downloads: $fileName",
+                      softWrap: true,
+                    ),
+                  ),
                 ],
               ),
-              action: SnackBarAction(label: "OPEN", onPressed: () async => await OpenFilex.open(file.path)),
+              action: SnackBarAction(
+                label: "OPEN",
+                onPressed: () async => await OpenFilex.open(file.path),
+              ),
             ),
           );
         }
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   bool _isHoliday(DateTime date) => date.weekday == DateTime.sunday;
   List<DateTime> _getDatesInRange(DateTime start, DateTime end) =>
-      List.generate(end.difference(start).inDays + 1, (i) => start.add(Duration(days: i)));
+      List.generate(
+        end.difference(start).inDays + 1,
+        (i) => start.add(Duration(days: i)),
+      );
 
   Size calcTextSize(BuildContext context, String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
@@ -455,10 +584,18 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               children: [
                 TextField(
                   controller: dialogSearchController,
-                  decoration: const InputDecoration(hintText: "Search names...", prefixIcon: Icon(Icons.search)),
+                  decoration: const InputDecoration(
+                    hintText: "Search names...",
+                    prefixIcon: Icon(Icons.search),
+                  ),
                   onChanged: (value) {
                     setStateDialog(() {
-                      filteredValues = allEmployeeNames.where((e) => e.toLowerCase().contains(value.toLowerCase())).toList();
+                      filteredValues = allEmployeeNames
+                          .where(
+                            (e) =>
+                                e.toLowerCase().contains(value.toLowerCase()),
+                          )
+                          .toList();
                     });
                   },
                 ),
@@ -469,7 +606,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                   title: const Text("Select All"),
                   onChanged: (checked) {
                     setStateDialog(() {
-                      currentSelection = checked == true ? Set.from(allEmployeeNames) : {};
+                      currentSelection = checked == true
+                          ? Set.from(allEmployeeNames)
+                          : {};
                     });
                   },
                 ),
@@ -483,7 +622,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                         title: Text(value),
                         onChanged: (checked) {
                           setStateDialog(() {
-                            checked == true ? currentSelection.add(value) : currentSelection.remove(value);
+                            checked == true
+                                ? currentSelection.add(value)
+                                : currentSelection.remove(value);
                           });
                         },
                       );
@@ -494,12 +635,18 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  final isAllSelected = currentSelection.length == allEmployeeNames.length;
-                  _selectedEmployeeNameFilters = isAllSelected ? null : Set.from(currentSelection);
+                  final isAllSelected =
+                      currentSelection.length == allEmployeeNames.length;
+                  _selectedEmployeeNameFilters = isAllSelected
+                      ? null
+                      : Set.from(currentSelection);
                 });
                 Navigator.pop(ctx);
               },
@@ -525,33 +672,57 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
     return FutureBuilder<Map<String, dynamic>>(
       future: _attendanceFetchFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Error fetching records: ${snapshot.error}"));
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("No attendance data found"));
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError)
+          return Center(
+            child: Text("Error fetching records: ${snapshot.error}"),
+          );
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
+          return const Center(child: Text("No attendance data found"));
 
-        final allEmployees = ((snapshot.data!['employees'] as Map<String, dynamic>).values
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList());
+        final allEmployees =
+            ((snapshot.data!['employees'] as Map<String, dynamic>).values
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList());
 
-        final allEmployeeNames = allEmployees.map((e) => e['full_name']?.toString() ?? 'Unknown').toSet().toList()..sort();
+        final allEmployeeNames =
+            allEmployees
+                .map((e) => e['full_name']?.toString() ?? 'Unknown')
+                .toSet()
+                .toList()
+              ..sort();
 
         var employees = allEmployees.where((m) {
           final fullName = m['full_name'].toString();
-          if (widget.searchQuery.isNotEmpty && !fullName.toLowerCase().contains(widget.searchQuery.toLowerCase())) return false;
-          if (_selectedEmployeeNameFilters != null && !_selectedEmployeeNameFilters!.contains(fullName)) return false;
-          if (widget.roleFilter != null && !widget.roleFilter!.contains(m['role'])) return false;
-          if (widget.genderFilter != null && !widget.genderFilter!.contains(m['gender'])) return false;
+          if (widget.searchQuery.isNotEmpty &&
+              !fullName.toLowerCase().contains(
+                widget.searchQuery.toLowerCase(),
+              ))
+            return false;
+          if (_selectedEmployeeNameFilters != null &&
+              !_selectedEmployeeNameFilters!.contains(fullName))
+            return false;
+          if (widget.roleFilter != null &&
+              !widget.roleFilter!.contains(m['role']))
+            return false;
+          if (widget.genderFilter != null &&
+              !widget.genderFilter!.contains(m['gender']))
+            return false;
           if (widget.clusterFilter != null) {
             final userClusters = Set<String>.from(m['clusters'] as List);
-            if (userClusters.intersection(widget.clusterFilter!).isEmpty) return false;
+            if (userClusters.intersection(widget.clusterFilter!).isEmpty)
+              return false;
           }
           if (widget.villageFilter != null) {
             final userVillages = Set<String>.from(m['villages'] as List);
-            if (userVillages.intersection(widget.villageFilter!).isEmpty) return false;
+            if (userVillages.intersection(widget.villageFilter!).isEmpty)
+              return false;
           }
           if (widget.schoolFilter != null) {
             final userSchools = Set<String>.from(m['schools'] as List);
-            if (userSchools.intersection(widget.schoolFilter!).isEmpty) return false;
+            if (userSchools.intersection(widget.schoolFilter!).isEmpty)
+              return false;
           }
           return true;
         }).toList();
@@ -563,13 +734,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
           return _isAscending ? compare : -compare;
         });
 
-        if (employees.isEmpty) return const Center(child: Text("No employees found"));
+        if (employees.isEmpty)
+          return const Center(child: Text("No employees found"));
 
         double maxNameWidth = 0;
-        const TextStyle nameStyle = TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black);
+        const TextStyle nameStyle = TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: Colors.black,
+        );
         for (final emp in employees) {
           final String textToMeasure = isMobile
-              ? ((emp['first_name']?.toString().length ?? 0) > (emp['last_name']?.toString().length ?? 0)
+              ? ((emp['first_name']?.toString().length ?? 0) >
+                        (emp['last_name']?.toString().length ?? 0)
                     ? (emp['first_name'] ?? '')
                     : (emp['last_name'] ?? ''))
               : (emp['full_name'] ?? 'Unknown');
@@ -589,7 +766,8 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         for (final d in dates) {
           final cellDateNormalized = DateTime(d.year, d.month, d.day);
           final bool isFutureOrToday =
-              cellDateNormalized.isAtSameMomentAs(todayNormalized) || cellDateNormalized.isAfter(todayNormalized);
+              cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
+              cellDateNormalized.isAfter(todayNormalized);
 
           if (_isHoliday(d) || isFutureOrToday)
             dailyTotals.add(-1);
@@ -600,10 +778,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
               final attMap = m['attendance_map'] as Map<String, dynamic>? ?? {};
               final record = attMap[key];
               final isPresent = record != null && record['status'] == 'present';
-              final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
-              final variance = record != null ? record['variance'].toString() : "99:99:99";
+              final location = record != null
+                  ? record['location'].toString().toLowerCase()
+                  : "off-site";
+              final variance = record != null
+                  ? record['variance'].toString()
+                  : "99:99:99";
 
-              if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000")) count++;
+              if (isPresent &&
+                  location != "off-site" &&
+                  (variance == "00:00:00" || variance == "00:00:00.000"))
+                count++;
             }
             dailyTotals.add(count);
             grandTotalPresent += count;
@@ -611,25 +796,37 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
         }
 
         return Container(
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!)),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+          ),
           child: Column(
             children: [
               if (_selectedEmployeeNameFilters != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 4.0,
+                  ),
                   color: Colors.blue.shade50,
                   child: Row(
                     children: [
                       Text(
                         'Filtered by ${_selectedEmployeeNameFilters!.length} Employee(s)',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                          fontSize: 13,
+                        ),
                       ),
                       const Spacer(),
                       TextButton.icon(
-                        onPressed: () => setState(() => _selectedEmployeeNameFilters = null),
+                        onPressed: () =>
+                            setState(() => _selectedEmployeeNameFilters = null),
                         icon: const Icon(Icons.filter_alt_off, size: 16),
                         label: const Text('Clear Table Filters'),
-                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
                       ),
                     ],
                   ),
@@ -644,7 +841,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                        border: Border(
+                          right: BorderSide(color: Colors.grey[300]!),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -660,13 +859,18 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                   const Flexible(
                                     child: Text(
                                       'Employee',
-                                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black,
+                                      ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   const SizedBox(width: 2),
                                   Icon(
-                                    _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                    _isAscending
+                                        ? Icons.arrow_upward
+                                        : Icons.arrow_downward,
                                     size: 13,
                                     color: AppTheme.primaryBlue,
                                   ),
@@ -686,7 +890,9 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                               child: Icon(
                                 Icons.filter_alt,
                                 size: 13,
-                                color: _selectedEmployeeNameFilters != null ? AppTheme.primaryBlue : Colors.grey.shade700,
+                                color: _selectedEmployeeNameFilters != null
+                                    ? AppTheme.primaryBlue
+                                    : Colors.grey.shade700,
                               ),
                             ),
                           ),
@@ -705,13 +911,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                   width: dateCellWidth,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                                    border: Border(
+                                      right: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
+                                    ),
                                   ),
                                   child: Text(
                                     "${DateFormat('dd/MM').format(d)}\n${DateFormat('E').format(d)}",
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                      color: _isHoliday(d) ? Colors.grey : Colors.black,
+                                      color: _isHoliday(d)
+                                          ? Colors.grey
+                                          : Colors.black,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13,
                                     ),
@@ -726,11 +938,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                       width: totalColumnWidth,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                        border: Border(
+                          left: BorderSide(color: Colors.grey[300]!),
+                        ),
                       ),
                       child: Text(
                         'Total:\n$workingDaysCount',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.black,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -748,17 +966,25 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                         width: maxNameWidth,
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
-                          border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(
+                            right: BorderSide(color: Colors.grey[300]!),
+                          ),
                         ),
                         child: Column(
                           children: employees
                               .map(
                                 (emp) => Container(
                                   height: rowHeight,
-                                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 13,
+                                  ),
                                   alignment: Alignment.centerLeft,
                                   decoration: BoxDecoration(
-                                    border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey[200]!,
+                                      ),
+                                    ),
                                   ),
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
@@ -783,65 +1009,132 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: employees.map((employee) {
-                              final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
-                              final String targetUserId = employee['user_id'] ?? '';
+                              final attMap =
+                                  employee['attendance_map']
+                                      as Map<String, dynamic>? ??
+                                  {};
+                              final String targetUserId =
+                                  employee['user_id'] ?? '';
                               return Container(
                                 height: rowHeight,
                                 decoration: BoxDecoration(
-                                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey[200]!,
+                                    ),
+                                  ),
                                 ),
                                 child: Row(
                                   children: dates.map((d) {
-                                    final key = DateFormat('yyyy-MM-dd').format(d);
+                                    final key = DateFormat(
+                                      'yyyy-MM-dd',
+                                    ).format(d);
                                     final record = attMap[key];
                                     final holiday = _isHoliday(d);
-                                    final isPresent = record != null && record['status'] == 'present';
-                                    final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
-                                    final variance = record != null ? record['variance'].toString() : "99:99:99";
-                                    final cellDateNormalized = DateTime(d.year, d.month, d.day);
+                                    final isPresent =
+                                        record != null &&
+                                        record['status'] == 'present';
+                                    final location = record != null
+                                        ? record['location']
+                                              .toString()
+                                              .toLowerCase()
+                                        : "off-site";
+                                    final variance = record != null
+                                        ? record['variance'].toString()
+                                        : "99:99:99";
+                                    final cellDateNormalized = DateTime(
+                                      d.year,
+                                      d.month,
+                                      d.day,
+                                    );
                                     final bool isFutureOrToday =
-                                        cellDateNormalized.isAtSameMomentAs(todayNormalized) ||
-                                        cellDateNormalized.isAfter(todayNormalized);
+                                        cellDateNormalized.isAtSameMomentAs(
+                                          todayNormalized,
+                                        ) ||
+                                        cellDateNormalized.isAfter(
+                                          todayNormalized,
+                                        );
 
                                     return Container(
                                       width: dateCellWidth,
                                       height: double.infinity,
                                       decoration: BoxDecoration(
-                                        color: holiday ? Colors.grey[100] : null,
-                                        border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                                        color: holiday
+                                            ? Colors.grey[100]
+                                            : null,
+                                        border: Border(
+                                          right: BorderSide(
+                                            color: Colors.grey[200]!,
+                                          ),
+                                        ),
                                       ),
                                       child: InkWell(
-                                        onTap: isPresent && targetUserId.isNotEmpty
+                                        onTap:
+                                            isPresent && targetUserId.isNotEmpty
                                             ? () => Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => EmployeeAttendanceDetailsPage(
-                                                    userId: employee['user_id'] ?? '',
-                                                    dateString: key,
-                                                  ),
+                                                  builder: (context) =>
+                                                      EmployeeIndividualDayAttendancePage(
+                                                        userId:
+                                                            employee['user_id'] ??
+                                                            '',
+                                                        dateString: key,
+                                                      ),
                                                 ),
                                               )
                                             : null,
                                         child: Center(
                                           child: holiday
-                                              ? const Icon(Icons.remove, color: Colors.grey, size: 13)
+                                              ? const Icon(
+                                                  Icons.remove,
+                                                  color: Colors.grey,
+                                                  size: 13,
+                                                )
                                               : isPresent
                                               ? (() {
-                                                  final bool isCorrectLocation = location != "off-site";
-                                                  final bool isOnTime = variance == "00:00:00" || variance == "00:00:00.000";
-                                                  if (isCorrectLocation && isOnTime) {
-                                                    return const Icon(Icons.check, color: Colors.green, size: 28);
-                                                  } else if (isCorrectLocation && !isOnTime) {
-                                                    return const Icon(Icons.access_time, color: Colors.amber, size: 22);
-                                                  } else if (!isCorrectLocation && isOnTime) {
-                                                    return const Icon(Icons.wrong_location, color: Colors.amber, size: 22);
+                                                  final bool isCorrectLocation =
+                                                      location != "off-site";
+                                                  final bool isOnTime =
+                                                      variance == "00:00:00" ||
+                                                      variance ==
+                                                          "00:00:00.000";
+                                                  if (isCorrectLocation &&
+                                                      isOnTime) {
+                                                    return const Icon(
+                                                      Icons.check,
+                                                      color: Colors.green,
+                                                      size: 28,
+                                                    );
+                                                  } else if (isCorrectLocation &&
+                                                      !isOnTime) {
+                                                    return const Icon(
+                                                      Icons.access_time,
+                                                      color: Colors.amber,
+                                                      size: 22,
+                                                    );
+                                                  } else if (!isCorrectLocation &&
+                                                      isOnTime) {
+                                                    return const Icon(
+                                                      Icons.wrong_location,
+                                                      color: Colors.amber,
+                                                      size: 22,
+                                                    );
                                                   } else {
-                                                    return const Icon(Icons.warning, color: Colors.purple, size: 22);
+                                                    return const Icon(
+                                                      Icons.warning,
+                                                      color: Colors.purple,
+                                                      size: 22,
+                                                    );
                                                   }
                                                 }())
                                               : isFutureOrToday
                                               ? const SizedBox.shrink()
-                                              : const Icon(Icons.close, color: Colors.red, size: 15),
+                                              : const Icon(
+                                                  Icons.close,
+                                                  color: Colors.red,
+                                                  size: 15,
+                                                ),
                                         ),
                                       ),
                                     );
@@ -856,23 +1149,47 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                         width: totalColumnWidth,
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
-                          border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                          border: Border(
+                            left: BorderSide(color: Colors.grey[300]!),
+                          ),
                         ),
                         child: Column(
                           children: employees.map((employee) {
-                            final attMap = employee['attendance_map'] as Map<String, dynamic>? ?? {};
+                            final attMap =
+                                employee['attendance_map']
+                                    as Map<String, dynamic>? ??
+                                {};
                             int presentCount = 0;
                             for (final d in dates) {
-                              final cellDateNormalized = DateTime(d.year, d.month, d.day);
+                              final cellDateNormalized = DateTime(
+                                d.year,
+                                d.month,
+                                d.day,
+                              );
                               if (!_isHoliday(d) &&
-                                  !cellDateNormalized.isAtSameMomentAs(todayNormalized) &&
-                                  !cellDateNormalized.isAfter(todayNormalized)) {
+                                  !cellDateNormalized.isAtSameMomentAs(
+                                    todayNormalized,
+                                  ) &&
+                                  !cellDateNormalized.isAfter(
+                                    todayNormalized,
+                                  )) {
                                 final key = DateFormat('yyyy-MM-dd').format(d);
                                 final record = attMap[key];
-                                final isPresent = record != null && record['status'] == 'present';
-                                final location = record != null ? record['location'].toString().toLowerCase() : "off-site";
-                                final variance = record != null ? record['variance'].toString() : "99:99:99";
-                                if (isPresent && location != "off-site" && (variance == "00:00:00" || variance == "00:00:00.000"))
+                                final isPresent =
+                                    record != null &&
+                                    record['status'] == 'present';
+                                final location = record != null
+                                    ? record['location']
+                                          .toString()
+                                          .toLowerCase()
+                                    : "off-site";
+                                final variance = record != null
+                                    ? record['variance'].toString()
+                                    : "99:99:99";
+                                if (isPresent &&
+                                    location != "off-site" &&
+                                    (variance == "00:00:00" ||
+                                        variance == "00:00:00.000"))
                                   presentCount++;
                               }
                             }
@@ -880,11 +1197,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                               height: rowHeight,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+                                border: Border(
+                                  bottom: BorderSide(color: Colors.grey[200]!),
+                                ),
                               ),
                               child: Text(
                                 "$presentCount\n(${workingDaysCount == 0 ? 0 : ((presentCount / workingDaysCount) * 100).toStringAsFixed(0)}%)",
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: Colors.black),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                  color: Colors.black,
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                             );
@@ -906,11 +1229,17 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.only(left: 13),
                       decoration: BoxDecoration(
-                        border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                        border: Border(
+                          right: BorderSide(color: Colors.grey[300]!),
+                        ),
                       ),
                       child: const Text(
                         "TOTAL",
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.black,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -925,11 +1254,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                                   width: dateCellWidth,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                                    border: Border(
+                                      right: BorderSide(
+                                        color: Colors.grey[200]!,
+                                      ),
+                                    ),
                                   ),
                                   child: Text(
                                     count == -1 ? "-" : "$count",
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Colors.black,
+                                    ),
                                   ),
                                 ),
                               )
@@ -941,13 +1278,19 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
                       width: totalColumnWidth,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        border: Border(left: BorderSide(color: Colors.grey[300]!)),
+                        border: Border(
+                          left: BorderSide(color: Colors.grey[300]!),
+                        ),
                       ),
                       child: Text(
                         workingDaysCount == 0 || employees.isEmpty
                             ? "0.0\n(0%)"
                             : "${(grandTotalPresent / workingDaysCount).toStringAsFixed(1)}\n(${((grandTotalPresent / (employees.length * workingDaysCount)) * 100).toStringAsFixed(0)}%)",
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -962,8 +1305,16 @@ class EmployeeAttendanceTableState extends ConsumerState<EmployeeAttendanceTable
   }
 
   static DateTimeRange toUtcRange(DateTimeRange range) {
-    final start = DateTime(range.start.year, range.start.month, range.start.day).toUtc();
-    final end = DateTime(range.end.year, range.end.month, range.end.day).add(const Duration(days: 1)).toUtc();
+    final start = DateTime(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+    ).toUtc();
+    final end = DateTime(
+      range.end.year,
+      range.end.month,
+      range.end.day,
+    ).add(const Duration(days: 1)).toUtc();
     return DateTimeRange(start: start, end: end);
   }
 }
