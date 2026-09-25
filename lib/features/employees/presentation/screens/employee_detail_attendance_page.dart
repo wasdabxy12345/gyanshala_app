@@ -10,9 +10,25 @@ import 'package:gyanshala_app/core/providers/supabase_provider.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
-class EmployeeDetailAttendancePage extends ConsumerWidget {
+class EmployeeDetailAttendancePage extends ConsumerStatefulWidget {
   final String userId;
   const EmployeeDetailAttendancePage({super.key, required this.userId});
+
+  @override
+  ConsumerState<EmployeeDetailAttendancePage> createState() =>
+      _EmployeeDetailAttendancePageState();
+}
+
+class _EmployeeDetailAttendancePageState
+    extends ConsumerState<EmployeeDetailAttendancePage> {
+  // Explicit scroll controller to fix the scrollbar exception
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<Map<String, dynamic>> _fetchPageData(WidgetRef ref) async {
     final supabase = ref.read(supabaseClientProvider);
@@ -21,7 +37,7 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
         supabase
             .from('employee_attendance')
             .select('*, schools(name)')
-            .eq('user_id', userId)
+            .eq('user_id', widget.userId)
             .order('recorded_at', ascending: true),
         supabase
             .from('schools')
@@ -32,13 +48,12 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
       );
       final List<Map<String, dynamic>> schools =
           List<Map<String, dynamic>>.from(futures[1]);
-
-      if (logs.isNotEmpty)
+      if (logs.isNotEmpty) {
         try {
           final profileResponse = await supabase
               .from('profiles')
               .select('first_name, last_name, role')
-              .eq('id', userId)
+              .eq('id', widget.userId)
               .single();
           for (var log in logs) {
             log['profiles'] = profileResponse;
@@ -46,7 +61,7 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
         } catch (profileError) {
           debugPrint("Profile Fetch Error: $profileError");
         }
-
+      }
       return {'logs': logs, 'schools': schools};
     } catch (e, stackTrace) {
       debugPrint("Database Exception in AttendanceDetailsPage: $e");
@@ -61,7 +76,6 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
     List<Map<String, dynamic>> schools,
   ) {
     if (lat == null || lng == null) return null;
-
     for (var school in schools) {
       final double? sLat = school['latitude'] != null
           ? double.tryParse(school['latitude'].toString())
@@ -71,10 +85,8 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
           : null;
       final double radius =
           double.tryParse(school['radius'].toString()) ?? 50.0;
-
       if (sLat != null && sLng != null) {
         final distance = _coordinateDistance(lat, lng, sLat, sLng);
-
         if (distance <= radius) return school;
       }
     }
@@ -93,24 +105,22 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
         0.5 -
         c((lat2 - lat1) * p) / 2 +
         c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p)) / 2;
-
     return 12742 * math.asin(math.sqrt(a)) * 1000;
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool useWideLayout = screenWidth > 850;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Daily Attendance Summary')),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchPageData(ref),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-
-          if (snapshot.hasError)
+          }
+          if (snapshot.hasError) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -121,16 +131,15 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                 ),
               ),
             );
-
+          }
           final data = snapshot.data;
           final List<Map<String, dynamic>> logs = data?['logs'] ?? [];
           final List<Map<String, dynamic>> schools = data?['schools'] ?? [];
-
-          if (logs.isEmpty)
+          if (logs.isEmpty) {
             return const Center(
               child: Text('No details available for this day.'),
             );
-
+          }
           final profile = logs.first['profiles'] as Map<String, dynamic>?;
           final employeeName = profile != null
               ? "${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}"
@@ -153,12 +162,12 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                 const SizedBox(height: 13),
                 Text("Role: $role", style: TextStyle(color: Colors.grey[600])),
                 const Divider(height: 13),
-                // Wrapped the map in a flexible/scrollable view to prevent overflow
                 Expanded(
                   child: Scrollbar(
+                    controller: _scrollController, // Linked here
                     thumbVisibility: true,
                     child: ListView(
-                      shrinkWrap: true,
+                      controller: _scrollController, // Linked here as well
                       children: logs.map((log) {
                         final isCheckIn = log['status'] == 'check_in';
                         final timeStr = DateFormat(
@@ -170,7 +179,6 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                         final double? lng = log['longitude'] != null
                             ? double.tryParse(log['longitude'].toString())
                             : null;
-
                         final matchingSchool = _checkSchoolGeofence(
                           lat,
                           lng,
@@ -180,17 +188,14 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                         final String presenceSubtitle = isAtSchool
                             ? "At: ${matchingSchool['name']}"
                             : "off-site";
-
                         final String variance =
                             log['attendance_time_variance']?.toString() ??
                             "99:99";
                         final bool isOnTime =
                             variance == "00:00" || variance == "00:00";
-
                         IconData statusIcon;
                         Color statusColor;
                         String statusLabel;
-
                         if (isAtSchool && isOnTime) {
                           statusIcon = Icons.check;
                           statusColor = Colors.green;
@@ -214,7 +219,6 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                               ? "Off-Site & Untracked"
                               : "Off-Site & Wrong Time ($variance)";
                         }
-
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
@@ -309,7 +313,6 @@ class EmployeeDetailAttendancePage extends ConsumerWidget {
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // In mobile layout, give the panel a flexible constraint or fixed height so the ListView doesn't throw bounded/unbounded errors
                           Expanded(child: logsDetailsPanel()),
                           const Divider(height: 13),
                           Expanded(
@@ -342,7 +345,6 @@ class AttendanceMultiMapView extends StatefulWidget {
     required this.employeeName,
     this.height = 280,
   });
-
   @override
   State<AttendanceMultiMapView> createState() => _AttendanceMultiMapViewState();
 }
@@ -353,7 +355,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};
   final Set<Circle> _circles = {};
-  final Set<Polyline> _polylines = {};
   LatLngBounds? _mapBounds;
   bool _isLoadingIcons = true;
 
@@ -374,20 +375,17 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
     final paint = Paint()
       ..color = badgeColor
       ..style = PaintingStyle.fill;
-
     final RRect rRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble() - 10),
       const Radius.circular(8),
     );
     canvas.drawRRect(rRect, paint);
-
     final path = Path();
     path.moveTo(width / 2 - 10, height - 10);
     path.lineTo(width / 2 + 10, height - 10);
     path.lineTo(width / 2, height.toDouble());
     path.close();
     canvas.drawPath(path, paint);
-
     final textPainter = TextPainter(
       textDirection: ui.TextDirection.ltr,
       textAlign: TextAlign.center,
@@ -401,13 +399,11 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       ),
     );
     textPainter.layout(minWidth: 0, maxWidth: width.toDouble());
-
     final offset = Offset(
       (width - textPainter.width) / 2,
       ((height - 10) - textPainter.height) / 2,
     );
     textPainter.paint(canvas, offset);
-
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(width, height);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -425,7 +421,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       text: "OUT",
       badgeColor: Colors.blue,
     );
-
     for (var school in widget.schools) {
       final double? sLat = school['latitude'] != null
           ? double.tryParse(school['latitude'].toString())
@@ -461,7 +456,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         );
       }
     }
-
     for (var log in widget.logs) {
       final double? lat = log['latitude'] != null
           ? double.tryParse(log['latitude'].toString())
@@ -484,16 +478,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       }
     }
 
-    if (tracePoints.length > 1) {
-      _polylines.add(
-        Polyline(
-          polylineId: const PolylineId('route_trace'),
-          points: tracePoints,
-          color: Colors.black54,
-          width: 3,
-        ),
-      );
-    }
+    // Polyline creation block has been completely removed here.
 
     final pointsToBound = tracePoints.isNotEmpty
         ? tracePoints
@@ -503,7 +488,6 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       double maxLat = pointsToBound.first.latitude;
       double minLng = pointsToBound.first.longitude;
       double maxLng = pointsToBound.first.longitude;
-
       for (var p in pointsToBound) {
         if (p.latitude < minLat) minLat = p.latitude;
         if (p.latitude > maxLat) maxLat = p.latitude;
@@ -515,11 +499,11 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
         northeast: LatLng(maxLat + 0.002, maxLng + 0.002),
       );
     }
-
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isLoadingIcons = false;
       });
+    }
   }
 
   Widget _buildMapTypeButton({
@@ -616,9 +600,9 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
   }
 
   Widget _buildBaseMapWidget() {
-    if (_isLoadingIcons || _markers.isEmpty)
+    if (_isLoadingIcons || _markers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
-
+    }
     return GoogleMap(
       key: ValueKey('multi_attendance_map_${_mapRefreshKey}_${_mapType.name}'),
       mapType: _mapType,
@@ -628,7 +612,7 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       ),
       markers: _markers,
       circles: _circles,
-      polylines: _polylines,
+      // polylines parameter removed completely
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
       gestureRecognizers: {
@@ -636,10 +620,11 @@ class _AttendanceMultiMapViewState extends State<AttendanceMultiMapView> {
       },
       onMapCreated: (controller) {
         _mapController = controller;
-        if (_mapBounds != null)
+        if (_mapBounds != null) {
           _mapController?.animateCamera(
             CameraUpdate.newLatLngBounds(_mapBounds!, 60),
           );
+        }
       },
     );
   }

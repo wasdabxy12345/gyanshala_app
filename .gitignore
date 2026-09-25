@@ -7,9 +7,6 @@
 .atom/
 *.pdf
 lib/temp
-lib/temp.*
-lib/test
-lib/test.*
 
 # .build/
 .buildlog/

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gyanshala_app/core/theme/app_theme.dart';
 import 'package:gyanshala_app/features/employees/presentation/screens/available_forms_screen.dart';
+import 'package:gyanshala_app/features/mentor/mentor_dashboard_screen.dart';
 
 class MentorActionGrid extends StatelessWidget {
   MentorActionGrid({super.key});
@@ -12,7 +13,12 @@ class MentorActionGrid extends StatelessWidget {
       color: Colors.red,
       targetScreen: AvailableFormsScreen(),
     ),
-    // const MenuItem(title: "Dashboard", icon: Icons.analytics, color: Colors.amber, targetScreen: MentorDashboard()),
+    const MenuItem(
+      title: "Dashboard",
+      icon: Icons.analytics,
+      color: Colors.amber,
+      targetScreen: MentorDashboardScreen(),
+    ),
     // const MenuItem(title: "Test Data", icon: Icons.bar_chart, color: Colors.green),
     // const MenuItem(title: "Monthly Reports", icon: Icons.description, color: Colors.blue),
   ];
